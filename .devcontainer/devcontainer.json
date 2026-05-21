@@ -1,17 +1,23 @@
 {
     "name": "LIMS dev",
     "build": {
-        "dockerfile": "Dockerfile",
+        "dockerfile": "Dockerfile"
     },
     "workspaceFolder": "/workspaces/lims",
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/lims,type=bind,consistency=cached",
     "remoteUser": "vscode",
     "updateRemoteUserUID": true,
-    "runArgs": ["--network=lims_devnet", "-p", "8000:8000", "-p", "3000:3000"],
+    "runArgs": [
+        "--name=lims-devcontainer",
+        "-p",
+        "8000:8000",
+        "-p",
+        "3000:3000"
+    ],
     "containerEnv": {
         "ENV": "development",
-        "DATABASE_URL": "postgresql+asyncpg://lims:lims@postgres:5432/lims",
-        "REDIS_URL": "redis://redis:6379/0",
+        "DATABASE_URL": "postgresql+asyncpg://lims:lims@host.docker.internal:5432/lims",
+        "REDIS_URL": "redis://host.docker.internal:6379/0",
         "JWT_SECRET": "change-me-in-prod-please",
         "JWT_ALGORITHM": "HS256",
         "JWT_EXPIRES_MINUTES": "1440",
@@ -24,7 +30,7 @@
         "SMTP_PASSWORD": "",
         "UPLOADS_DIR": "/workspaces/lims/backend/uploads",
         "NEXT_PUBLIC_API_URL": "http://localhost:8000/api",
-        "PGHOST": "postgres",
+        "PGHOST": "host.docker.internal",
         "PGUSER": "lims",
         "PGPASSWORD": "lims",
         "PGDATABASE": "lims",
@@ -35,7 +41,7 @@
         // the container and survives until the container is destroyed.
         "PYTHONPYCACHEPREFIX": "/tmp/pycache",
         "MYPY_CACHE_DIR": "/tmp/mypy_cache",
-        "RUFF_CACHE_DIR": "/tmp/ruff_cache",
+        "RUFF_CACHE_DIR": "/tmp/ruff_cache"
     },
-    "postCreateCommand": "bash .devcontainer/post-create.sh",
+    "postCreateCommand": "bash .devcontainer/post-create.sh"
 }
