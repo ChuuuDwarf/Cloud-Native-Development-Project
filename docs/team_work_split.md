@@ -42,9 +42,11 @@
 |------|------|----------|----------|
 | 流程核心組 | 組員 A | 委託單、簽核、配額 | `order_management.md` |
 | 流程核心組 | 組員 B | 收樣、分貨、WIP、樣品流轉 | `sample_management.md`, `flow.md` |
-| 流程核心組 | 組員 C | 機台、Recipe、派工排程 | `machine_receipe.md`, `schedule.md` |
-| 營運支援組 | 組員 D | 實驗執行、結果、報告、結單、倉儲取件 | `experiment_execution.md`, `experiment_report.md`, `result_manage.md` |
+| 流程核心組 | 組員 C | 機台、Recipe、派工排程 | `machine_recipe.md`, `schedule.md` |
+| 營運支援組 | 組員 D | 實驗執行、結果、報告、結單、倉儲取件 | `experiment_execute.md`, `result_manage.md` |
 | 營運支援組 | 組員 E | 角色權限、系統設定、告警通知、主管儀表板、整合品質 | `role.md`, `system_setting.md`, `warn.md`, `dashboard.md` |
+
+> 這份分工以目前 `docs/` 實際檔名為準；若未來重新命名，需同步更新 `README.md`、`total.md`、`flow.md` 與各 md 的「會使用到其他 md 的 API」。
 
 ## 4. 各成員詳細責任
 
@@ -108,7 +110,7 @@
 
 | 類別 | 責任 |
 |------|------|
-| 前端頁面 | `/execution`、報告頁、結單頁、`/storage` |
+| 前端頁面 | `/experiment-runs`、`/reports`、結單頁、`/storage` |
 | 後端 API | 上機登記、下機登記、實驗進度、結果上傳、報告草稿、報告審核、發布、結單判斷、入庫出庫 |
 | 狀態流程 | 實驗中、暫停中、待主管判定、已終止、待結果確認、已完成、待報告回傳、待取件、已結案 |
 | 資料重點 | 操作人、機台、Recipe、上下機時間、原始數據、結果備註、報告版本、取件狀態 |
@@ -127,7 +129,7 @@
 
 | 類別 | 責任 |
 |------|------|
-| 前端頁面 | `/account`, `/config`, `/alert`, `/`, 全域導覽與儀表板 |
+| 前端頁面 | `/account`, `/config`, `/issues`, `/notifications`, `/`, 全域導覽與儀表板 |
 | 後端 API | 使用者/角色、系統參數、通知、告警、dashboard summary、假資料開關 |
 | 狀態流程 | 告警開啟、指派、升級、關閉；通知已讀/未讀 |
 | 資料重點 | 角色、部門、實驗室歸屬、通知規則、告警規則、KPI 統計、假資料設定 |
@@ -169,18 +171,18 @@ API 建議以功能資源命名：
 | 模組 | API 前綴 |
 |------|----------|
 | 委託單 | `/api/orders` |
-| 簽核 | `/api/approvals` |
+| 簽核流程 | `POST /api/orders/:id/actions` |
 | 樣品 | `/api/samples` |
 | WIP | `/api/wips` |
 | 機台 | `/api/machines` |
 | Recipe | `/api/recipes` |
 | 排程派工 | `/api/dispatches` |
-| 實驗執行 | `/api/experiments` |
+| 實驗執行 | `/api/experiment-runs` |
 | 報告 | `/api/reports` |
-| 結單 | `/api/closures` |
-| 告警通知 | `/api/alerts`, `/api/notifications` |
+| 結單檢查 | `/api/orders/:id/close-check` |
+| 異常 / 告警 / 通知 | `/api/issues`, `/api/notifications` |
 | 儀表板 | `/api/dashboard` |
-| 系統設定 | `/api/settings` |
+| 系統設定 | `/api/system-settings` |
 | 帳號角色 | `/api/users`, `/api/roles` |
 
 ### 5.3 前端頁面建議
@@ -196,9 +198,10 @@ API 建議以功能資源命名：
 | `/machine` | 組員 C | 機台管理 |
 | `/recipe` | 組員 C | Recipe 管理 |
 | `/dispatch` | 組員 C | 派工排程 |
-| `/execution` | 組員 D | 實驗執行 |
+| `/experiment-runs` | 組員 D | 實驗執行 |
 | `/storage` | 組員 D | 倉儲取件 |
-| `/alert` | 組員 E | 告警升級 |
+| `/issues` | 組員 E | 異常 / 告警 / 中止申請 |
+| `/notifications` | 組員 E | 通知中心 |
 | `/account` | 組員 E | 帳號角色 |
 | `/config` | 組員 E | 系統設定 |
 

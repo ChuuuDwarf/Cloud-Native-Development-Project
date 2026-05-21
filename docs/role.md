@@ -21,3 +21,41 @@
 | 權限控管 | — | — | — | ✅ |
 
 ---
+
+# 使用者與帳號管理 API
+
+## API 總表
+
+| Method | API | 用途 |
+|---|---|---|
+| POST | `/api/auth/login` | 使用者登入 |
+| POST | `/api/auth/logout` | 使用者登出 |
+| GET | `/api/me` | 取得目前登入者資料、角色與權限 |
+| GET | `/api/users` | 查詢使用者列表 |
+| POST | `/api/users` | 建立使用者 |
+| GET | `/api/users/:id` | 查看單一使用者 |
+| PATCH | `/api/users/:id` | 修改使用者資料、角色、部門、實驗室歸屬或啟用狀態 |
+| GET | `/api/roles` | 取得角色清單 |
+| GET | `/api/permissions` | 取得系統權限清單 |
+
+
+## 主要流程
+
+### 1. 登入
+
+`POST /api/auth/login` 驗證帳號密碼、檢查帳號啟用狀態，成功後建立登入狀態並回傳 token 或 session 資訊。
+
+### 2. 取得目前登入者
+
+`GET /api/me` 是所有頁面權限判斷的核心 API，前端登入後、重新整理頁面、Route Guard、顯示功能選單時都要使用。
+
+### 3. 使用者管理
+
+`GET /api/users` 支援依關鍵字、角色、部門、實驗室、啟用狀態查詢。`POST /api/users` 建立帳號，`PATCH /api/users/:id` 負責修改角色、部門、實驗室歸屬、啟用狀態與重設密碼。
+
+## 會使用到其他 md 的 API
+
+| 來源 md | 會使用到的 API | 使用目的 |
+|---|---|---|
+| `system_setting.md` | `GET /api/labs`<br>`GET /api/departments` | 建立或編輯使用者時選擇實驗室與部門 |
+| `system_setting.md` | `GET /api/master-data` | 載入角色、部門、實驗室等下拉選單 |

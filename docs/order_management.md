@@ -42,3 +42,59 @@
 | 設定個人 / 部門送測上限 | — | — | — | ✅ |
 | 設定特急單上限 | — | — | — | ✅ |
 | 超額申請特批流程 | 申請 | — | 審核 | 設定規則 |
+
+---
+
+# 委託單 API 整理
+
+## API 總表
+
+| Method | API | 用途 |
+|---|---|---|
+| GET | `/api/orders` | 查詢委託單列表 |
+| POST | `/api/orders` | 建立委託單草稿 |
+| GET | `/api/orders/:id` | 查看委託單詳細資料 |
+| PATCH | `/api/orders/:id` | 編輯草稿或退回補件的委託單 |
+| DELETE | `/api/orders/:id` | 刪除草稿委託單 |
+| POST | `/api/orders/:id/actions` | 執行送出、取消、核准、退回、拒絕、確認送樣、待取件、結案等流程動作 |
+| GET | `/api/orders/:id/history` | 查看委託單流程歷程 |
+
+
+## 狀態動作設計
+
+`POST /api/orders/:id/actions` 統一處理委託單流程，不要為每個狀態另外開 API。
+
+| action | 用途 | 使用角色 |
+|---|---|---|
+| `submit` | 草稿送出簽核 | 廠區使用者 |
+| `cancel` | 取消委託單 | 廠區使用者 |
+| `approve` | 核准委託單 | 實驗室主管 |
+| `return` | 退回補件 | 實驗室主管 |
+| `reject` | 拒絕委託單 | 實驗室主管 |
+| `confirm_delivery` | 廠區端確認送樣 | 廠區使用者 |
+| `confirm_received` | 實驗室確認收樣後同步委託單狀態 | 實驗室人員 |
+| `ready_for_pickup` | 報告完成後轉待取件 | 實驗室人員 |
+| `close` | 使用者取件後結案 | 實驗室人員 / 主管 |
+
+
+### 特批超額送測
+
+特批超額送測不另外開 API，統一使用 `POST /api/orders/:id/actions` 的 `approve` action，並在 Request Body 帶入 `quotaOverride`。
+
+```json
+{
+  "action": "approve",
+  "quotaOverride": true,
+  "reason": "主管特批超額送測"
+}
+```
+
+## 會使用到其他 md 的 API
+
+| 來源 md | 會使用到的 API | 使用目的 |
+|---|---|---|
+| `role.md` | `GET /api/me` | 判斷目前登入者是否能建立、編輯、簽核、結案 |
+| `system_setting.md` | `GET /api/master-data`<br>`GET /api/labs`<br>`GET /api/departments` | 建立委託單時取得實驗室、部門、實驗項目與狀態選項 |
+| `sample_management.md` | `GET /api/samples`<br>`GET /api/wips` | 委託單詳細頁顯示樣品與 WIP 進度 |
+| `experiment_execute.md` | `GET /api/reports` | 委託單詳細頁顯示報告狀態 |
+| `warn.md` | `GET /api/issues` | 委託單詳細頁顯示相關異常、中止或告警 |
