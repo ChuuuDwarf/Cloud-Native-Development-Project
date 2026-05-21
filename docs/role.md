@@ -1,11 +1,98 @@
 ## 系統角色定義
 
-| 角色 | 簡稱 | 說明 |
-|------|------|------|
-| 廠區使用者 | 使用者 | 提出送測需求的廠區端人員 |
-| 實驗室人員 | 實驗員 | 執行收樣、派工、實驗的操作人員 |
-| 實驗室主管 | 主管 | 負責審核、監控與決策的管理者 |
-| 系統管理者 | 管理者 | 維護系統設定與帳號的後台人員 |
+| 角色 | 簡稱 | seed key (DB role.name) | 說明 |
+|------|------|---|------|
+| 廠區使用者 | 使用者 | `plant_user` | 提出送測需求的廠區端人員 |
+| 實驗室人員 | 實驗員 | `lab_engineer` | 執行收樣、派工、實驗的操作人員 |
+| 實驗室主管 | 主管 | `lab_supervisor` | 負責審核、監控與決策的管理者 |
+| 系統管理者 | 管理者 | `system_admin` | 維護系統設定與帳號的後台人員 |
+
+> seed key 是 DB `roles.name` 欄位，也是 `scripts/seed_dev.py` 寫入的 key。後端 `require_permission(code)` dependency 透過 user→roles→permissions 關聯查表。
+
+### 設計原則
+
+1. **`system_admin` 用 `*` wildcard** 通過所有 permission 檢查。
+2. **`lab_supervisor` 是 `lab_engineer` 的 superset** — 主管能做實驗員所有操作，再多出審核 / 結案 / 發佈報告 / 升級告警等管理權。`seed_dev.py` 用 `set(LAB_ENGINEER_PERMS + LAB_SUPERVISOR_EXTRA_PERMS)` 自動 union。
+3. **`plant_user` 跨 lab，但綁定 owner**：可以看 / 建立委託單到任何 lab，但只看到自己開的單。
+4. **`lab_engineer` / `lab_supervisor` 綁定單一 lab**：只看到自己 lab 的資料（multi-lab scoping 設計仍在討論，詳見本文末「Lab-scoped authorization」）。
+
+---
+
+## Permission 矩陣（截至 Phase 1）
+
+> 真實來源為 `backend/scripts/seed_dev.py::ROLES`。本表追隨更新。
+
+| Permission code | plant_user | lab_engineer | lab_supervisor | system_admin |
+|---|:---:|:---:|:---:|:---:|
+| `users:read` | | | ✅ | ✅ (*) |
+| `users:create` | | | | ✅ (*) |
+| `users:update` | | | | ✅ (*) |
+| `orders:read` | ✅ | ✅ | ✅ | ✅ (*) |
+| `orders:create` | ✅ | | | ✅ (*) |
+| `orders:approve` | | | ✅ | ✅ (*) |
+| `orders:close` | | | ✅ | ✅ (*) |
+| `samples:read` | ✅ | ✅ | ✅ | ✅ (*) |
+| `samples:create` | | ✅ | ✅ | ✅ (*) |
+| `wips:read` | | ✅ | ✅ | ✅ (*) |
+| `wips:create` | | ✅ | ✅ | ✅ (*) |
+| `wips:dispatch` | | ✅ | ✅ | ✅ (*) |
+| `machines:read` | | ✅ | ✅ | ✅ (*) |
+| `machines:manage` | | | ✅ | ✅ (*) |
+| `recipes:read` | | ✅ | ✅ | ✅ (*) |
+| `recipes:manage` | | | ✅ | ✅ (*) |
+| `schedules:read` | | ✅ | ✅ | ✅ (*) |
+| `schedules:manage` | | | ✅ | ✅ (*) |
+| `dispatches:read` | | ✅ | ✅ | ✅ (*) |
+| `dispatches:manage` | | ✅ | ✅ | ✅ (*) |
+| `experiment_runs:read` | | ✅ | ✅ | ✅ (*) |
+| `experiment_runs:execute` | | ✅ | ✅ | ✅ (*) |
+| `reports:read` | | ✅ | ✅ | ✅ (*) |
+| `reports:create` | | ✅ | ✅ | ✅ (*) |
+| `reports:publish` | | | ✅ | ✅ (*) |
+| `issues:read` | | ✅ | ✅ | ✅ (*) |
+| `issues:create` | | ✅ | ✅ | ✅ (*) |
+| `issues:close` | | | ✅ | ✅ (*) |
+| `issues:escalate` | | | ✅ | ✅ (*) |
+| `notifications:read` | ✅ | ✅ | ✅ | ✅ (*) |
+| `dashboard:read` | | | ✅ | ✅ (*) |
+| `audit_logs:read` | | | ✅ | ✅ (*) |
+| `system_settings:read` | | | | ✅ (*) |
+| `system_settings:update` | | | | ✅ (*) |
+| `labs:read` | ✅ | ✅ | ✅ | ✅ (*) |
+| `labs:manage` | | | | ✅ (*) |
+| `departments:read` | ✅ | | ✅ | ✅ (*) |
+| `departments:manage` | | | | ✅ (*) |
+| `storage_locations:read` | | ✅ | ✅ | ✅ (*) |
+| `storage_locations:manage` | | | | ✅ (*) |
+
+`(*)` = 透過 `*` wildcard 自動通過，不需要逐條 grant。
+
+### 業務 intent 對照（給隊友快速建構心智模型）
+
+- **plant_user**：開單 → 看自己單的進度 → 取件結案。**不能** 簽核、看 WIP / 機台 / 實驗、看儀表板。
+- **lab_engineer**：收樣 → 拆 WIP / 分貨 → 派工到機台跑 recipe → 上下機 → 回報 → 寫報告草稿。**不能** 簽核 / 結案 / 發佈報告 / 處理告警 / 看儀表板。
+- **lab_supervisor**：實驗員的所有動作 +**審核** (`orders:approve`, `orders:close`, `reports:publish`)、**告警處理** (`issues:close`, `issues:escalate`)、**監督**（看儀表板、看 audit log、機台/Recipe/排程**管理權**）。
+- **system_admin**：除了業務操作以外，**only role** 能管帳號、權限、系統設定、實驗室 / 部門 / 倉位 master data。
+
+### 怎麼新增 / 修改 permission
+
+1. 改 `backend/scripts/seed_dev.py::PERMISSIONS` 列表加新 code
+2. 在 `ROLES` 內把 code 加進對應 role（或 `LAB_ENGINEER_PERMS` / `LAB_SUPERVISOR_EXTRA_PERMS` 群組）
+3. 重灌 seed：`make seed`
+4. 在用到該 code 的 endpoint 加 `Depends(require_permission("..."))`
+5. **同步更新本文件的 permission 矩陣**
+
+---
+
+## Lab-scoped authorization（討論中，尚未實作）
+
+廠區有多個實驗室；engineer / supervisor 只看自己 lab 的資料。設計細節整理中，待 team align 後落地。**目前實作僅做到 resource:verb 層**，沒有 row-level lab filter，任何過了 permission 檢查的 user 都看得到全部 lab 的資料。
+
+待定問題：
+- engineer 是否可同時隸屬多個 lab？
+- plant_user 是否限制只能開單給「自己部門」配合的某些 lab？
+- 跨 lab 委託（樣品從 LAB-A 送 LAB-B 加測）的權限怎麼算？
+- audit log 是否 lab-scoped（supervisor 只看自己 lab 的稽核）？
 
 ---
 ## 使用者與帳號管理

@@ -91,6 +91,47 @@ PERMISSIONS: list[tuple[str, str]] = [
 # Role -> permission code list. Use "*" wildcard for sysadmin.
 # ---------------------------------------------------------------------------
 
+# Engineer is the base "operator" role. Supervisor inherits everything
+# engineer can do PLUS approve/close/publish/escalate authority. Defined as a
+# superset so we never drift — bumping engineer perms auto-bumps supervisor.
+LAB_ENGINEER_PERMS: list[str] = [
+    "orders:read",
+    "samples:read",
+    "samples:create",
+    "wips:read",
+    "wips:create",
+    "wips:dispatch",
+    "machines:read",
+    "recipes:read",
+    "schedules:read",
+    "dispatches:read",
+    "dispatches:manage",
+    "experiment_runs:read",
+    "experiment_runs:execute",
+    "reports:read",
+    "reports:create",
+    "issues:read",
+    "issues:create",
+    "notifications:read",
+    "labs:read",
+    "storage_locations:read",
+]
+
+LAB_SUPERVISOR_EXTRA_PERMS: list[str] = [
+    "users:read",
+    "orders:approve",
+    "orders:close",
+    "machines:manage",
+    "recipes:manage",
+    "schedules:manage",
+    "reports:publish",
+    "issues:close",
+    "issues:escalate",
+    "dashboard:read",
+    "audit_logs:read",
+    "departments:read",
+]
+
 ROLES: dict[str, tuple[str, list[str]]] = {
     "system_admin": (
         "系統管理者 (Sysadmin)",
@@ -98,59 +139,12 @@ ROLES: dict[str, tuple[str, list[str]]] = {
     ),
     "lab_supervisor": (
         "實驗室主管",
-        [
-            "users:read",
-            "orders:read",
-            "orders:approve",
-            "orders:close",
-            "samples:read",
-            "wips:read",
-            "machines:read",
-            "machines:manage",
-            "recipes:read",
-            "recipes:manage",
-            "schedules:read",
-            "schedules:manage",
-            "dispatches:read",
-            "dispatches:manage",
-            "experiment_runs:read",
-            "reports:read",
-            "reports:publish",
-            "issues:read",
-            "issues:close",
-            "issues:escalate",
-            "notifications:read",
-            "dashboard:read",
-            "audit_logs:read",
-            "labs:read",
-            "departments:read",
-            "storage_locations:read",
-        ],
+        # Superset: engineer perms + supervisor-only extras.
+        sorted(set(LAB_ENGINEER_PERMS + LAB_SUPERVISOR_EXTRA_PERMS)),
     ),
     "lab_engineer": (
         "實驗室人員",
-        [
-            "orders:read",
-            "samples:read",
-            "samples:create",
-            "wips:read",
-            "wips:create",
-            "wips:dispatch",
-            "machines:read",
-            "recipes:read",
-            "schedules:read",
-            "dispatches:read",
-            "dispatches:manage",
-            "experiment_runs:read",
-            "experiment_runs:execute",
-            "reports:read",
-            "reports:create",
-            "issues:read",
-            "issues:create",
-            "notifications:read",
-            "labs:read",
-            "storage_locations:read",
-        ],
+        LAB_ENGINEER_PERMS,
     ),
     "plant_user": (
         "廠區使用者",
