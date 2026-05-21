@@ -1,7 +1,10 @@
 import axios from "axios";
 
 export const httpClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api",
+  // NEXT_PUBLIC_* env vars in Next.js are baked at build time, so this is
+  // read once during `next build`. Pass it as a Docker build-arg in CI/prod;
+  // for local `next dev` the runtime env var is honored.
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api",
   timeout: 10000,
   // CRITICAL: the backend sets a httpOnly cookie at /api/auth/login and reads
   // it on every authenticated request. Without withCredentials, the browser

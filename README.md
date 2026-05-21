@@ -242,7 +242,7 @@ npm run dev                 # http://localhost:3000
 環境變數（可選）：
 
 ```bash
-export NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api   # 預設值即此
+export NEXT_PUBLIC_API_URL=http://localhost:8000/api   # 預設值即此（Docker build 也用同名 build-arg）
 ```
 
 ### 檔案夾用途

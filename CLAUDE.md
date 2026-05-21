@@ -85,7 +85,7 @@ Next.js 16 App Router, React 19, TypeScript.
 
 ### Backend (`backend/`)
 
-FastAPI + Python 3.12, uvicorn ASGI, modular MVC under `app/modules/`. Entry: `app.main:app`. Runs on port 8000. Frontend expects it at `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`).
+FastAPI + Python 3.12, uvicorn ASGI, modular MVC under `app/modules/`. Entry: `app.main:app`. Runs on port 8000. Frontend expects it at `NEXT_PUBLIC_API_URL` (default `http://localhost:8000/api`; baked at build time via Docker `build.args`).
 
 ```
 backend/app/

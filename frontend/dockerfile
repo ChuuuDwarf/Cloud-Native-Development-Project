@@ -5,6 +5,11 @@ RUN npm install
 
 FROM node:20-alpine AS builder
 WORKDIR /app
+# NEXT_PUBLIC_* env vars are baked into the client bundle at build time.
+# Setting only at runtime (via compose `environment:`) has no effect on a
+# `next build` image — must come in as a build-arg.
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

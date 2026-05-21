@@ -94,13 +94,19 @@ services:
         condition: service_healthy
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # NEXT_PUBLIC_* must arrive as a build-arg because Next.js bakes it
+        # into the client bundle during `next build`. The `environment:`
+        # block below is for `next dev` parity only.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
     ports:
       - "3000:3000"
     depends_on:
       - backend
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
 
   pgadmin:
     image: dpage/pgadmin4:latest

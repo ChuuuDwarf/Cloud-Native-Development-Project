@@ -156,14 +156,14 @@ src/api/httpClient.ts
 建議使用 Next.js 的公開環境變數：
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
 ```
 
 範例：
 
 ```ts
 const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 ```
 
 ---
