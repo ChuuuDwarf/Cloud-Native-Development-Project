@@ -148,13 +148,13 @@ jobs:
 
     steps:
       - name: Download backend coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.1.3
         with:
           name: backend-coverage
           path: coverage/backend
 
       - name: Download frontend coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.1.3
         with:
           name: frontend-coverage
           path: coverage/frontend
