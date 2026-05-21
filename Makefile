@@ -4,6 +4,7 @@
 	test test-backend test-frontend \
 	lint lint-backend lint-frontend format \
 	up down build infra logs \
+	devcontainer-net devcontainer-up \
 	ci ci-backend ci-frontend ci-build ci-e2e ci-down
 
 # ---------------------------------------------------------------------------
@@ -40,6 +41,10 @@ help:
 	@echo "    down               docker compose down"
 	@echo "    build              docker compose build"
 	@echo "    logs               docker compose logs -f"
+	@echo ""
+	@echo "  Devcontainer (Zed / VS Code / Cursor)"
+	@echo "    devcontainer-net   create lims_devnet (idempotent; required before compose up)"
+	@echo "    devcontainer-up    devcontainer-net + start postgres/redis sidecars"
 	@echo ""
 	@echo "  CI reproducers (run the same steps as .github/workflows/ci.yml)"
 	@echo "    ci-backend         ruff + mypy + alembic + pytest with coverage"
@@ -126,10 +131,25 @@ format:
 # Docker
 # ---------------------------------------------------------------------------
 
-infra:
+infra: devcontainer-net
 	docker compose up postgres redis -d
 
-up:
+# ---------------------------------------------------------------------------
+# Devcontainer helpers
+#
+# The .devcontainer workspace attaches to an external docker network so it
+# can reach the postgres/redis sidecars by service name. These targets give
+# you a one-liner setup for the "before I open Zed" step.
+# ---------------------------------------------------------------------------
+
+devcontainer-net:
+	@docker network inspect lims_devnet >/dev/null 2>&1 \
+		|| docker network create lims_devnet
+
+devcontainer-up: devcontainer-net
+	docker compose up -d postgres redis
+
+up: devcontainer-net
 	docker compose up
 
 down:
@@ -169,7 +189,7 @@ ci-frontend:
 ci-build:
 	$(CI_COMPOSE) build
 
-ci-e2e:
+ci-e2e: devcontainer-net
 	cp -n backend/.env.example backend/.env || true
 	$(CI_COMPOSE) up -d --build postgres redis backend celery-worker celery-beat frontend
 	@echo "Waiting for backend /health..."
