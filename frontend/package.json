@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "coverage": "vitest run --coverage --passWithNoTests",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "next": "16.2.4",
@@ -18,9 +22,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.7",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "prettier": "^3.8.3",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typecheck": "^0.1.2",
+    "typescript": "^5",
+    "vitest": "^4.1.7"
   }
 }
