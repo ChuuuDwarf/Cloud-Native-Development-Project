@@ -57,4 +57,12 @@ RUN groupadd --gid ${USER_GID} ${USERNAME} \
 
 WORKDIR /workspaces/lims
 
+# Put the project's Python venv FIRST on PATH so uvicorn / alembic / pytest /
+# ruff / mypy "just work" once post-create.sh has created backend/.venv. Done
+# here (not in devcontainer.json containerEnv) because Zed's devcontainer
+# driver doesn't resolve the `${containerEnv:PATH}` spec substitution -- it
+# leaks the literal string into the UID-update Dockerfile and breaks the
+# build with "unsupported modifier (:P)". Dockerfile sees a real ${PATH}.
+ENV PATH="/workspaces/lims/backend/.venv/bin:${PATH}"
+
 USER ${USERNAME}

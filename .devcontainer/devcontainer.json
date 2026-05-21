@@ -35,7 +35,11 @@
         "PGPASSWORD": "lims",
         "PGDATABASE": "lims",
         "VIRTUAL_ENV": "/workspaces/lims/backend/.venv",
-        "PATH": "/workspaces/lims/backend/.venv/bin:${containerEnv:PATH}",
+        // PATH is set in .devcontainer/Dockerfile (ENV PATH=...:$PATH) rather
+        // than here, because Zed's devcontainer driver doesn't resolve the
+        // ${containerEnv:PATH} spec substitution — it passes the literal
+        // string through and the UID-update step fails with "unsupported
+        // modifier (:P)". Dockerfile ENV sees a real shell $PATH.
         // Redirect tool caches OUT of the bind mount so they don't trigger
         // host fsevents → Zed file-tree thrash. /tmp is tmpfs-backed inside
         // the container and survives until the container is destroyed.
