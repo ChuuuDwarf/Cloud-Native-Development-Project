@@ -127,26 +127,28 @@ export function LoginForm({ onSuccess }: Props) {
         {submitting ? "登入中..." : "登入"}
       </button>
 
-      <div
-        style={{
-          fontSize: 10,
-          color: "var(--text3)",
-          fontFamily: "monospace",
-          lineHeight: 1.6,
-          borderTop: "1px solid var(--border2)",
-          paddingTop: 12,
-        }}
-      >
-        DEV SEED ACCOUNTS:
-        <br />
-        admin@example.com / Admin1234
-        <br />
-        supervisor@example.com / Super1234
-        <br />
-        engineer@example.com / Engin1234
-        <br />
-        requester@example.com / Reque1234
-      </div>
+      {process.env.NODE_ENV !== "production" && (
+        <div
+          style={{
+            fontSize: 10,
+            color: "var(--text3)",
+            fontFamily: "monospace",
+            lineHeight: 1.6,
+            borderTop: "1px solid var(--border2)",
+            paddingTop: 12,
+          }}
+        >
+          DEV SEED ACCOUNTS:
+          <br />
+          admin@example.com / Admin1234
+          <br />
+          supervisor@example.com / Super1234
+          <br />
+          engineer@example.com / Engin1234
+          <br />
+          requester@example.com / Reque1234
+        </div>
+      )}
     </form>
   );
 }

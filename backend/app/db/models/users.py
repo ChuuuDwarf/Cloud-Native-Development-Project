@@ -41,9 +41,13 @@ class User(Base, TimestampMixin):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # No model-level lazy="selectin" — every caller already uses an explicit
+    # selectinload(User.roles).selectinload(Role.permissions) chain because
+    # they need the nested permissions too, which the model-level setting
+    # can't express. Adding it here was an unconditional extra IN-query for
+    # zero benefit.
     roles: Mapped[list["Role"]] = relationship(
         secondary="user_roles",
         back_populates="users",
-        lazy="selectin",
     )
     lab: Mapped["Lab | None"] = relationship(lazy="selectin")

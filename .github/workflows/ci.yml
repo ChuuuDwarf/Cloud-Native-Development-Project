@@ -98,8 +98,16 @@ jobs:
         working-directory: backend
         run: mypy app
 
-      - name: Run migrations
+      - name: Verify alembic migration on the test DB
         working-directory: backend
+        # Point alembic at the test DB so the migration is actually exercised
+        # against the database the tests use. Without this override the step
+        # ran against `lims` (which doesn't exist on the GHA postgres service,
+        # since POSTGRES_DB above is `lims_test`) and silently no-op'd.
+        # conftest still drops + recreates via Base.metadata before tests, so
+        # this is purely a migration-drift guard.
+        env:
+          DATABASE_URL: postgresql+asyncpg://lims:lims@localhost:5432/lims_test
         run: alembic upgrade head
 
       - name: Tests (pytest + coverage)
