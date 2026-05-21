@@ -53,7 +53,12 @@ const nav: NavSection[] = [
         href: "/sample",
         icon: "🧪",
         label: "收樣管理",
-        permission: "samples:read",
+        // Engineer's workflow page (mark samples as received, bind to WIPs).
+        // plant_user still has `samples:read` so they can see sample status
+        // inside their own order detail page, but shouldn't see this top-
+        // level nav entry — gate by `samples:create` which only engineers
+        // and supervisors hold.
+        permission: "samples:create",
       },
       {
         id: "wip",
@@ -93,7 +98,8 @@ const nav: NavSection[] = [
         href: "/transfer",
         icon: "🔄",
         label: "樣品交接",
-        permission: "samples:read",
+        // Engineer-only workflow; see comment on `/sample` above.
+        permission: "samples:create",
       },
     ],
   },

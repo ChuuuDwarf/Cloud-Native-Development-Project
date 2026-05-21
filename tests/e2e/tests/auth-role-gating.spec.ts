@@ -7,14 +7,19 @@ test("plant_user sidebar omits admin-only sections, and /account is gated", asyn
   await login(page, "requester@example.com", "Reque1234");
 
   // Plant user's seed permissions: orders:read, orders:create, samples:read,
-  // notifications:read, labs:read, departments:read. So they see:
-  //   委託流程 (orders:read -> 委託單管理, samples:read -> 收樣管理)
-  //   執行與機台 (only 樣品交接 which needs samples:read)
+  // notifications:read, labs:read, departments:read. samples:read lets them
+  // see sample status inside their own order detail page, but the
+  // engineer-only workflow nav entries (收樣管理 / 樣品交接) are gated on
+  // samples:create, which plant_user does NOT have. So they see only:
+  //   委託流程 (orders:read -> 委託單管理)
   // They must NOT see:
-  //   結案與倉儲, 系統, 簽核管理, 帳號管理, OVERVIEW
+  //   執行與機台 (no member item), 結案與倉儲, 系統, 簽核管理, 帳號管理,
+  //   OVERVIEW, 收樣管理, 樣品交接
   await expect(page.getByText("委託單管理", { exact: true })).toBeVisible();
-  await expect(page.getByText("收樣管理", { exact: true })).toBeVisible();
 
+  await expect(page.getByText("收樣管理", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("樣品交接", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("執行與機台", { exact: true })).toHaveCount(0);
   await expect(page.getByText("結案與倉儲", { exact: true })).toHaveCount(0);
   await expect(page.getByText("系統", { exact: true })).toHaveCount(0);
   await expect(page.getByText("簽核管理", { exact: true })).toHaveCount(0);

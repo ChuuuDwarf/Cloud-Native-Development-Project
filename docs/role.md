@@ -84,15 +84,99 @@
 
 ---
 
-## Lab-scoped authorization（討論中，尚未實作）
+## Lab-scoped authorization（已 align，Phase 2+ 實作）
 
-廠區有多個實驗室；engineer / supervisor 只看自己 lab 的資料。設計細節整理中，待 team align 後落地。**目前實作僅做到 resource:verb 層**，沒有 row-level lab filter，任何過了 permission 檢查的 user 都看得到全部 lab 的資料。
+廠區有多個實驗室，每個實驗室有自己的主管 + 機台 + recipe + 排程 + 報告，**不跨 lab 共用**。Engineer / supervisor 嚴格綁定**單一 lab**，只看自己 lab 的資料；plant_user 跨 lab 但只看自己開的單；sysadmin 看全部。
 
-待定問題：
-- engineer 是否可同時隸屬多個 lab？
-- plant_user 是否限制只能開單給「自己部門」配合的某些 lab？
-- 跨 lab 委託（樣品從 LAB-A 送 LAB-B 加測）的權限怎麼算？
-- audit log 是否 lab-scoped（supervisor 只看自己 lab 的稽核）？
+> **目前 (Phase 0/1) 實作僅到 resource:verb 層**；row-level lab filter 還沒上。任何過了 permission 檢查的 user 都看得到全部 lab 的資料。**Phase 2 起每個新 module 必須吃 scope helper**。
+
+### Authorization scope 對照
+
+| 角色 | scope | 解讀 |
+|---|---|---|
+| `system_admin` | `all` | 全部 lab、全部 user 的資料 |
+| `lab_supervisor` | `own_lab` | 只 `WHERE lab_id = user.lab_id` |
+| `lab_engineer` | `own_lab` | 同上 |
+| `plant_user` | `own_records` | 只 `WHERE created_by = user.id`（自己開的單、自己的樣品） |
+
+### 已定案的 spec
+
+1. **engineer / supervisor 綁單一 lab**（`users.lab_id` 是 single FK，不做 many-to-many）。
+2. **plant_user 可開單到任意 active lab**，不限制部門對應。
+3. **一張委託單 = 一個 lab**（`orders.lab_id` 必填，不允許跨 lab order_items）。跨 lab 工作流請開兩張單。
+4. **主管不能簽核別 lab 來的單**（接續 3，本來就不會發生）。
+5. **Audit log 也 scoped**：sysadmin 看全部、supervisor 只看自己 lab 的稽核紀錄。
+6. **`/api/master-data` 的 `labs` 永遠回全部 active labs**（plant_user 建單時要選、engineer 也需要知道自己在哪 lab）；但個別 endpoint（`/api/machines` / `/api/recipes` / `/api/wips` 等）才做 lab filter。
+7. **plant_user 的 `samples:read` 是 scoped 讀**：只看到自己單對應的樣品；前端 sidebar 不該列「收樣管理」這個 engineer 工作頁入口（Sidebar 上 `/sample` 跟 `/transfer` 用 `samples:create` 把關，非 `samples:read`）。
+
+### 需要 `lab_id` FK 的表（給 A/B/C/D 設計 model 時參考）
+
+| 表 | 欄位 | 拿誰的 lab_id |
+|---|---|---|
+| `orders` | `lab_id NOT NULL` | plant_user 建單時挑 |
+| `samples` | `lab_id NOT NULL` | 繼承自 `order.lab_id` |
+| `wips` | `lab_id NOT NULL` | 繼承自 `sample.lab_id` |
+| `machines` | `lab_id NOT NULL` | 註冊機台時指定 |
+| `recipes` | `lab_id NOT NULL` | 註冊 recipe 時指定（或從 machine 繼承） |
+| `schedules` | `lab_id NOT NULL` | 從 machine 推 |
+| `dispatches` | `lab_id NOT NULL` | 從 wip / machine 推 |
+| `experiment_runs` | `lab_id NOT NULL` | 從 dispatch 推 |
+| `reports` | `lab_id NOT NULL` | 從 experiment_run 推 |
+| `issues` | `lab_id NULLABLE` | 從 target 推（target 不一定有 lab，例如系統層 issue） |
+| `audit_logs` | `lab_id NULLABLE` | 從 target 推（用於 supervisor scoped 讀） |
+
+### Service-layer pattern（建議 helper）
+
+E 在 Phase 2 會在 `app/common/dependencies/scope.py` 提供 helper，A/B/C/D 直接吃：
+
+```python
+from sqlalchemy import Select
+from app.common.dependencies import CurrentUser
+
+def apply_lab_scope(
+    stmt: Select,
+    user: CurrentUser,
+    lab_id_column,
+    created_by_column=None,  # optional, 只有 plant_user 會用
+) -> Select:
+    """加 lab 或 owner filter 到 SQLAlchemy select。
+
+    - system_admin: 不加 filter
+    - lab_supervisor / lab_engineer: stmt.where(lab_id_column == user.lab_id)
+    - plant_user: 如果 created_by_column 給了，stmt.where(... == user.id)；
+                  否則 raise（plant_user 不該看這資源）
+    """
+    ...
+```
+
+呼叫範例（Phase 2+ service 內部）：
+
+```python
+async def list_orders(self, user: CurrentUser) -> list[Order]:
+    stmt = select(Order)
+    stmt = apply_lab_scope(stmt, user, Order.lab_id, created_by_column=Order.created_by)
+    return (await self._session.execute(stmt)).scalars().all()
+```
+
+### Edge case 對照
+
+| 情境 | 預期行為 |
+|---|---|
+| plant_user 查不是自己開的單 (`GET /api/orders/<other-id>`) | 404 (不洩漏存在性) 或 403 |
+| engineer 查別 lab 的機台 | 404 / 403 同上 |
+| supervisor 簽核別 lab 的單（直接打 API） | 403 |
+| 主管 promote 自己變成兩個 lab 的主管 | sysadmin 才能改 user.lab_id，supervisor 自己不能 |
+| sysadmin 不綁 lab 也 OK | `users.lab_id = NULL` 對 sysadmin 合法 |
+
+### Implementation 進度
+
+- [x] permission code 設計（resource:verb）— Phase 1 完成
+- [x] role → perm mapping — Phase 1 完成（本文上方矩陣）
+- [ ] `lab_id` FK 加進每個 model — A/B/C/D 各自 Phase 1+
+- [ ] `apply_lab_scope` helper — E Phase 2
+- [ ] 所有 list/get/update service 改吃 helper — A/B/C/D Phase 2+
+- [ ] 404-not-403 不洩漏存在性 — 統一規則待定
+- [ ] audit log scoped 讀 — E Phase 2（audit_logs 模組）
 
 ---
 ## 使用者與帳號管理
