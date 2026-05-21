@@ -1,0 +1,49 @@
+# CI overlay for docker-compose.yml.
+#
+# Why this exists: the dev compose file mounts ./backend into the backend
+# container (great for hot-reload, bad for CI because it shadows the baked
+# image). It also uses `uvicorn --reload`, which means workers restart on
+# every code probe. And the frontend Dockerfile sets PORT=3030 internally
+# while docker-compose maps 3000:3000 -- in dev that works because the host
+# port is independent, but the frontend healthcheck we want in CI hits
+# http://localhost:3000 from inside the runner, and inside the container
+# Next.js binds to 3030, breaking the proxy. We fix that here by forcing
+# Next.js to listen on 3000.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build \
+#       postgres redis backend celery-worker celery-beat frontend
+
+services:
+  backend:
+    # Drop --reload and the source bind-mount so we test the built image,
+    # not the working tree.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    volumes:
+      - uploads:/app/uploads
+    environment:
+      ENV: ci
+      CORS_ORIGINS: http://localhost:3000,http://frontend:3000
+      JWT_SECRET: ci-test-secret-not-for-prod
+
+  celery-worker:
+    # Same: no bind-mount so we exercise the baked image.
+    volumes:
+      - uploads:/app/uploads
+    environment:
+      ENV: ci
+      JWT_SECRET: ci-test-secret-not-for-prod
+
+  celery-beat:
+    volumes: []
+    environment:
+      ENV: ci
+      JWT_SECRET: ci-test-secret-not-for-prod
+
+  frontend:
+    environment:
+      # Fix the dev/Dockerfile mismatch -- Next.js standalone server reads
+      # PORT, default in the image is 3030; force 3000 so the compose port
+      # mapping (3000:3000) actually works in CI.
+      PORT: "3000"
+      NEXT_PUBLIC_API_URL: http://localhost:8000
