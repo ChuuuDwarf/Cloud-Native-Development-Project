@@ -1,12 +1,35 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
-const nav = [
+interface NavItem {
+  id: string;
+  href: string;
+  icon: string;
+  label: string;
+  permission?: string; // omit -> visible to every authenticated user
+  badge?: number;
+}
+
+interface NavSection {
+  section: string;
+  items: NavItem[];
+}
+
+const nav: NavSection[] = [
   {
     section: "OVERVIEW",
-    items: [{ id: "dashboard", href: "/", icon: "⬛", label: "主管儀表板" }],
+    items: [
+      {
+        id: "dashboard",
+        href: "/",
+        icon: "⬛",
+        label: "主管儀表板",
+        permission: "dashboard:read",
+      },
+    ],
   },
   {
     section: "委託流程",
@@ -16,47 +39,107 @@ const nav = [
         href: "/orders",
         icon: "📋",
         label: "委託單管理",
-        badge: 12,
+        permission: "orders:read",
       },
       {
         id: "approve",
         href: "/approve",
         icon: "✅",
         label: "簽核管理",
-        badge: 7,
+        permission: "orders:approve",
       },
-      { id: "sample", href: "/sample", icon: "🧪", label: "收樣管理" },
-      { id: "wip", href: "/wip", icon: "🔬", label: "分貨 / WIP" },
+      {
+        id: "sample",
+        href: "/sample",
+        icon: "🧪",
+        label: "收樣管理",
+        permission: "samples:read",
+      },
+      {
+        id: "wip",
+        href: "/wip",
+        icon: "🔬",
+        label: "分貨 / WIP",
+        permission: "wips:read",
+      },
     ],
   },
   {
     section: "執行與機台",
     items: [
-      { id: "dispatch", href: "/dispatch", icon: "🗂️", label: "派工排程" },
-      { id: "machine", href: "/machine", icon: "⚙️", label: "機台管理" },
-      { id: "recipe", href: "/recipe", icon: "📐", label: "Recipe 管理" },
-      { id: "transfer", href: "/transfer", icon: "🔄", label: "樣品交接" },
+      {
+        id: "dispatch",
+        href: "/dispatch",
+        icon: "🗂️",
+        label: "派工排程",
+        permission: "dispatches:read",
+      },
+      {
+        id: "machine",
+        href: "/machine",
+        icon: "⚙️",
+        label: "機台管理",
+        permission: "machines:read",
+      },
+      {
+        id: "recipe",
+        href: "/recipe",
+        icon: "📐",
+        label: "Recipe 管理",
+        permission: "recipes:read",
+      },
+      {
+        id: "transfer",
+        href: "/transfer",
+        icon: "🔄",
+        label: "樣品交接",
+        permission: "samples:read",
+      },
     ],
   },
   {
     section: "結案與倉儲",
     items: [
-      { id: "storage", href: "/storage", icon: "📦", label: "倉儲取件" },
+      {
+        id: "storage",
+        href: "/storage",
+        icon: "📦",
+        label: "倉儲取件",
+        permission: "storage_locations:read",
+      },
       {
         id: "exception",
         href: "/exception",
         icon: "⚠️",
         label: "異常管理",
-        badge: 3,
+        permission: "issues:read",
       },
-      { id: "alert", href: "/alert", icon: "🔔", label: "告警升級", badge: 5 },
+      {
+        id: "alert",
+        href: "/alert",
+        icon: "🔔",
+        label: "告警升級",
+        permission: "issues:read",
+      },
     ],
   },
   {
     section: "系統",
     items: [
-      { id: "account", href: "/account", icon: "👥", label: "帳號管理" },
-      { id: "config", href: "/config", icon: "🛠️", label: "系統設定" },
+      {
+        id: "account",
+        href: "/account",
+        icon: "👥",
+        label: "帳號管理",
+        permission: "users:read",
+      },
+      {
+        id: "config",
+        href: "/config",
+        icon: "🛠️",
+        label: "系統設定",
+        permission: "system_settings:read",
+      },
     ],
   },
 ];
@@ -64,6 +147,22 @@ const nav = [
 export default function Sidebar() {
   const [open, setOpen] = useState(true);
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, logout, hasPermission } = useAuth();
+
+  const visibleSections = nav
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((i) => !i.permission || hasPermission(i.permission)),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  const initial = user?.name?.[0] ?? "?";
+
+  async function handleLogout() {
+    await logout();
+    router.replace("/");
+  }
 
   return (
     <aside
@@ -118,7 +217,7 @@ export default function Sidebar() {
 
       {/* Nav */}
       <div style={{ flex: 1, width: "100%", overflowY: "auto" }}>
-        {nav.map((group) => (
+        {visibleSections.map((group) => (
           <div
             key={group.section}
             style={{ width: "100%", padding: "4px 8px 0" }}
@@ -222,7 +321,7 @@ export default function Sidebar() {
         {open ? "◀" : "▶"}
       </div>
 
-      {/* Footer */}
+      {/* Footer — user info + logout */}
       <div
         style={{
           width: "100%",
@@ -245,13 +344,24 @@ export default function Sidebar() {
             fontSize: 12,
             fontWeight: 700,
             flexShrink: 0,
+            color: "#fff",
           }}
         >
-          張
+          {initial}
         </div>
         {open && (
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>張志明</div>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {user?.name ?? "—"}
+            </div>
             <div
               style={{
                 fontSize: 10,
@@ -259,9 +369,26 @@ export default function Sidebar() {
                 fontFamily: "monospace",
               }}
             >
-              系統管理者
+              {user?.role ?? "—"}
             </div>
           </div>
+        )}
+        {open && user && (
+          <button
+            onClick={handleLogout}
+            title="登出"
+            style={{
+              background: "transparent",
+              border: "1px solid var(--border)",
+              color: "var(--text2)",
+              borderRadius: 6,
+              cursor: "pointer",
+              fontSize: 10,
+              padding: "4px 8px",
+            }}
+          >
+            登出
+          </button>
         )}
       </div>
     </aside>
