@@ -40,6 +40,15 @@ echo "==> Installing backend Python deps into ${VENV}"
 echo "==> Installing frontend Node deps"
 (cd frontend && npm ci)
 
+# Reduce Zed file-tree red-flicker caused by .git/index atomic-rename races
+# under the macOS bind mount. fsmonitor uses inotify to avoid rewriting the
+# index on every `git status`; untrackedCache memoizes the untracked-file
+# scan. Both are per-clone settings (written to .git/config), so each
+# teammate gets them on first attach instead of having to know to set them.
+echo "==> Enabling git fsmonitor + untrackedCache to quiet Zed file-tree flicker"
+git config core.fsmonitor true
+git config core.untrackedCache true
+
 cat <<'EOF'
 
 Devcontainer setup complete.
