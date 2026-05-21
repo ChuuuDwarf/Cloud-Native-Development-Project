@@ -37,5 +37,20 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     include: ["**/*.test.{ts,tsx}"],
     exclude: ["node_modules", ".next", "dist"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html", "json-summary"],
+      reportsDirectory: "./coverage",
+      include: ["components/**/*.{ts,tsx}", "src/**/*.{ts,tsx}"],
+      exclude: [
+        "**/__tests__/**",
+        "**/*.test.{ts,tsx}",
+        "**/*.d.ts",
+        "node_modules/**",
+        ".next/**",
+        "dist/**",
+        "src/constants/enums.ts",
+      ],
+    },
   },
 });
