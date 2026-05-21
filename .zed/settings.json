@@ -18,5 +18,13 @@
     "**/playwright-report",
     "**/test-results",
     "**/.DS_Store"
-  ]
+  ],
+  // Hide git status indicators (the red/green/yellow dots and color tint)
+  // in the project panel. Eliminates the residual "file tree briefly
+  // flashes red then reverts" that fsmonitor + untrackedCache didn't fully
+  // suppress under the macOS bind mount. Gutter diff markers in the editor
+  // and `git status` from the terminal are unaffected.
+  "project_panel": {
+    "git_status": false
+  }
 }
