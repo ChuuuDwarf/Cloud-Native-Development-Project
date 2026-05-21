@@ -42,7 +42,7 @@ def _build_probe_app(code: str) -> FastAPI:
         )
 
     @probe.get("/probe")
-    async def probe_route(  # noqa: D401 — test helper
+    async def probe_route(
         user: CurrentUser = Depends(require_permission(code)),
     ) -> dict:
         return {"id": str(user.id), "code": code}

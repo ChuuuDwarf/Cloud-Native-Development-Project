@@ -9,7 +9,7 @@ expired / refers to an unknown or disabled user.
 """
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Cookie, Depends
@@ -81,7 +81,7 @@ async def get_current_user(
     )
 
 
-def require_permission(code: str) -> Callable[..., CurrentUser]:
+def require_permission(code: str) -> Callable[..., Awaitable[CurrentUser]]:
     """Dependency factory: gate a route on a permission code.
 
     Usage::
