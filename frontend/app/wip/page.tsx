@@ -111,7 +111,7 @@ export default function WipPage() {
       const [meData, sampleData, wipData] = await Promise.all([
         loadCurrentUser(),
         apiGet<Sample[]>('/api/samples'),
-        apiGet<Wip[]>('/api/wips') // TODO(integration): WIP 正式 API 已在 sample_management.md 定義，合併後確認 include/history/actions 是否一致,
+        apiGet<Wip[]>('/api/wips'),
       ])
 
       const lab = getCurrentLab(meData)
@@ -124,12 +124,24 @@ export default function WipPage() {
         activeSampleStatuses.has(sample.status),
       )
 
+      // 如果網址有帶 sampleId，就只在「真的找得到且可操作」時自動選它。
+      // 找不到或不可操作時，不要跳紅色錯誤，避免沒資料時畫面看起來像壞掉。
       if (sampleIdFromUrl) {
         const target = sampleData.find((sample) => sample.id === sampleIdFromUrl)
 
         if (target && activeSampleStatuses.has(target.status)) {
           setSelectedSampleId(target.id)
           resetFormsForSample(target, lab, wipData)
+          return
+        }
+
+        const firstTargetSample =
+          activeSampleData.find((sample) => sample.status === 'received') ??
+          activeSampleData[0]
+
+        if (firstTargetSample) {
+          setSelectedSampleId(firstTargetSample.id)
+          resetFormsForSample(firstTargetSample, lab, wipData)
           return
         }
 
@@ -140,7 +152,7 @@ export default function WipPage() {
           createWip: true,
           currentWips: true,
         })
-        setError('這筆樣品目前不可分貨，只有「已收樣」或「已分貨」的樣品能在此頁操作')
+
         return
       }
 
@@ -286,14 +298,6 @@ export default function WipPage() {
     return ''
   }
 
-  function buildWipNo(index: number) {
-    const sampleNo = selectedSample?.sample_no ?? 'SAMPLE'
-    const cleanSampleNo = sampleNo.replace('SMP', 'WIP')
-    const suffix = String(index + 1).padStart(2, '0')
-
-    return `${cleanSampleNo}-${suffix}`
-  }
-
   async function submitSplit() {
     try {
       setSubmitting(true)
@@ -315,11 +319,14 @@ export default function WipPage() {
       await apiPost(`/api/samples/${selectedSample.id}/actions`, {
         action: 'split',
         operator_name: currentOperatorName,
-        wips: forms.map((form, index) => ({
-          wip_no: buildWipNo(index),
+        wips: forms.map((form) => ({
           lab_name: form.lab_name || currentLab,
           experiment_item: form.experiment_item,
           priority: form.priority,
+          // 不送 wip_no。
+          // WIP 編號統一由後端 generate_unique_wip_no() 產生，
+          // 格式固定為 WIP-YYYY-NNNN-{LabCode}-XX。
+          //
           // 不送 current_location。
           // 後端會用 sample.current_location，避免 Lab B 的 WIP 在交接前被 Lab B 看到。
           note: form.note,
@@ -530,9 +537,6 @@ export default function WipPage() {
                               {form.auto_generated && (
                                 <span style={autoTagStyle}>自動帶入</span>
                               )}
-                            </div>
-                            <div style={panelHintStyle}>
-                              {buildWipNo(index)} · {form.lab_name || currentLab}
                             </div>
                           </div>
 

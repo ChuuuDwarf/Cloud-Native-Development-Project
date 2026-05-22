@@ -124,11 +124,20 @@ export default function SampleTransferPage() {
         (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab),
       )
 
+      if (currentLabWips.length === 0) return
+
+      const currentLabIncompleteWips = currentLabWips.filter(
+        (wip) => wip.status !== 'completed',
+      )
+
+      // 重點：
+      // 只要目前 Lab 還有任何 WIP 沒完成，就不能顯示可轉移。
+      // 避免完成一個 WIP 後，又新增另一個 WIP，transfer 頁面仍然顯示可轉移。
+      if (currentLabIncompleteWips.length > 0) return
+
       const currentLabCompletedWips = currentLabWips.filter(
         (wip) => wip.status === 'completed',
       )
-
-      if (currentLabCompletedWips.length === 0) return
 
       const remainingExperiments =
         requestedExperiments.length > 0
@@ -232,13 +241,25 @@ export default function SampleTransferPage() {
         (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab),
       )
 
+      if (currentLabWips.length === 0) return
+
+      const currentLabIncompleteWips = currentLabWips.filter(
+        (wip) => wip.status !== 'completed',
+      )
+
+      if (currentLabIncompleteWips.length > 0) return
+
       const currentLabCompletedWips = currentLabWips.filter(
         (wip) => wip.status === 'completed',
       )
 
-      const hasCurrentLabCompletedWip = currentLabCompletedWips.length > 0
+      const unfinishedAnyWips = sampleWips.filter(
+        (wip) => wip.status !== 'completed',
+      )
 
-      if (!hasCurrentLabCompletedWip) return
+      // 不管是不是委託單原始實驗，只要這個 sample 底下還有 WIP 沒完成，
+      // 就不能通知取件。
+      if (unfinishedAnyWips.length > 0) return
 
       if (requestedExperiments.length > 0) {
         const unfinishedExperiments = requestedExperiments.filter(
@@ -258,12 +279,6 @@ export default function SampleTransferPage() {
       }
 
       if (sampleWips.length === 0) return
-
-      const unfinishedAnyWips = sampleWips.filter(
-        (wip) => wip.status !== 'completed',
-      )
-
-      if (unfinishedAnyWips.length > 0) return
 
       result.push({
         kind: 'return',
