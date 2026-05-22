@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, apiPost } from '@/lib/api'
+import { getErrorMessage } from '@/lib/error'
 import { fallbackUser } from './constants'
 import type { CurrentUser, Sample, SampleAction, SampleFilter, SampleHistory, Transfer, Wip } from './types'
 import { SampleDetailModal } from './components/SampleDetailModal'
@@ -354,7 +355,7 @@ export default function SamplePage() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '載入資料失敗')
+      setError(getErrorMessage(err, '載入資料失敗'))
     } finally {
       setLoading(false)
     }
@@ -366,7 +367,7 @@ export default function SamplePage() {
       const data = await apiGet<SampleHistory[]>(`/api/samples/${sampleId}/history`)
       setSampleHistories(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '載入樣品歷程失敗')
+      setError(getErrorMessage(err, '載入樣品歷程失敗'))
     } finally {
       setHistoryLoading(false)
     }
@@ -442,7 +443,7 @@ export default function SamplePage() {
       await loadData()
       await loadSampleHistory(sampleId)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '操作失敗')
+      setError(getErrorMessage(err, '操作失敗'))
     } finally {
       setSubmitting(false)
     }

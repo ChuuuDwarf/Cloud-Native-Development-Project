@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, apiPost } from '@/lib/api'
+import { getErrorMessage, logClientError } from '@/lib/error'
 import type {
   CurrentUser,
   Sample,
@@ -345,7 +346,7 @@ export default function SampleTransferPage() {
         setSelectedTransferId(null)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '載入樣品流轉資料失敗')
+      setError(getErrorMessage(err, '載入樣品流轉資料失敗'))
     } finally {
       setLoading(false)
     }
@@ -374,8 +375,8 @@ export default function SampleTransferPage() {
       setSuccessMessage('交接申請已建立')
       await loadData()
     } catch (err) {
-      console.error('createTransfer failed:', err)
-      setError(err instanceof Error ? err.message : '建立交接申請失敗')
+      logClientError('createTransfer failed', err)
+      setError(getErrorMessage(err, '建立交接申請失敗'))
     } finally {
       setSubmitting(false)
     }
@@ -396,8 +397,8 @@ export default function SampleTransferPage() {
       setSuccessMessage('已送出交接，樣品已移至下一個 Lab 的待收樣區')
       await loadData()
     } catch (err) {
-      console.error('sendTransfer failed:', err)
-      setError(err instanceof Error ? err.message : '送出交接單失敗')
+      logClientError('sendTransfer failed', err)
+      setError(getErrorMessage(err, '送出交接單失敗'))
     } finally {
       setSubmitting(false)
     }
@@ -418,8 +419,8 @@ export default function SampleTransferPage() {
       setSuccessMessage('交接單已取消')
       await loadData()
     } catch (err) {
-      console.error('cancelTransfer failed:', err)
-      setError(err instanceof Error ? err.message : '取消交接單失敗')
+      logClientError('cancelTransfer failed', err)
+      setError(getErrorMessage(err, '取消交接單失敗'))
     } finally {
       setSubmitting(false)
     }
@@ -442,8 +443,8 @@ export default function SampleTransferPage() {
       setSuccessMessage('已通知原使用者取件，樣品已移至待取件區')
       await loadData()
     } catch (err) {
-      console.error('notifyPickup failed:', err)
-      setError(err instanceof Error ? err.message : '通知取件失敗')
+      logClientError('notifyPickup failed', err)
+      setError(getErrorMessage(err, '通知取件失敗'))
     } finally {
       setSubmitting(false)
     }
@@ -465,8 +466,8 @@ export default function SampleTransferPage() {
       setSuccessMessage('已確認使用者取件，樣品流程完成')
       await loadData()
     } catch (err) {
-      console.error('confirmPickup failed:', err)
-      setError(err instanceof Error ? err.message : '確認取件失敗')
+      logClientError('confirmPickup failed', err)
+      setError(getErrorMessage(err, '確認取件失敗'))
     } finally {
       setSubmitting(false)
     }

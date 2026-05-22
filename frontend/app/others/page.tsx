@@ -3,6 +3,7 @@
 // TODO(integration): 這個頁面是暫時替代頁。專案合併後請改接 sample_management.md 內列出的正式模組 API：/api/me、/api/orders、/api/storage-locations、/api/labs、/api/master-data、/api/schedules、/api/dispatches、/api/issues。
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, apiPost } from '@/lib/api'
+import { getErrorMessage } from '@/lib/error'
 import type { CurrentUser, OthersData, PayloadValue } from './types'
 import { tabs, defaultForms, sampleStatusText, wipStatusText, priorityText, orderStatusText } from './constants'
 import type { TabKey } from './constants'
@@ -32,7 +33,7 @@ export default function OthersPage() {
       const result = await apiGet<OthersData>('/api/others') // TODO(integration): 改接正式 role/order/system_setting/schedule/warn 模組 API 後移除 /api/others 聚合資料
       setData(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '載入替代資料失敗')
+      setError(getErrorMessage(err, '載入替代資料失敗'))
     } finally {
       setLoading(false)
     }
@@ -55,7 +56,7 @@ export default function OthersPage() {
       window.dispatchEvent(new Event('lims-current-user-changed'))
       setSuccessMessage('目前分頁操作身分已切換，不會影響其他分頁')
     } catch (err) {
-      setError(err instanceof Error ? err.message : '切換使用者失敗')
+      setError(getErrorMessage(err, '切換使用者失敗'))
     } finally {
       setSaving(false)
     }
@@ -72,7 +73,7 @@ export default function OthersPage() {
       await loadData()
       setSuccessMessage('WIP 已標記完成，樣品位置已同步更新')
     } catch (err) {
-      setError(err instanceof Error ? err.message : '標記 WIP 完成失敗')
+      setError(getErrorMessage(err, '標記 WIP 完成失敗'))
     } finally {
       setSaving(false)
     }
@@ -89,7 +90,7 @@ export default function OthersPage() {
       await loadData()
       setSuccessMessage('已確認送樣，樣品已建立並送到對應 Lab 收樣區')
     } catch (err) {
-      setError(err instanceof Error ? err.message : '確認送樣失敗')
+      setError(getErrorMessage(err, '確認送樣失敗'))
     } finally {
       setSaving(false)
     }
@@ -193,7 +194,7 @@ export default function OthersPage() {
         setSuccessMessage('新增成功，資料已更新')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '新增資料失敗')
+      setError(getErrorMessage(err, '新增資料失敗'))
     } finally {
       setSaving(false)
     }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { apiGet, apiPost } from '@/lib/api'
+import { getErrorMessage } from '@/lib/error'
 import type { CurrentUser, Sample, Wip, WipForm } from './types'
 import { fallbackUser, activeSampleStatuses, wipStatusText, priorityText, experimentOptions, operatorName } from './constants'
 import { createEmptyWipForm, getCurrentLab, getRequestedExperiments, makeAutoFormsForSample, formatRequestedExperiments, shouldOpenCreateWipByDefault } from './utils/wipForm'
@@ -179,7 +180,7 @@ export default function WipPage() {
         })
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '載入資料失敗')
+      setError(getErrorMessage(err, '載入資料失敗'))
     } finally {
       setLoading(false)
     }
@@ -342,7 +343,7 @@ export default function WipPage() {
 
       await loadData()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '建立 WIP 失敗')
+      setError(getErrorMessage(err, '建立 WIP 失敗'))
     } finally {
       setSubmitting(false)
     }
