@@ -1,18 +1,39 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=lims
+      - POSTGRES_USER=lims
+      - POSTGRES_PASSWORD=lims
+    ports:
+      - "5432:5432"
+    volumes:
+      - lims-db-data:/var/lib/postgresql/data
+
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: dockerfile
     ports:
       - "8000:8000"
+    depends_on:
+      - db
     environment:
       - ENV=development
+      - DATABASE_URL=postgresql://lims:lims@db:5432/lims
     volumes:
       - ./backend:/app
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
     ports:
       - "3000:3000"
     depends_on:
       - backend
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+
+volumes:
+  lims-db-data:
