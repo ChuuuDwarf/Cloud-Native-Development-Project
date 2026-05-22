@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -23,18 +24,6 @@ interface NavSection {
 }
 
 const nav: NavSection[] = [
-  {
-    section: "OVERVIEW",
-    items: [
-      {
-        id: "dashboard",
-        href: "/",
-        icon: "⬛",
-        label: "主管儀表板",
-        roles: ["system_admin", "lab_supervisor"],
-      },
-    ],
-  },
   {
     section: "委託流程",
     items: [
@@ -150,6 +139,13 @@ const nav: NavSection[] = [
         label: "系統設定",
         roles: ["system_admin"],
       },
+      {
+        id: "others",
+        href: "/others",
+        icon: "🧩",
+        label: "替代資料切換",
+        roles: ["system_admin", "lab_engineer", "lab_supervisor", "plant_user"],
+      },
     ],
   },
 ];
@@ -194,6 +190,11 @@ export default function Sidebar() {
   async function handleLogout() {
     await logout();
     router.replace("/");
+  }
+
+  function isActive(href: string) {
+    if (href === "/") return pathname === "/";
+    return pathname === href || pathname.startsWith(`${href}/`);
   }
 
   return (
@@ -264,11 +265,14 @@ export default function Sidebar() {
                 {group.section}
               </div>
             )}
+
             {group.items.map((item) => {
-              const active = pathname === item.href;
+              const active = isActive(item.href);
+
               return (
                 <Link key={item.id} href={item.href} style={{ textDecoration: "none" }}>
                   <div
+                    title={!open ? item.label : undefined}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -292,6 +296,7 @@ export default function Sidebar() {
                     >
                       {item.icon}
                     </span>
+
                     {open && (
                       <span
                         style={{
@@ -304,6 +309,7 @@ export default function Sidebar() {
                         {item.label}
                       </span>
                     )}
+
                     {open && item.badge && (
                       <span
                         style={{
@@ -370,6 +376,7 @@ export default function Sidebar() {
         >
           {initial}
         </div>
+
         {open && (
           <div style={{ flex: 1, overflow: "hidden" }}>
             <div
@@ -388,6 +395,7 @@ export default function Sidebar() {
                 fontSize: 10,
                 color: "var(--text3)",
                 fontFamily: "monospace",
+                whiteSpace: "nowrap",
               }}
             >
               {userPositionLabel}

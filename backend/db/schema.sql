@@ -228,4 +228,4 @@ CREATE INDEX IF NOT EXISTS idx_wips_sample_id ON wips(sample_id);
 
 CREATE INDEX IF NOT EXISTS idx_sample_histories_sample_id ON sample_histories(sample_id);
 CREATE INDEX IF NOT EXISTS idx_wip_histories_wip_id ON wip_histories(wip_id);
-CREATE INDEX IF NOT EXISTS idx_sample_transfers_sample_id ON sample_transfers(sample_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_target_id ON transfers(target_id);
