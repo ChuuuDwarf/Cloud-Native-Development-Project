@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS wips (
     status VARCHAR(30) NOT NULL DEFAULT 'created',
 
     progress INTEGER NOT NULL DEFAULT 0,
+    current_location VARCHAR(100),
 
     scheduled_at TIMESTAMP,
     dispatched_at TIMESTAMP,
