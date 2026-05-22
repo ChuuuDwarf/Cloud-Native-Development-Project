@@ -8,25 +8,6 @@ export function normalizeExperiment(value: string | null | undefined) {
   return (value ?? '').trim().toLowerCase()
 }
 
-export function safeParseSampleNote(note: string | null) {
-  if (!note) return null
-
-  try {
-    const parsed = JSON.parse(note)
-
-    if (!parsed || typeof parsed !== 'object') return null
-
-    return parsed as {
-      requested_experiments?: RequestedExperiment[]
-      priority?: string
-      sample_quantity?: string
-      source?: string
-    }
-  } catch {
-    return null
-  }
-}
-
 export function parseExperimentsFromSummary(summary: string | null): RequestedExperiment[] {
   if (!summary) return []
 
@@ -51,17 +32,8 @@ export function parseExperimentsFromSummary(summary: string | null): RequestedEx
 export function getRequestedExperiments(sample: Sample | null): RequestedExperiment[] {
   if (!sample) return []
 
-  const parsedNote = safeParseSampleNote(sample.note)
-
-  if (
-    parsedNote?.requested_experiments &&
-    Array.isArray(parsedNote.requested_experiments)
-  ) {
-    return parsedNote.requested_experiments.filter(
-      (item) => item.lab_name && item.experiment_item,
-    )
-  }
-
+  // note 是使用者備註，不解析。
+  // 交接流程需要的實驗順序統一從 sample.experiment_item 解析。
   return parseExperimentsFromSummary(sample.experiment_item)
 }
 
@@ -111,4 +83,3 @@ export function getCandidateKey(candidate: Candidate) {
 
   return `return-${candidate.sample.id}`
 }
-

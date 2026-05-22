@@ -1,5 +1,5 @@
 import type { KeyboardEvent, ReactNode } from 'react'
-import { wipStatusText } from '../constants'
+import { sampleStatusText, wipStatusText } from '../constants'
 import {
   panelStyle,
   panelHintStyle,
@@ -39,10 +39,10 @@ export function CollapsibleSection({
   return (
     <section style={panelStyle}>
       <div
-        onClick={onToggle}
-        onKeyDown={handleKeyDown}
         role="button"
         tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={handleKeyDown}
         style={sectionToggleHeaderStyle}
       >
         <div>
@@ -52,20 +52,20 @@ export function CollapsibleSection({
 
         <div style={sectionHeaderRightStyle}>
           {right}
-          <span style={collapseIconStyle}>{open ? '收合 ▲' : '展開 ▼'}</span>
+          <span style={collapseIconStyle}>{open ? '⌃' : '⌄'}</span>
         </div>
       </div>
 
-      {open && children}
+      {open && <div>{children}</div>}
     </section>
   )
 }
 
-export function InfoItem({ label, value }: { label: string; value: string }) {
+export function InfoItem({ label, value }: { label: string; value: string | number | null }) {
   return (
     <div style={infoItemStyle}>
       <div style={infoLabelStyle}>{label}</div>
-      <div style={infoValueStyle}>{value}</div>
+      <div style={infoValueStyle}>{value ?? '-'}</div>
     </div>
   )
 }
@@ -80,5 +80,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  return <span style={statusBadgeStyle}>{wipStatusText[status] ?? status}</span>
+  const text = sampleStatusText[status] ?? wipStatusText[status] ?? status
+
+  return <span style={statusBadgeStyle}>{text}</span>
 }

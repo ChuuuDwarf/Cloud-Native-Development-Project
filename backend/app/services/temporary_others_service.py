@@ -342,22 +342,9 @@ def experiment_temp_location(lab_name: str | None):
 
 
 def parse_requested_experiments_from_sample(sample: dict):
-    note = sample.get("note")
-
-    if note:
-        try:
-            parsed = json.loads(note)
-            requested_experiments = parsed.get("requested_experiments", [])
-
-            if isinstance(requested_experiments, list):
-                return [
-                    item
-                    for item in requested_experiments
-                    if item.get("lab_name") and item.get("experiment_item")
-                ]
-        except Exception:
-            pass
-
+    # note 是使用者備註，不可再拿來存或解析系統資料。
+    # 實驗需求統一從 samples.experiment_item 解析。
+    # 格式例如：Lab A:SEM 觀察、Lab B:光學量測
     experiment_item = sample.get("experiment_item") or ""
     result = []
 

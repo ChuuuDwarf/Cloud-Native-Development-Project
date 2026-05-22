@@ -6,7 +6,6 @@
 # - system_setting.md: GET /api/storage-locations, GET /api/labs, GET /api/master-data
 # - schedule.md: GET /api/schedules, GET /api/dispatches
 # - warn.md: GET /api/issues, POST /api/issues
-import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
@@ -246,6 +245,7 @@ def create_mock_order(
         "requested_experiments": requested_experiments,
         "priority": priority,
         "status": status,
+        "note": payload.get("note"),
     }
 
     mock_orders.append(order)
@@ -271,16 +271,7 @@ def create_mock_order(
     sample_no = generate_sample_no(db)
     current_location = receive_location(first_lab)
 
-    note = json.dumps(
-        {
-            "source": "/api/others/orders",
-            "sample_quantity": sample_quantity,
-            "priority": priority,
-            "requested_experiments": requested_experiments,
-            "delivery_status": "confirmed",
-        },
-        ensure_ascii=False,
-    )
+    note = payload.get("note")
 
     sample_result = db.execute(
         text(
@@ -885,16 +876,7 @@ def confirm_mock_order_delivery(
     sample_no = generate_sample_no(db)
     current_location = receive_location(first_lab)
 
-    note = json.dumps(
-        {
-            "source": "/api/others/orders/confirm-delivery",
-            "sample_quantity": order.get("sample_quantity") or "1",
-            "priority": order.get("priority") or "normal",
-            "requested_experiments": requested_experiments,
-            "delivery_status": "confirmed",
-        },
-        ensure_ascii=False,
-    )
+    note = order.get("note")
 
     sample_result = db.execute(
         text(

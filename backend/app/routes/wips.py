@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -11,10 +9,8 @@ router = APIRouter(
     tags=["wips"],
 )
 
+from app.services.wip_service import *  # noqa: F403
 
-# 這個 route 檔現在只保留 API endpoint 與 request/response 組裝。
-# 權限、位置、ID、狀態流轉等 helper 已拆到 service 檔，方便後續維護與測試。
-from app.services.wip_service import *  # noqa: F403 - route endpoint 會使用拆出的 helper
 
 @router.get("")
 def get_wips(
@@ -26,7 +22,9 @@ def get_wips(
     current_user = get_active_user(request)
     role = current_user.get("role")
 
-    if include_all_for_flow and role in ("lab_staff", "lab_supervisor", "system_admin"):
+    # 只有 system_admin 可以跨 Lab 看全部 WIP。
+    # Lab A 人員 / 主管只能看 w.lab_name = Lab A 的 WIP。
+    if include_all_for_flow and role == "system_admin":
         where_clauses = []
         params = {}
     else:
@@ -170,8 +168,6 @@ def update_wip(
     return dict(result.fetchone()._mapping)
 
 
-# TODO(integration): WIP actions 目前只處理本模組狀態與位置。
-# 正式整合 schedule.md 後，send_to_schedule / mark_scheduled / mark_dispatched 應改接排程與派工模組。
 @router.post("/{wip_id}/actions")
 def wip_action(
     wip_id: str,
@@ -186,7 +182,6 @@ def wip_action(
         raise HTTPException(status_code=403, detail="You do not have permission to operate this WIP")
 
     current_lab = get_user_lab(current_user)
-
     action = payload.get("action")
 
     if action not in (
@@ -314,11 +309,13 @@ def wip_action(
                         current_location = :next_location,
                         updated_at = NOW()
                     WHERE sample_id = :sample_id
+                      AND lab_name = :current_lab
                       AND status <> 'completed'
-                """
+                    """
                 ),
                 {
                     "sample_id": wip["sample_id"],
+                    "current_lab": current_lab,
                     "next_location": next_location,
                 },
             )

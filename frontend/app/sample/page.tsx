@@ -51,16 +51,92 @@ export default function SamplePage() {
   const isFactoryUser = currentUser.role === 'factory_user'
   const operatorName = currentUser.name || fallbackUser.name
 
+  function parseExperimentLabs(experimentItem: string | null | undefined) {
+    if (!experimentItem) return []
+
+    const labs: string[] = []
+
+    experimentItem
+      .split('、')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((part) => {
+        const [labName] = part.split(':')
+
+        if (!labName) return
+
+        const normalizedLabName = labName.trim()
+
+        if (normalizedLabName && !labs.includes(normalizedLabName)) {
+          labs.push(normalizedLabName)
+        }
+      })
+
+    return labs
+  }
+
+  function hasNextLabAfterCurrent(sample: Sample | null, user: CurrentUser) {
+    if (!sample) return false
+
+    const currentLab = getUserLab(user)
+    const labs = parseExperimentLabs(sample.experiment_item)
+
+    if (!currentLab || labs.length === 0) return false
+
+    const currentIndex = labs.findIndex((lab) => lab === currentLab)
+
+    if (currentIndex === -1) return false
+
+    return currentIndex < labs.length - 1
+  }
+
   const outgoingTransfersBySampleId = useMemo(() => {
     const map = new Map<string, Transfer>()
+    const currentLab = getUserLab(currentUser)
+    const isLabUser = currentUser.role === 'lab_staff' || currentUser.role === 'lab_supervisor'
+
+    function getTransferPriority(transfer: Transfer) {
+      if (!isLabUser || !currentLab) return 0
+
+      const isIncomingToCurrentLab = transfer.to_lab === currentLab
+      const isOutgoingFromCurrentLab = transfer.from_lab === currentLab
+
+      // 樣品目前在自己 Lab，代表要看「別人交給我」的待收樣資訊。
+      // 樣品不在自己 Lab，代表要看「我交出去」的交接結果。
+      const relatedSample = samples.find((sample) => sample.id === transfer.target_id)
+      const location = relatedSample?.current_location ?? ''
+      const sampleInCurrentLab = Boolean(location.startsWith(currentLab))
+
+      if (sampleInCurrentLab && isIncomingToCurrentLab) return 3
+      if (!sampleInCurrentLab && isOutgoingFromCurrentLab) return 3
+      if (isOutgoingFromCurrentLab || isIncomingToCurrentLab) return 2
+
+      return 1
+    }
 
     transfers
       .filter((transfer) => transfer.target_type === 'sample')
+      .filter((transfer) => {
+        if (!isLabUser || !currentLab) return true
+        return transfer.from_lab === currentLab || transfer.to_lab === currentLab
+      })
       .forEach((transfer) => {
         const existing = map.get(transfer.target_id)
 
         if (!existing) {
           map.set(transfer.target_id, transfer)
+          return
+        }
+
+        const existingPriority = getTransferPriority(existing)
+        const nextPriority = getTransferPriority(transfer)
+
+        if (nextPriority > existingPriority) {
+          map.set(transfer.target_id, transfer)
+          return
+        }
+
+        if (nextPriority < existingPriority) {
           return
         }
 
@@ -73,7 +149,7 @@ export default function SamplePage() {
       })
 
     return map
-  }, [transfers])
+  }, [transfers, samples, currentUser])
 
   const filterOptions = useMemo(() => {
     if (isFactoryUser) {
@@ -122,11 +198,7 @@ export default function SamplePage() {
       return selectedWips
     }
 
-    if (currentUser.role === 'lab_supervisor') {
-      return selectedWips
-    }
-
-    if (currentUser.role === 'lab_staff') {
+    if (currentUser.role === 'lab_staff' || currentUser.role === 'lab_supervisor') {
       const currentLab = getUserLab(currentUser)
       return selectedWips.filter((wip) => wip.lab_name === currentLab)
     }
@@ -147,7 +219,34 @@ export default function SamplePage() {
     }, {})
   }, [visibleSelectedWips])
 
-  const allWipsCompleted = selectedWips.length > 0 && selectedWips.every((wip) => wip.status === 'completed')
+  const currentLabWips = useMemo(() => {
+    const currentLab = getUserLab(currentUser)
+
+    if (!currentLab) return []
+
+    return selectedWips.filter((wip) => wip.lab_name === currentLab)
+  }, [selectedWips, currentUser])
+
+  const currentLabWipsCompleted =
+    currentLabWips.length > 0 && currentLabWips.every((wip) => wip.status === 'completed')
+
+  const hasNextLab = hasNextLabAfterCurrent(selectedSample, currentUser)
+
+  const canNotifyPickup =
+    Boolean(selectedSample) &&
+    !isFactoryUser &&
+    selectedSampleInCurrentLab &&
+    selectedSample?.status === 'split' &&
+    currentLabWipsCompleted &&
+    !hasNextLab
+
+  const shouldShowTransferAction =
+    Boolean(selectedSample) &&
+    !isFactoryUser &&
+    selectedSampleInCurrentLab &&
+    selectedSample?.status === 'split' &&
+    currentLabWipsCompleted &&
+    hasNextLab
 
   const baseSamplesForCount = useMemo(() => {
     return samples.filter((sample) => isSampleVisibleForUser(sample, currentUser))
@@ -234,7 +333,7 @@ export default function SamplePage() {
 
       const [sampleData, wipData, transferData] = await Promise.all([
         apiGet<Sample[]>('/api/samples?scope=all'),
-        apiGet<Wip[]>('/api/wips?include_all_for_flow=true'),
+        apiGet<Wip[]>('/api/wips'),
         apiGet<Transfer[]>('/api/transfers'),
       ])
 
@@ -375,11 +474,21 @@ export default function SamplePage() {
 
     if (sample.status === 'pending_receive') return '樣品尚未完成收樣，下一步是確認收樣。'
     if (sample.status === 'received') return '樣品已完成收樣，下一步請前往 WIP / 分貨管理建立實驗子單。'
-    if (sample.status === 'split' && selectedWips.length === 0) return '樣品已標記分貨，但目前沒有 WIP，請確認後端資料是否已建立實驗子單。'
-    if (sample.status === 'split' && selectedWips.length > 0 && !allWipsCompleted) {
-      return '樣品已有 WIP / 實驗子單，請依實驗室分組追蹤各實驗進度。若某實驗室完成且還有下一實驗室，請至交接流轉頁處理。'
+    if (sample.status === 'split' && currentLabWips.length === 0) {
+      return '樣品已建立 WIP，但目前登入 Lab 沒有可處理的 WIP。'
     }
-    if (sample.status === 'split' && allWipsCompleted) return '所有實驗已完成，可通知原使用者取件，並將樣品移至待取件區。'
+
+    if (sample.status === 'split' && currentLabWips.length > 0 && !currentLabWipsCompleted) {
+      return '此樣品仍有本 Lab 的 WIP 尚未完成，完成後才能進入下一步。'
+    }
+
+    if (sample.status === 'split' && currentLabWipsCompleted && hasNextLab) {
+      return '本 Lab 的 WIP 已完成，但此樣品後面還有其他實驗室要處理。下一步請前往交接流轉，移交給下一個 Lab。'
+    }
+
+    if (sample.status === 'split' && currentLabWipsCompleted && !hasNextLab) {
+      return '此樣品已完成最後一個 Lab 的實驗，可通知原使用者取件，並將樣品移至待取件區。'
+    }
     if (sample.status === 'transferring') return '樣品正在跨實驗室交接中，等待下一個實驗室簽收。'
     if (sample.status === 'outbound') return '已通知原使用者取件，樣品目前在待取件區。'
     if (sample.status === 'picked_up') return '樣品已由原使用者取回，流程完成。此筆會保留在已取件紀錄。'
@@ -393,7 +502,7 @@ export default function SamplePage() {
   }
 
   function goToTransferPage() {
-    window.location.href = '/sample/transfer'
+    window.location.href = '/transfer'
   }
 
   useEffect(() => {
@@ -500,7 +609,8 @@ export default function SamplePage() {
           submitting={submitting}
           canFactoryConfirmPickup={canFactoryConfirmPickup}
           selectedSampleInCurrentLab={selectedSampleInCurrentLab}
-          allWipsCompleted={allWipsCompleted}
+          allWipsCompleted={canNotifyPickup}
+          shouldShowTransferAction={shouldShowTransferAction}
           shouldShowActionSection={shouldShowActionSection}
           isFactoryUser={isFactoryUser}
           nextStepText={getNextStep(selectedSample)}

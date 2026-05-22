@@ -75,7 +75,10 @@ def build_transfer_visibility_filter(current_user: dict):
             where_clauses.append("1 = 0")
             return where_clauses, params
 
-        where_clauses.append("from_lab = :current_lab")
+        # Lab 使用者要同時看得到：
+        # 1. 自己 Lab 交出去的交接單
+        # 2. 別人 Lab 交給自己 Lab 的待接收交接單
+        where_clauses.append("(from_lab = :current_lab OR to_lab = :current_lab)")
         params["current_lab"] = current_lab
         return where_clauses, params
 

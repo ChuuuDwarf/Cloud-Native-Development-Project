@@ -1,4 +1,4 @@
-import type { CurrentUser, RequestedExperiment, Sample, SampleNote, Wip, WipForm } from '../types'
+import type { CurrentUser, RequestedExperiment, Sample, Wip, WipForm } from '../types'
 import { fallbackUser } from '../constants'
 
 export function createEmptyWipForm(labName = ''): WipForm {
@@ -13,20 +13,6 @@ export function createEmptyWipForm(labName = ''): WipForm {
 
 export function getCurrentLab(user: CurrentUser | null) {
   return user?.lab_name || user?.department || fallbackUser.lab_name || fallbackUser.department
-}
-
-export function safeParseSampleNote(note: string | null): SampleNote | null {
-  if (!note) return null
-
-  try {
-    const parsed = JSON.parse(note)
-
-    if (!parsed || typeof parsed !== 'object') return null
-
-    return parsed as SampleNote
-  } catch {
-    return null
-  }
 }
 
 export function parseExperimentsFromSummary(summary: string | null): RequestedExperiment[] {
@@ -53,18 +39,15 @@ export function parseExperimentsFromSummary(summary: string | null): RequestedEx
 export function getRequestedExperiments(sample: Sample | null): RequestedExperiment[] {
   if (!sample) return []
 
-  const note = safeParseSampleNote(sample.note)
-
-  if (note?.requested_experiments && Array.isArray(note.requested_experiments)) {
-    return note.requested_experiments.filter((item) => item.lab_name && item.experiment_item)
-  }
-
+  // note 是使用者備註，不解析。
+  // 實驗需求統一從 sample.experiment_item 解析。
   return parseExperimentsFromSummary(sample.experiment_item)
 }
 
-export function getSampleDefaultPriority(sample: Sample | null) {
-  const note = safeParseSampleNote(sample?.note ?? null)
-  return note?.priority || 'normal'
+export function getSampleDefaultPriority(_sample: Sample | null) {
+  // 不再從 sample.note 取 priority。
+  // 備註只給使用者填文字，WIP 預設 normal。
+  return 'normal'
 }
 
 export function makeAutoFormsForSample(
@@ -118,9 +101,7 @@ export function formatRequestedExperiments(sample: Sample | null) {
 export function shouldOpenCreateWipByDefault(sample: Sample | null) {
   if (!sample) return true
 
-  // 已分貨代表通常已經建立過 WIP，所以「建立 WIP」block 預設收合
   if (sample.status === 'split') return false
 
   return true
 }
-

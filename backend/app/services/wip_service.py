@@ -1,16 +1,16 @@
 """WIPs helper/service layer.
 
-這個檔案由原本過長的 route 檔拆出，集中放置權限判斷、位置轉換、ID 產生、資料查詢等輔助邏輯。
-Route 檔應只保留 HTTP endpoint，避免 API 入口與流程邏輯混在一起。
+這個檔案集中放置 WIP 權限判斷、位置轉換、ID 驗證、資料查詢等輔助邏輯。
+重點：
+- WIP 的可見範圍用 w.lab_name 判斷，不能用 current_location。
+- current_location 只代表樣品 / WIP 目前所在位置，不代表 WIP 原本歸屬哪個 Lab。
 """
 
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Query, Request
+from fastapi import HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
-from database import get_db
 
 
 fallback_user = {
@@ -30,7 +30,6 @@ def get_active_user(request: Request | None = None):
         # 正式整合 role.md 後，請改接 GET /api/me 或正式 auth/user service。
         from app.routes.others import resolve_current_user
 
-        # 這裡保留舊行為，避免前端在正式 role API 上線前無法取得登入身分。
         return resolve_current_user(request)
     except Exception:
         return fallback_user
@@ -80,9 +79,12 @@ def build_wip_visibility_filter(current_user: dict):
             where_clauses.append("1 = 0")
             return where_clauses, params
 
-        # WIP 以樣品實體位置判斷目前在哪個 Lab。
-        where_clauses.append("w.current_location LIKE :current_lab_prefix")
-        params["current_lab_prefix"] = f"{current_lab}%"
+        # 重要：
+        # WIP 是由哪個 Lab 建立 / 執行，就永遠屬於那個 Lab。
+        # 即使樣品後來轉交到其他 Lab，甚至最後被廠區取回，
+        # 原 Lab 仍然要看得到自己 Lab 的 WIP 紀錄。
+        where_clauses.append("w.lab_name = :current_lab")
+        params["current_lab"] = current_lab
         return where_clauses, params
 
     where_clauses.append("1 = 0")
@@ -100,8 +102,10 @@ def can_view_wip(current_user: dict, wip: dict, sample: dict | None = None) -> b
 
     if role in ("lab_staff", "lab_supervisor"):
         current_lab = get_user_lab(current_user)
-        current_location = wip.get("current_location") or ""
-        return bool(current_lab and current_location.startswith(current_lab))
+
+        # 查看 WIP 用 lab_name，不用 current_location。
+        # 這樣 Lab A 已轉出的樣品，Lab A 還是可以看到自己做過的 WIP。
+        return bool(current_lab and wip.get("lab_name") == current_lab)
 
     return False
 
@@ -116,8 +120,10 @@ def can_manage_wip(current_user: dict, wip: dict) -> bool:
         return False
 
     current_lab = get_user_lab(current_user)
-    current_location = wip.get("current_location") or ""
-    return bool(current_lab and current_location.startswith(current_lab))
+
+    # 操作 WIP 也以 WIP 歸屬 Lab 為準，避免 current_location 被更新成
+    # 「已由使用者取回」後，原 Lab 連自己的 WIP 都不能操作 / 補資料。
+    return bool(current_lab and wip.get("lab_name") == current_lab)
 
 
 def validate_uuid(value: str | None, field_name: str) -> None:

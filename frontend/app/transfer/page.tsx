@@ -2,11 +2,68 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, apiPost } from '@/lib/api'
-import type { CurrentUser, Sample, Wip, Transfer, TransferCandidate, ReturnCandidate, Candidate } from './types'
+import type {
+  CurrentUser,
+  Sample,
+  Wip,
+  Transfer,
+  TransferCandidate,
+  ReturnCandidate,
+  Candidate,
+} from './types'
 import { fallbackUser, sampleStatusText, blockingTransferStatuses } from './constants'
-import { normalizeLab, getRequestedExperiments, findMatchingWipForExperiment, isExperimentCompleted, getCandidateKey } from './utils/transferFlow'
-import { TransferModal, TransferDetail, ReturnDetail, SummaryCard, InfoLine, StatusBadge } from './components/TransferWidgets'
-import { headerStyle, headerActionsStyle, titleStyle, subtitleStyle, currentUserBoxStyle, currentUserTitleStyle, currentUserTextStyle, summaryGridStyle, twoColumnGridStyle, panelStyle, panelHeaderStyle, panelTitleStyle, hintStyle, countBadgeStyle, errorStyle, successStyle, emptyStyle, candidateListStyle, candidateCardStyle, selectedCandidateCardStyle, candidateTopRowStyle, candidateTitleStyle, candidateSubtitleStyle, candidateMetaGridStyle, readyBadgeStyle, warningBadgeStyle, secondaryButtonStyle, tableStyle, thStyle, tdStyle, monoTdStyle, smallActionGroupStyle, smallPrimaryButtonStyle, smallSecondaryButtonStyle, smallDangerButtonStyle } from './styles'
+import {
+  normalizeLab,
+  getRequestedExperiments,
+  findMatchingWipForExperiment,
+  isExperimentCompleted,
+  getCandidateKey,
+} from './utils/transferFlow'
+import {
+  TransferModal,
+  TransferDetail,
+  ReturnDetail,
+  SummaryCard,
+  InfoLine,
+  StatusBadge,
+} from './components/TransferWidgets'
+import {
+  headerStyle,
+  headerActionsStyle,
+  titleStyle,
+  subtitleStyle,
+  currentUserBoxStyle,
+  currentUserTitleStyle,
+  currentUserTextStyle,
+  summaryGridStyle,
+  twoColumnGridStyle,
+  panelStyle,
+  panelHeaderStyle,
+  panelTitleStyle,
+  hintStyle,
+  countBadgeStyle,
+  errorStyle,
+  successStyle,
+  emptyStyle,
+  candidateListStyle,
+  candidateCardStyle,
+  selectedCandidateCardStyle,
+  candidateTopRowStyle,
+  candidateTitleStyle,
+  candidateSubtitleStyle,
+  candidateMetaGridStyle,
+  readyBadgeStyle,
+  warningBadgeStyle,
+  secondaryButtonStyle,
+  tableStyle,
+  thStyle,
+  tdStyle,
+  monoTdStyle,
+  smallActionGroupStyle,
+  smallPrimaryButtonStyle,
+  smallSecondaryButtonStyle,
+  smallDangerButtonStyle,
+} from './styles'
 
 export default function SampleTransferPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser>(fallbackUser)
@@ -14,7 +71,7 @@ export default function SampleTransferPage() {
   const [wips, setWips] = useState<Wip[]>([])
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [selectedCandidateKey, setSelectedCandidateKey] = useState('')
-  const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null)
+  const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -22,6 +79,12 @@ export default function SampleTransferPage() {
 
   const currentLab = currentUser.lab_name || currentUser.department || 'Lab A'
   const operatorName = currentUser.name || fallbackUser.name
+
+  const selectedTransfer = useMemo(() => {
+    if (!selectedTransferId) return null
+
+    return transfers.find((transfer) => transfer.id === selectedTransferId) ?? null
+  }, [transfers, selectedTransferId])
 
   const wipsBySampleId = useMemo(() => {
     return wips.reduce<Record<string, Wip[]>>((groups, wip) => {
@@ -235,7 +298,9 @@ export default function SampleTransferPage() {
     }
   }
 
-  async function loadData() {
+  async function loadData(options?: { resetCandidate?: boolean }) {
+    const resetCandidate = options?.resetCandidate ?? true
+
     try {
       setLoading(true)
       setError('')
@@ -246,14 +311,24 @@ export default function SampleTransferPage() {
       const [sampleData, wipData, transferData] = await Promise.all([
         apiGet<Sample[]>('/api/samples'),
         apiGet<Wip[]>('/api/wips?include_all_for_flow=true'),
-        apiGet<Transfer[]>('/api/transfers') // TODO(integration): 交接模組合併後確認是否保留 /api/transfers，或改由 /api/samples/:id/actions 管理,
+        apiGet<Transfer[]>('/api/transfers'),
       ])
 
       setCurrentUser(meData)
       setSamples(sampleData)
       setWips(wipData)
       setTransfers(transferData)
-      setSelectedCandidateKey('')
+
+      if (resetCandidate) {
+        setSelectedCandidateKey('')
+      }
+
+      if (
+        selectedTransferId &&
+        !transferData.some((transfer) => transfer.id === selectedTransferId)
+      ) {
+        setSelectedTransferId(null)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '載入樣品流轉資料失敗')
     } finally {
@@ -267,7 +342,7 @@ export default function SampleTransferPage() {
       setError('')
       setSuccessMessage('')
 
-      await apiPost('/api/transfers', { // TODO(integration): 交接 API 若併回 sample actions，這裡需改成 /api/samples/:id/actions transfer
+      await apiPost('/api/transfers', {
         target_type: 'sample',
         target_id: candidate.sample.id,
         order_no: candidate.sample.order_no,
@@ -302,6 +377,7 @@ export default function SampleTransferPage() {
         operator_name: operatorName,
       })
 
+      setSelectedTransferId(null)
       setSuccessMessage('已送出交接，樣品已移至下一個 Lab 的待收樣區')
       await loadData()
     } catch (err) {
@@ -323,6 +399,7 @@ export default function SampleTransferPage() {
         operator_name: operatorName,
       })
 
+      setSelectedTransferId(null)
       setSuccessMessage('交接單已取消')
       await loadData()
     } catch (err) {
@@ -346,6 +423,7 @@ export default function SampleTransferPage() {
         note: candidate.sample.note,
       })
 
+      setSelectedTransferId(null)
       setSuccessMessage('已通知原使用者取件，樣品已移至待取件區')
       await loadData()
     } catch (err) {
@@ -368,6 +446,7 @@ export default function SampleTransferPage() {
         current_location: '已由使用者取回',
       })
 
+      setSelectedTransferId(null)
       setSuccessMessage('已確認使用者取件，樣品流程完成')
       await loadData()
     } catch (err) {
@@ -397,7 +476,7 @@ export default function SampleTransferPage() {
           <button onClick={() => (window.location.href = '/sample')} style={secondaryButtonStyle}>
             回樣品管理
           </button>
-          <button onClick={loadData} style={secondaryButtonStyle}>
+          <button onClick={() => loadData()} style={secondaryButtonStyle}>
             重新整理
           </button>
         </div>
@@ -652,7 +731,7 @@ export default function SampleTransferPage() {
                       <div style={smallActionGroupStyle}>
                         <button
                           type="button"
-                          onClick={() => setSelectedTransfer(transfer)}
+                          onClick={() => setSelectedTransferId(transfer.id)}
                           style={smallSecondaryButtonStyle}
                         >
                           查看
@@ -660,6 +739,7 @@ export default function SampleTransferPage() {
 
                         {transfer.from_lab === currentLab && transfer.status === 'pending' && (
                           <button
+                            type="button"
                             onClick={() => sendTransfer(transfer)}
                             disabled={submitting}
                             style={smallPrimaryButtonStyle}
@@ -670,6 +750,7 @@ export default function SampleTransferPage() {
 
                         {transfer.from_lab === currentLab && transfer.status === 'pending' && (
                           <button
+                            type="button"
                             onClick={() => cancelTransfer(transfer)}
                             disabled={submitting}
                             style={smallDangerButtonStyle}
@@ -678,9 +759,15 @@ export default function SampleTransferPage() {
                           </button>
                         )}
 
-                        {transfer.status === 'transferring' && <span style={hintStyle}>已送至對方待收樣區</span>}
-                        {transfer.status === 'received' && <span style={hintStyle}>對方已收樣</span>}
-                        {transfer.status === 'cancelled' && <span style={hintStyle}>已取消</span>}
+                        {transfer.status === 'transferring' && (
+                          <span style={hintStyle}>已送至對方待收樣區</span>
+                        )}
+                        {transfer.status === 'received' && (
+                          <span style={hintStyle}>對方已收樣</span>
+                        )}
+                        {transfer.status === 'cancelled' && (
+                          <span style={hintStyle}>已取消</span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -696,7 +783,7 @@ export default function SampleTransferPage() {
           transfer={selectedTransfer}
           currentLab={currentLab}
           submitting={submitting}
-          onClose={() => setSelectedTransfer(null)}
+          onClose={() => setSelectedTransferId(null)}
           onSendTransfer={sendTransfer}
           onCancelTransfer={cancelTransfer}
         />

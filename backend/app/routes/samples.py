@@ -16,6 +16,53 @@ router = APIRouter(
 # 權限、位置、ID、狀態流轉等 helper 已拆到 service 檔，方便後續維護與測試。
 from app.services.sample_service import *  # noqa: F403 - route endpoint 會使用拆出的 helper
 
+
+def parse_required_labs_from_experiment_item(experiment_item: str | None):
+    """
+    從 sample.experiment_item 解析需要流轉的 Lab 順序。
+
+    格式範例：
+    Lab A:SEM 觀察、Lab B:光學量測
+
+    回傳：
+    ["Lab A", "Lab B"]
+    """
+    if not experiment_item:
+        return []
+
+    required_labs = []
+
+    for part in experiment_item.split("、"):
+        part = part.strip()
+
+        if ":" not in part:
+            continue
+
+        lab_name = part.split(":", 1)[0].strip()
+
+        if lab_name and lab_name not in required_labs:
+            required_labs.append(lab_name)
+
+    return required_labs
+
+
+def get_next_lab_after_current(experiment_item: str | None, current_lab: str | None):
+    if not current_lab:
+        return None
+
+    required_labs = parse_required_labs_from_experiment_item(experiment_item)
+
+    if current_lab not in required_labs:
+        return None
+
+    current_index = required_labs.index(current_lab)
+
+    if current_index >= len(required_labs) - 1:
+        return None
+
+    return required_labs[current_index + 1]
+
+
 @router.get("")
 def get_samples(
     request: Request,
@@ -112,11 +159,11 @@ def get_sample_history(
                 detail="You do not have permission to view this sample history",
             )
 
-    elif role == "lab_staff":
+    elif role in ("lab_staff", "lab_supervisor"):
         where_clauses.append("lab_name = :current_lab")
         params["current_lab"] = current_lab
 
-    elif role in ("lab_supervisor", "system_admin"):
+    elif role == "system_admin":
         pass
 
     else:
@@ -472,6 +519,86 @@ def sample_action(
         return dict(result.fetchone()._mapping)
 
     if action == "outbound":
+        if sample["status"] != "split":
+            raise HTTPException(
+                status_code=400,
+                detail="只有已建立 WIP / 已分貨的樣品可以通知取件",
+            )
+
+        pending_transfer = db.execute(
+            text(
+                """
+                SELECT
+                    transfer_no,
+                    from_lab,
+                    to_lab,
+                    status
+                FROM transfers
+                WHERE target_type = 'sample'
+                  AND target_id = :sample_id
+                  AND status IN ('pending', 'transferring')
+                ORDER BY created_at DESC
+                LIMIT 1
+                """
+            ),
+            {"sample_id": sample_id},
+        ).fetchone()
+
+        if pending_transfer is not None:
+            pending_transfer_data = dict(pending_transfer._mapping)
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "此樣品仍有尚未完成的交接流程，不能通知取件："
+                    f"{pending_transfer_data.get('transfer_no')} "
+                    f"{pending_transfer_data.get('from_lab')} → "
+                    f"{pending_transfer_data.get('to_lab')} "
+                    f"({pending_transfer_data.get('status')})"
+                ),
+            )
+
+        incomplete_wips = db.execute(
+            text(
+                """
+                SELECT
+                    lab_name,
+                    experiment_item,
+                    status
+                FROM wips
+                WHERE sample_id = :sample_id
+                  AND status <> 'completed'
+                ORDER BY created_at ASC
+                """
+            ),
+            {"sample_id": sample_id},
+        ).fetchall()
+
+        if incomplete_wips:
+            items = [
+                f"{row._mapping['lab_name']} / {row._mapping['experiment_item']}：{row._mapping['status']}"
+                for row in incomplete_wips
+            ]
+
+            raise HTTPException(
+                status_code=400,
+                detail=f"此樣品仍有未完成的 WIP，不能通知取件：{'、'.join(items)}",
+            )
+
+        next_lab = get_next_lab_after_current(
+            sample.get("experiment_item"),
+            current_lab,
+        )
+
+        if next_lab:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"此樣品後續還有 {next_lab} 的實驗，"
+                    f"不能由 {current_lab} 通知取件，請先交接流轉"
+                ),
+            )
+
         next_location = normalize_location_for_action(
             payload.get("current_location"),
             current_lab,

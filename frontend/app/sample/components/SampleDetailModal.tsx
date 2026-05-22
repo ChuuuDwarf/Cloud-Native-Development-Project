@@ -35,6 +35,7 @@ import {
   formatStatusChange,
   getDisplaySampleLocation,
   getDisplaySampleStatus,
+  getUserLab,
   shouldMaskSampleForLab,
 } from '../utils/sampleDisplay'
 
@@ -52,6 +53,7 @@ type SampleDetailModalProps = {
   canFactoryConfirmPickup: boolean
   selectedSampleInCurrentLab: boolean
   allWipsCompleted: boolean
+  shouldShowTransferAction: boolean
   shouldShowActionSection: boolean
   isFactoryUser: boolean
   nextStepText: string
@@ -77,6 +79,7 @@ export function SampleDetailModal({
   canFactoryConfirmPickup,
   selectedSampleInCurrentLab,
   allWipsCompleted,
+  shouldShowTransferAction,
   shouldShowActionSection,
   isFactoryUser,
   nextStepText,
@@ -87,6 +90,66 @@ export function SampleDetailModal({
   onGoToWipPage,
   onGoToTransferPage,
 }: SampleDetailModalProps) {
+  const currentLab = getUserLab(currentUser)
+  const shouldMaskForCurrentLab = shouldMaskSampleForLab(sample, currentUser)
+  const isLabUser = currentUser.role === 'lab_staff' || currentUser.role === 'lab_supervisor'
+
+  const ownLabReceiveHistory = sampleHistories.find((history) => {
+    if (history.action !== 'receive') return false
+    if (!isLabUser) return true
+    return history.lab_name === currentLab
+  })
+
+  const isIncomingTransferWaitingReceive = Boolean(
+    isLabUser &&
+      selectedSampleInCurrentLab &&
+      selectedSampleOutgoingTransfer &&
+      selectedSampleOutgoingTransfer.to_lab === currentLab &&
+      selectedSampleOutgoingTransfer.status === 'transferring' &&
+      sample.status === 'pending_receive',
+  )
+
+  const displayReceivedBy =
+    ownLabReceiveHistory?.operator_name ??
+    (shouldMaskForCurrentLab
+      ? selectedSampleOutgoingTransfer?.handed_by ?? sample.received_by ?? '尚未收樣'
+      : sample.received_by ?? '尚未收樣')
+
+  const displayReceivedAt = ownLabReceiveHistory?.created_at ?? sample.received_at
+
+  const transferReceiverText =
+    selectedSampleOutgoingTransfer?.received_by ??
+    (selectedSampleOutgoingTransfer?.to_lab
+      ? `${selectedSampleOutgoingTransfer.to_lab} 尚未確認接收`
+      : '接收實驗室尚未確認接收')
+
+  const transferredOutStatusText = (() => {
+    if (!selectedSampleOutgoingTransfer) return '已離開本實驗室'
+
+    if (selectedSampleOutgoingTransfer.status === 'pending') {
+      return `交接單已建立，尚未送出至 ${selectedSampleOutgoingTransfer.to_lab ?? '接收實驗室'}`
+    }
+
+    if (selectedSampleOutgoingTransfer.status === 'transferring') {
+      return `等待 ${selectedSampleOutgoingTransfer.to_lab ?? '接收實驗室'} 確認接收`
+    }
+
+    if (selectedSampleOutgoingTransfer.status === 'received') {
+      return '接收實驗室已確認接收'
+    }
+
+    if (selectedSampleOutgoingTransfer.status === 'cancelled') {
+      return '交接已取消'
+    }
+
+    return selectedSampleOutgoingTransfer.status
+  })()
+
+  const shouldShowPickupInfo =
+    !shouldMaskForCurrentLab &&
+    !isIncomingTransferWaitingReceive &&
+    (sample.status === 'outbound' || sample.status === 'picked_up')
+
   return (
     <Modal onClose={onClose}>
       <div style={modalHeaderStyle}>
@@ -126,10 +189,62 @@ export function SampleDetailModal({
             label="目前位置"
             value={getDisplaySampleLocation(sample, currentUser, selectedSampleOutgoingTransfer)}
           />
-          <InfoItem label="收樣人" value={sample.received_by ?? '尚未收樣'} />
-          <InfoItem label="收樣時間" value={formatDateTime(sample.received_at)} />
-          <InfoItem label="取件人" value={sample.picked_up_by ?? '尚未取件'} />
-          <InfoItem label="取件時間" value={formatDateTime(sample.picked_up_at)} />
+
+          {isIncomingTransferWaitingReceive ? (
+            <>
+              <InfoItem label="來源實驗室" value={selectedSampleOutgoingTransfer?.from_lab ?? '-'} />
+              <InfoItem label="交接人" value={selectedSampleOutgoingTransfer?.handed_by ?? '-'} />
+              <InfoItem
+                label="交接時間"
+                value={formatDateTime(selectedSampleOutgoingTransfer?.transferred_at ?? null)}
+              />
+              <InfoItem label="收件人" value="尚未接收" />
+              <InfoItem label="收件時間" value="-" />
+            </>
+          ) : (
+            <>
+              <InfoItem label="收樣人" value={displayReceivedBy} />
+              <InfoItem label="收樣時間" value={formatDateTime(displayReceivedAt)} />
+
+              {shouldMaskForCurrentLab && selectedSampleOutgoingTransfer && (
+                <>
+                  {selectedSampleOutgoingTransfer.status === 'received' ? (
+                    <>
+                      <InfoItem label="取走人" value={transferReceiverText} />
+                      <InfoItem
+                        label="取走時間"
+                        value={formatDateTime(selectedSampleOutgoingTransfer.received_at)}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <InfoItem label="接收狀態" value={transferredOutStatusText} />
+                      <InfoItem
+                        label={
+                          selectedSampleOutgoingTransfer.status === 'pending'
+                            ? '建立交接時間'
+                            : '交接時間'
+                        }
+                        value={formatDateTime(
+                          selectedSampleOutgoingTransfer.status === 'pending'
+                            ? selectedSampleOutgoingTransfer.created_at
+                            : selectedSampleOutgoingTransfer.transferred_at,
+                        )}
+                      />
+                    </>
+                  )}
+                </>
+              )}
+
+              {shouldShowPickupInfo && (
+                <>
+                  <InfoItem label="取件人" value={sample.picked_up_by ?? '尚未取件'} />
+                  <InfoItem label="取件時間" value={formatDateTime(sample.picked_up_at)} />
+                </>
+              )}
+            </>
+          )}
+
           <InfoItem label="備註" value={sample.note ?? '-'} />
         </div>
 
@@ -282,6 +397,19 @@ export function SampleDetailModal({
                     style={primaryButtonStyle}
                   >
                     通知取件 / 移至待取件區
+                  </button>
+                )}
+
+              {!isFactoryUser &&
+                selectedSampleInCurrentLab &&
+                sample.status === 'split' &&
+                shouldShowTransferAction && (
+                  <button
+                    onClick={onGoToTransferPage}
+                    disabled={submitting}
+                    style={primaryButtonStyle}
+                  >
+                    本 Lab 已完成，前往交接流轉
                   </button>
                 )}
 
