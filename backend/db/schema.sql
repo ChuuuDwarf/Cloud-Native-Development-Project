@@ -69,25 +69,20 @@ CREATE TABLE IF NOT EXISTS samples (
 -- 3. 樣品歷程表
 -- =========================
 CREATE TABLE IF NOT EXISTS sample_histories (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     sample_id UUID NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
-
-    action VARCHAR(50) NOT NULL,
-    from_status VARCHAR(30),
-    to_status VARCHAR(30),
-
+    action VARCHAR(100) NOT NULL,
+    from_status VARCHAR(50),
+    to_status VARCHAR(50),
     description TEXT,
     operator_name VARCHAR(100),
-
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    lab_name VARCHAR(100),
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- =========================
 -- 4. 樣品交接紀錄
 -- =========================
-DROP TABLE IF EXISTS sample_transfers;
-
 CREATE TABLE IF NOT EXISTS transfers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 

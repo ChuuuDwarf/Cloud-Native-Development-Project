@@ -35,6 +35,27 @@ def get_user_lab(user: dict):
     return user.get("lab_name") or user.get("department")
 
 
+def get_lab_from_location(location: str | None):
+    if not location:
+        return None
+
+    location = location.strip()
+
+    if location.startswith("Lab A"):
+        return "Lab A"
+
+    if location.startswith("Lab B"):
+        return "Lab B"
+
+    if location.startswith("Lab C"):
+        return "Lab C"
+
+    if location.startswith("Lab D"):
+        return "Lab D"
+
+    return None
+
+
 def lab_location(lab_name: str | None, area: str):
     if not lab_name:
         return area
@@ -45,6 +66,26 @@ def lab_location(lab_name: str | None, area: str):
         return lab_name
 
     return f"{lab_name} {area}"
+
+
+def receive_location(lab_name: str | None):
+    return lab_location(lab_name, "收樣區")
+
+
+def experiment_temp_location(lab_name: str | None):
+    return lab_location(lab_name, "實驗暫存區")
+
+
+def machine_location(lab_name: str | None):
+    return lab_location(lab_name, "機台區")
+
+
+def transfer_waiting_location(lab_name: str | None):
+    return lab_location(lab_name, "交接待送區")
+
+
+def pickup_location(lab_name: str | None):
+    return lab_location(lab_name, "待取件區")
 
 
 def normalize_location_for_action(
@@ -58,7 +99,7 @@ def normalize_location_for_action(
     return lab_location(current_lab, default_area)
 
 
-def build_sample_visibility_filter(current_user: dict):
+def build_sample_visibility_filter(current_user: dict, scope: str | None = None):
     role = current_user.get("role")
     where_clauses = []
     params = {}
@@ -67,7 +108,7 @@ def build_sample_visibility_filter(current_user: dict):
         return where_clauses, params
 
     if role == "factory_user":
-        where_clauses.append("applicant_name = :applicant_name")
+        where_clauses.append("s.applicant_name = :applicant_name")
         params["applicant_name"] = current_user.get("name")
         return where_clauses, params
 
@@ -78,15 +119,43 @@ def build_sample_visibility_filter(current_user: dict):
             where_clauses.append("1 = 0")
             return where_clauses, params
 
-        where_clauses.append("current_location LIKE :current_lab_prefix")
+        params["current_lab"] = current_lab
         params["current_lab_prefix"] = f"{current_lab}%"
+
+        if scope == "all":
+            where_clauses.append(
+                """
+                (
+                    s.current_location LIKE :current_lab_prefix
+                    OR EXISTS (
+                        SELECT 1
+                        FROM wips w
+                        WHERE w.sample_id = s.id
+                          AND w.lab_name = :current_lab
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM transfers t
+                        WHERE t.target_type = 'sample'
+                          AND t.target_id = s.id
+                          AND (
+                              t.from_lab = :current_lab
+                              OR t.to_lab = :current_lab
+                          )
+                    )
+                )
+                """
+            )
+            return where_clauses, params
+
+        where_clauses.append("s.current_location LIKE :current_lab_prefix")
         return where_clauses, params
 
     where_clauses.append("1 = 0")
     return where_clauses, params
 
 
-def can_view_sample(current_user: dict, sample: dict) -> bool:
+def can_view_sample(current_user: dict, sample: dict, db: Session | None = None) -> bool:
     role = current_user.get("role")
 
     if role == "system_admin":
@@ -98,7 +167,43 @@ def can_view_sample(current_user: dict, sample: dict) -> bool:
     if role in ("lab_staff", "lab_supervisor"):
         current_lab = get_user_lab(current_user)
         current_location = sample.get("current_location") or ""
-        return bool(current_lab and current_location.startswith(current_lab))
+
+        if current_lab and current_location.startswith(current_lab):
+            return True
+
+        if db is None or not current_lab:
+            return False
+
+        related = db.execute(
+            text(
+                """
+                SELECT 1
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM wips
+                    WHERE sample_id = :sample_id
+                      AND lab_name = :current_lab
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM transfers
+                    WHERE target_type = 'sample'
+                      AND target_id = :sample_id
+                      AND (
+                          from_lab = :current_lab
+                          OR to_lab = :current_lab
+                      )
+                )
+                LIMIT 1
+                """
+            ),
+            {
+                "sample_id": sample.get("id"),
+                "current_lab": current_lab,
+            },
+        ).fetchone()
+
+        return related is not None
 
     return False
 
@@ -209,17 +314,90 @@ def update_all_wips_location(
     )
 
 
+def normalize_lab_code(lab_name: str | None):
+    if not lab_name:
+        return "LAB"
+
+    cleaned = lab_name.strip().replace(" ", "")
+
+    if cleaned.lower().startswith("laba"):
+        return "A"
+
+    if cleaned.lower().startswith("labb"):
+        return "B"
+
+    if cleaned.lower().startswith("labc"):
+        return "C"
+
+    if cleaned.lower().startswith("labd"):
+        return "D"
+
+    return cleaned.upper()
+
+
+def generate_unique_wip_no(
+    db: Session,
+    sample: dict,
+    lab_name: str | None,
+    preferred_wip_no: str | None = None,
+):
+    if preferred_wip_no:
+        exists = db.execute(
+            text(
+                """
+                SELECT 1
+                FROM wips
+                WHERE wip_no = :wip_no
+                LIMIT 1
+                """
+            ),
+            {"wip_no": preferred_wip_no},
+        ).fetchone()
+
+        if exists is None:
+            return preferred_wip_no
+
+    sample_no = sample.get("sample_no") or "SMP"
+    lab_code = normalize_lab_code(lab_name)
+
+    base_no = sample_no.replace("SMP-", "WIP-")
+
+    for index in range(1, 1000):
+        candidate = f"{base_no}-{lab_code}-{index:02d}"
+
+        exists = db.execute(
+            text(
+                """
+                SELECT 1
+                FROM wips
+                WHERE wip_no = :wip_no
+                LIMIT 1
+                """
+            ),
+            {"wip_no": candidate},
+        ).fetchone()
+
+        if exists is None:
+            return candidate
+
+    raise HTTPException(
+        status_code=500,
+        detail="Unable to generate unique WIP number",
+    )
+
+
 @router.get("")
 def get_samples(
     request: Request,
     status: str | None = Query(default=None),
+    scope: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     current_user = get_active_user(request)
-    where_clauses, params = build_sample_visibility_filter(current_user)
+    where_clauses, params = build_sample_visibility_filter(current_user, scope)
 
     if status:
-        where_clauses.append("status = :status")
+        where_clauses.append("s.status = :status")
         params["status"] = status
 
     where_sql = ""
@@ -230,26 +408,26 @@ def get_samples(
         text(
             f"""
             SELECT
-                id,
-                sample_no,
-                order_no,
-                sample_name,
-                experiment_item,
-                applicant_name,
-                applicant_department,
-                status,
-                current_location,
-                storage_location_id,
-                received_at,
-                received_by,
-                picked_up_at,
-                picked_up_by,
-                note,
-                created_at,
-                updated_at
-            FROM samples
+                s.id,
+                s.sample_no,
+                s.order_no,
+                s.sample_name,
+                s.experiment_item,
+                s.applicant_name,
+                s.applicant_department,
+                s.status,
+                s.current_location,
+                s.storage_location_id,
+                s.received_at,
+                s.received_by,
+                s.picked_up_at,
+                s.picked_up_by,
+                s.note,
+                s.created_at,
+                s.updated_at
+            FROM samples s
             {where_sql}
-            ORDER BY created_at DESC
+            ORDER BY s.created_at DESC
             """
         ),
         params,
@@ -267,7 +445,7 @@ def get_sample(
     current_user = get_active_user(request)
     sample = get_sample_or_404(sample_id, db)
 
-    if not can_view_sample(current_user, sample):
+    if not can_view_sample(current_user, sample, db):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this sample",
@@ -285,15 +463,43 @@ def get_sample_history(
     current_user = get_active_user(request)
     sample = get_sample_or_404(sample_id, db)
 
-    if not can_view_sample(current_user, sample):
+    if not can_view_sample(current_user, sample, db):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this sample",
         )
 
+    role = current_user.get("role")
+    current_lab = get_user_lab(current_user)
+
+    where_clauses = ["sample_id = :sample_id"]
+    params = {"sample_id": sample_id}
+
+    if role == "factory_user":
+        if sample.get("applicant_name") != current_user.get("name"):
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to view this sample history",
+            )
+
+    elif role == "lab_staff":
+        where_clauses.append("lab_name = :current_lab")
+        params["current_lab"] = current_lab
+
+    elif role in ("lab_supervisor", "system_admin"):
+        pass
+
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to view this sample history",
+        )
+
+    where_sql = "WHERE " + " AND ".join(where_clauses)
+
     result = db.execute(
         text(
-            """
+            f"""
             SELECT
                 id,
                 sample_id,
@@ -302,13 +508,14 @@ def get_sample_history(
                 to_status,
                 description,
                 operator_name,
+                lab_name,
                 created_at
             FROM sample_histories
-            WHERE sample_id = :sample_id
+            {where_sql}
             ORDER BY created_at DESC
             """
         ),
-        {"sample_id": sample_id},
+        params,
     )
 
     return [dict(row._mapping) for row in result]
@@ -367,6 +574,7 @@ def sample_action(
 ):
     sample = get_sample_or_404(sample_id, db)
     current_user = get_active_user(request)
+
     current_lab = get_user_lab(current_user)
     action = payload.get("action")
 
@@ -411,6 +619,31 @@ def sample_action(
                 status_code=400,
                 detail="只有待收樣或交接中的樣品可以確認收樣",
             )
+
+        transfer_for_receive = db.execute(
+            text(
+                """
+                SELECT *
+                FROM transfers
+                WHERE target_type = 'sample'
+                  AND target_id = :sample_id
+                  AND to_lab = :current_lab
+                  AND status = 'transferring'
+                ORDER BY transferred_at DESC NULLS LAST, created_at DESC
+                LIMIT 1
+                """
+            ),
+            {
+                "sample_id": sample_id,
+                "current_lab": current_lab,
+            },
+        ).fetchone()
+
+        transfer_for_receive_data = (
+            dict(transfer_for_receive._mapping)
+            if transfer_for_receive is not None
+            else None
+        )
 
         next_location = normalize_location_for_action(
             payload.get("current_location"),
@@ -477,7 +710,8 @@ def sample_action(
                     from_status,
                     to_status,
                     description,
-                    operator_name
+                    operator_name,
+                    lab_name
                 )
                 VALUES (
                     :sample_id,
@@ -485,7 +719,8 @@ def sample_action(
                     :from_status,
                     'received',
                     :description,
-                    :operator_name
+                    :operator_name,
+                    :lab_name
                 )
                 """
             ),
@@ -494,8 +729,50 @@ def sample_action(
                 "from_status": sample["status"],
                 "description": f"確認收樣，樣品移至 {next_location}",
                 "operator_name": operator_name,
+                "lab_name": current_lab,
             },
         )
+
+        if transfer_for_receive_data is not None:
+            from_lab = transfer_for_receive_data.get("from_lab")
+            to_lab = transfer_for_receive_data.get("to_lab")
+            transfer_no = transfer_for_receive_data.get("transfer_no")
+
+            if from_lab and from_lab != current_lab:
+                db.execute(
+                    text(
+                        """
+                        INSERT INTO sample_histories (
+                            sample_id,
+                            action,
+                            from_status,
+                            to_status,
+                            description,
+                            operator_name,
+                            lab_name
+                        )
+                        VALUES (
+                            :sample_id,
+                            'transfer_received_by_next_lab',
+                            :from_status,
+                            'received',
+                            :description,
+                            :operator_name,
+                            :lab_name
+                        )
+                        """
+                    ),
+                    {
+                        "sample_id": sample_id,
+                        "from_status": sample["status"],
+                        "description": (
+                            f"交接單 {transfer_no} 已由 {to_lab} 確認收樣，"
+                            f"樣品已送達對方實驗室"
+                        ),
+                        "operator_name": operator_name,
+                        "lab_name": from_lab,
+                    },
+                )
 
         db.commit()
 
@@ -536,7 +813,8 @@ def sample_action(
                     from_status,
                     to_status,
                     description,
-                    operator_name
+                    operator_name,
+                    lab_name
                 )
                 VALUES (
                     :sample_id,
@@ -544,7 +822,8 @@ def sample_action(
                     :from_status,
                     'in_storage',
                     '樣品入庫',
-                    :operator_name
+                    :operator_name,
+                    :lab_name
                 )
                 """
             ),
@@ -552,6 +831,7 @@ def sample_action(
                 "sample_id": sample_id,
                 "from_status": sample["status"],
                 "operator_name": operator_name,
+                "lab_name": current_lab,
             },
         )
 
@@ -601,7 +881,8 @@ def sample_action(
                     from_status,
                     to_status,
                     description,
-                    operator_name
+                    operator_name,
+                    lab_name
                 )
                 VALUES (
                     :sample_id,
@@ -609,7 +890,8 @@ def sample_action(
                     :from_status,
                     'outbound',
                     :description,
-                    :operator_name
+                    :operator_name,
+                    :lab_name
                 )
                 """
             ),
@@ -618,6 +900,7 @@ def sample_action(
                 "from_status": sample["status"],
                 "description": f"通知原使用者取件，樣品移至 {next_location}",
                 "operator_name": operator_name,
+                "lab_name": current_lab,
             },
         )
 
@@ -632,6 +915,7 @@ def sample_action(
                 detail="只有待取件 outbound 狀態可以確認取件",
             )
 
+        pickup_lab = get_lab_from_location(sample.get("current_location"))
         next_location = payload.get("current_location") or "已由使用者取回"
 
         result = db.execute(
@@ -670,7 +954,8 @@ def sample_action(
                     from_status,
                     to_status,
                     description,
-                    operator_name
+                    operator_name,
+                    lab_name
                 )
                 VALUES (
                     :sample_id,
@@ -678,7 +963,8 @@ def sample_action(
                     :from_status,
                     'picked_up',
                     '廠區確認取件，樣品已由使用者取回',
-                    :operator_name
+                    :operator_name,
+                    :lab_name
                 )
                 """
             ),
@@ -686,6 +972,7 @@ def sample_action(
                 "sample_id": sample_id,
                 "from_status": sample["status"],
                 "operator_name": operator_name,
+                "lab_name": pickup_lab,
             },
         )
 
@@ -736,7 +1023,8 @@ def sample_action(
                     from_status,
                     to_status,
                     description,
-                    operator_name
+                    operator_name,
+                    lab_name
                 )
                 VALUES (
                     :sample_id,
@@ -744,7 +1032,8 @@ def sample_action(
                     :from_status,
                     'split',
                     :description,
-                    :operator_name
+                    :operator_name,
+                    :lab_name
                 )
                 """
             ),
@@ -753,10 +1042,55 @@ def sample_action(
                 "from_status": sample["status"],
                 "description": f"樣品分貨並建立 WIP，樣品位於 {next_location}",
                 "operator_name": operator_name,
+                "lab_name": current_lab,
             },
         )
 
         for item in wips:
+            lab_name = item.get("lab_name")
+            experiment_item = item.get("experiment_item")
+
+            if not lab_name:
+                raise HTTPException(
+                    status_code=400,
+                    detail="lab_name is required for each WIP",
+                )
+
+            if not experiment_item:
+                raise HTTPException(
+                    status_code=400,
+                    detail="experiment_item is required for each WIP",
+                )
+
+            existing_wip = db.execute(
+                text(
+                    """
+                    SELECT *
+                    FROM wips
+                    WHERE sample_id = :sample_id
+                      AND lab_name = :lab_name
+                      AND experiment_item = :experiment_item
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "sample_id": sample_id,
+                    "lab_name": lab_name,
+                    "experiment_item": experiment_item,
+                },
+            ).fetchone()
+
+            if existing_wip is not None:
+                created_wips.append(dict(existing_wip._mapping))
+                continue
+
+            wip_no = generate_unique_wip_no(
+                db=db,
+                sample=sample,
+                lab_name=lab_name,
+                preferred_wip_no=item.get("wip_no"),
+            )
+
             result = db.execute(
                 text(
                     """
@@ -788,11 +1122,11 @@ def sample_action(
                     """
                 ),
                 {
-                    "wip_no": item.get("wip_no"),
+                    "wip_no": wip_no,
                     "sample_id": sample_id,
                     "order_no": sample["order_no"],
-                    "lab_name": item.get("lab_name"),
-                    "experiment_item": item.get("experiment_item"),
+                    "lab_name": lab_name,
+                    "experiment_item": experiment_item,
                     "priority": item.get("priority", "normal"),
                     "current_location": item.get("current_location") or next_location,
                     "note": item.get("note"),
@@ -825,7 +1159,10 @@ def sample_action(
                 ),
                 {
                     "wip_id": created_wip["id"],
-                    "description": f"由樣品 {sample['sample_no']} 分貨建立 WIP，位置：{next_location}",
+                    "description": (
+                        f"由樣品 {sample['sample_no']} 分貨建立 WIP："
+                        f"{lab_name} / {experiment_item}，位置：{next_location}"
+                    ),
                     "operator_name": operator_name,
                 },
             )

@@ -45,6 +45,26 @@ type Wip = {
   updated_at: string
 }
 
+type Transfer = {
+  id: string
+  transfer_no: string
+  target_type: 'sample' | 'wip'
+  target_id: string
+  order_no: string | null
+  sample_no: string | null
+  wip_no: string | null
+  from_lab: string | null
+  to_lab: string | null
+  handed_by: string | null
+  received_by: string | null
+  status: string
+  transferred_at: string | null
+  received_at: string | null
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
 type SampleHistory = {
   id: string
   sample_id: string
@@ -53,6 +73,7 @@ type SampleHistory = {
   to_status: string | null
   description: string | null
   operator_name: string | null
+  lab_name?: string | null
   created_at: string
 }
 
@@ -65,6 +86,8 @@ type CurrentUser = {
   lab_name?: string | null
   email?: string
 }
+
+type SampleFilter = 'current' | 'active' | 'outbound' | 'picked_up' | 'all'
 
 const fallbackUser: CurrentUser = {
   id: 'fallback',
@@ -82,6 +105,10 @@ const sampleStatusText: Record<string, string> = {
   received: '已收樣',
   split: '已分貨',
   transferring: '交接中',
+  transfer_pending: '交接待送出',
+  transferred_waiting_receive: '已轉出 / 等待接收實驗室收樣',
+  transferred_received: '已被接收實驗室收樣',
+  transferred_out: '已轉出 / 後續由接收實驗室處理',
   in_storage: '已入庫',
   outbound: '待取件',
   picked_up: '已取件',
@@ -113,6 +140,105 @@ function getUserLab(user: CurrentUser) {
   return user.lab_name || user.department
 }
 
+function isActiveSampleStatus(status: string) {
+  return ['pending_receive', 'received', 'split', 'transferring', 'in_storage'].includes(status)
+}
+
+function isSampleInCurrentLab(sample: Sample | null, user: CurrentUser) {
+  if (!sample) return false
+
+  if (user.role === 'system_admin') return true
+
+  if (user.role !== 'lab_staff' && user.role !== 'lab_supervisor') {
+    return false
+  }
+
+  const currentLab = getUserLab(user)
+  const currentLocation = sample.current_location ?? ''
+
+  return Boolean(currentLab && currentLocation.startsWith(currentLab))
+}
+
+function shouldMaskSampleForLab(sample: Sample, user: CurrentUser) {
+  if (user.role === 'factory_user' || user.role === 'system_admin') {
+    return false
+  }
+
+  if (user.role !== 'lab_staff' && user.role !== 'lab_supervisor') {
+    return false
+  }
+
+  return !isSampleInCurrentLab(sample, user)
+}
+
+function getDisplaySampleStatus(
+  sample: Sample,
+  user: CurrentUser,
+  outgoingTransfer?: Transfer,
+) {
+  if (!shouldMaskSampleForLab(sample, user)) {
+    return sample.status
+  }
+
+  if (outgoingTransfer?.status === 'pending') {
+    return 'transfer_pending'
+  }
+
+  if (outgoingTransfer?.status === 'transferring') {
+    return 'transferred_waiting_receive'
+  }
+
+  if (outgoingTransfer?.status === 'received') {
+    return 'transferred_received'
+  }
+
+  if (outgoingTransfer?.status === 'cancelled') {
+    return 'cancelled'
+  }
+
+  if (sample.status === 'cancelled') return 'cancelled'
+  if (sample.status === 'lost') return 'lost'
+  if (sample.status === 'damaged') return 'damaged'
+
+  return 'transferred_out'
+}
+
+function getDisplaySampleLocation(
+  sample: Sample,
+  user: CurrentUser,
+  outgoingTransfer?: Transfer,
+) {
+  if (!shouldMaskSampleForLab(sample, user)) {
+    return sample.current_location ?? '-'
+  }
+
+  const receiverLabText = outgoingTransfer?.to_lab
+    ? `接收實驗室（${outgoingTransfer.to_lab}）`
+    : '接收實驗室'
+
+  if (outgoingTransfer?.status === 'pending') {
+    return '本實驗室交接待送區'
+  }
+
+  if (outgoingTransfer?.status === 'transferring') {
+    return `已送出，等待${receiverLabText}收樣`
+  }
+
+  if (outgoingTransfer?.status === 'received') {
+    return `已由${receiverLabText}收樣`
+  }
+
+  if (outgoingTransfer?.status === 'cancelled') {
+    return '交接已取消'
+  }
+
+  if (sample.status === 'cancelled') return '流程已取消'
+  if (sample.status === 'lost') return '樣品異常：遺失'
+  if (sample.status === 'damaged') return '樣品異常：破損'
+
+  return '已離開本實驗室'
+}
+
 function isSampleVisibleForUser(sample: Sample, user: CurrentUser) {
   if (user.role === 'system_admin') return true
 
@@ -121,20 +247,71 @@ function isSampleVisibleForUser(sample: Sample, user: CurrentUser) {
   }
 
   if (user.role === 'lab_staff' || user.role === 'lab_supervisor') {
-    const labName = getUserLab(user)
-
-    if (!labName) return false
-
-    return sample.current_location?.startsWith(labName) ?? false
+    return true
   }
 
   return false
+}
+
+function filterSamplesByView(samples: Sample[], currentUser: CurrentUser, filter: SampleFilter) {
+  const visibleBase = samples.filter((sample) => isSampleVisibleForUser(sample, currentUser))
+
+  if (currentUser.role === 'factory_user') {
+    if (filter === 'active' || filter === 'current') {
+      return visibleBase.filter((sample) => isActiveSampleStatus(sample.status))
+    }
+
+    if (filter === 'outbound') {
+      return visibleBase.filter((sample) => sample.status === 'outbound')
+    }
+
+    if (filter === 'picked_up') {
+      return visibleBase.filter((sample) => sample.status === 'picked_up')
+    }
+
+    return visibleBase
+  }
+
+  if (currentUser.role === 'lab_staff' || currentUser.role === 'lab_supervisor') {
+    const currentLab = getUserLab(currentUser)
+
+    if (filter === 'current') {
+      return visibleBase.filter((sample) => {
+        const location = sample.current_location ?? ''
+        return currentLab && location.startsWith(currentLab) && sample.status !== 'picked_up'
+      })
+    }
+
+    if (filter === 'active') {
+      return visibleBase.filter((sample) => isActiveSampleStatus(sample.status))
+    }
+
+    if (filter === 'outbound') {
+      return visibleBase.filter((sample) => {
+        if (sample.status !== 'outbound') return false
+
+        const currentLabName = getUserLab(currentUser)
+        const location = sample.current_location ?? ''
+
+        return Boolean(currentLabName && location.startsWith(currentLabName))
+      })
+    }
+
+    if (filter === 'picked_up') {
+      return visibleBase.filter((sample) => sample.status === 'picked_up')
+    }
+
+    return visibleBase
+  }
+
+  return visibleBase
 }
 
 export default function SamplePage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser>(fallbackUser)
   const [samples, setSamples] = useState<Sample[]>([])
   const [wips, setWips] = useState<Wip[]>([])
+  const [transfers, setTransfers] = useState<Transfer[]>([])
   const [sampleHistories, setSampleHistories] = useState<SampleHistory[]>([])
   const [selectedSampleId, setSelectedSampleId] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -142,33 +319,98 @@ export default function SamplePage() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyVisibleCount, setHistoryVisibleCount] = useState(5)
   const [submitting, setSubmitting] = useState(false)
+  const [sampleFilter, setSampleFilter] = useState<SampleFilter>('current')
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
 
   const isFactoryUser = currentUser.role === 'factory_user'
-
-  const canOperateSample =
-    currentUser.role === 'lab_staff' ||
-    currentUser.role === 'lab_supervisor' ||
-    currentUser.role === 'system_admin'
-
   const operatorName = currentUser.name || fallbackUser.name
 
+  const outgoingTransfersBySampleId = useMemo(() => {
+    const map = new Map<string, Transfer>()
+
+    transfers
+      .filter((transfer) => transfer.target_type === 'sample')
+      .forEach((transfer) => {
+        const existing = map.get(transfer.target_id)
+
+        if (!existing) {
+          map.set(transfer.target_id, transfer)
+          return
+        }
+
+        const existingTime = new Date(existing.updated_at ?? existing.created_at).getTime()
+        const nextTime = new Date(transfer.updated_at ?? transfer.created_at).getTime()
+
+        if (nextTime > existingTime) {
+          map.set(transfer.target_id, transfer)
+        }
+      })
+
+    return map
+  }, [transfers])
+
+  const filterOptions = useMemo(() => {
+    if (isFactoryUser) {
+      return [
+        { value: 'all', label: '全部' },
+        { value: 'active', label: '進行中' },
+        { value: 'outbound', label: '待取件' },
+        { value: 'picked_up', label: '已取件' },
+      ] as Array<{ value: SampleFilter; label: string }>
+    }
+
+    return [
+      { value: 'current', label: '目前在本 Lab' },
+      { value: 'outbound', label: '待取件' },
+      { value: 'picked_up', label: '已取件紀錄' },
+      { value: 'all', label: '全部紀錄' },
+    ] as Array<{ value: SampleFilter; label: string }>
+  }, [isFactoryUser])
+
   const visibleSamples = useMemo(() => {
-    return samples.filter((sample) => isSampleVisibleForUser(sample, currentUser))
-  }, [samples, currentUser])
+    return filterSamplesByView(samples, currentUser, sampleFilter)
+  }, [samples, currentUser, sampleFilter])
 
   const selectedSample = useMemo(() => {
     return visibleSamples.find((sample) => sample.id === selectedSampleId) ?? null
   }, [visibleSamples, selectedSampleId])
+
+  const selectedSampleInCurrentLab = useMemo(() => {
+    return isSampleInCurrentLab(selectedSample, currentUser)
+  }, [selectedSample, currentUser])
+
+  const selectedSampleOutgoingTransfer = useMemo(() => {
+    if (!selectedSample) return undefined
+    return outgoingTransfersBySampleId.get(selectedSample.id)
+  }, [selectedSample, outgoingTransfersBySampleId])
 
   const selectedWips = useMemo(() => {
     if (!selectedSample) return []
     return wips.filter((wip) => wip.sample_id === selectedSample.id)
   }, [wips, selectedSample])
 
+  const visibleSelectedWips = useMemo(() => {
+    if (!selectedSample) return []
+
+    if (currentUser.role === 'system_admin' || currentUser.role === 'factory_user') {
+      return selectedWips
+    }
+
+    if (currentUser.role === 'lab_supervisor') {
+      return selectedWips
+    }
+
+    if (currentUser.role === 'lab_staff') {
+      const currentLab = getUserLab(currentUser)
+      return selectedWips.filter((wip) => wip.lab_name === currentLab)
+    }
+
+    return []
+  }, [selectedWips, selectedSample, currentUser])
+
   const wipsByLab = useMemo(() => {
-    return selectedWips.reduce<Record<string, Wip[]>>((groups, wip) => {
+    return visibleSelectedWips.reduce<Record<string, Wip[]>>((groups, wip) => {
       const labName = wip.lab_name ?? '未指定實驗室'
 
       if (!groups[labName]) {
@@ -178,25 +420,29 @@ export default function SamplePage() {
       groups[labName].push(wip)
       return groups
     }, {})
-  }, [selectedWips])
+  }, [visibleSelectedWips])
 
   const allWipsCompleted =
     selectedWips.length > 0 &&
     selectedWips.every((wip) => wip.status === 'completed')
 
-  const pendingReceiveCount = visibleSamples.filter(
+  const baseSamplesForCount = useMemo(() => {
+    return samples.filter((sample) => isSampleVisibleForUser(sample, currentUser))
+  }, [samples, currentUser])
+
+  const pendingReceiveCount = baseSamplesForCount.filter(
     (sample) => sample.status === 'pending_receive',
   ).length
 
-  const inLabCount = visibleSamples.filter((sample) =>
+  const inLabCount = baseSamplesForCount.filter((sample) =>
     ['received', 'split', 'transferring', 'in_storage'].includes(sample.status),
   ).length
 
-  const outboundCount = visibleSamples.filter(
+  const outboundCount = baseSamplesForCount.filter(
     (sample) => sample.status === 'outbound',
   ).length
 
-  const pickedUpCount = visibleSamples.filter(
+  const pickedUpCount = baseSamplesForCount.filter(
     (sample) => sample.status === 'picked_up',
   ).length
 
@@ -213,6 +459,7 @@ export default function SamplePage() {
   const shouldShowLabActions =
     Boolean(selectedSample) &&
     !isFactoryUser &&
+    selectedSampleInCurrentLab &&
     (
       selectedSample?.status === 'pending_receive' ||
       selectedSample?.status === 'received' ||
@@ -226,6 +473,13 @@ export default function SamplePage() {
     try {
       const me = await apiGet<CurrentUser>('/api/me')
       setCurrentUser(me)
+
+      if (me.role === 'factory_user') {
+        setSampleFilter((prev) => (prev === 'current' ? 'all' : prev))
+      } else {
+        setSampleFilter((prev) => (prev === 'active' ? 'current' : prev))
+      }
+
       return me
     } catch {
       setCurrentUser(fallbackUser)
@@ -241,18 +495,18 @@ export default function SamplePage() {
 
       const meData = await loadCurrentUser()
 
-      const [sampleData, wipData] = await Promise.all([
-        apiGet<Sample[]>('/api/samples'),
-        apiGet<Wip[]>('/api/wips'),
+      const [sampleData, wipData, transferData] = await Promise.all([
+        apiGet<Sample[]>('/api/samples?scope=all'),
+        apiGet<Wip[]>('/api/wips?include_all_for_flow=true'),
+        apiGet<Transfer[]>('/api/transfers'),
       ])
 
-      const filteredSamples = sampleData.filter((sample) =>
-        isSampleVisibleForUser(sample, meData),
-      )
+      const filteredSamples = filterSamplesByView(sampleData, meData, sampleFilter)
 
       setCurrentUser(meData)
       setSamples(sampleData)
       setWips(wipData)
+      setTransfers(transferData)
 
       if (selectedSampleId) {
         const stillVisible = filteredSamples.some((item) => item.id === selectedSampleId)
@@ -308,8 +562,11 @@ export default function SamplePage() {
       targetSample?.status === 'outbound' &&
       targetSample.applicant_name === currentUser.name
 
-    if (!canOperateSample && !isFactoryPickup) {
-      setError('廠區使用者只能查看樣品資料，只有待取件狀態可以確認取件')
+    const isLabOperationAllowed =
+      !isFactoryUser && isSampleInCurrentLab(targetSample, currentUser)
+
+    if (!isLabOperationAllowed && !isFactoryPickup) {
+      setError('只能操作目前位於自己 Lab 內的樣品；歷史紀錄只能查看，不能處理')
       return
     }
 
@@ -386,6 +643,24 @@ export default function SamplePage() {
       return '目前僅提供樣品狀態與歷程查詢。'
     }
 
+    if (!isSampleInCurrentLab(sample, currentUser)) {
+      const transfer = outgoingTransfersBySampleId.get(sample.id)
+
+      if (transfer?.status === 'received') {
+        return '此樣品已被接收實驗室收樣。你只能查看本實驗室的交接紀錄，不能查看接收實驗室後續處理狀態，也不能執行操作。'
+      }
+
+      if (transfer?.status === 'transferring') {
+        return '此樣品已送出，等待接收實驗室確認收樣。'
+      }
+
+      if (transfer?.status === 'pending') {
+        return '此樣品已有交接單，尚未送出。'
+      }
+
+      return '此樣品已離開你的實驗室。本畫面只保留你所屬 Lab 的歷程紀錄與交接確認結果，不能查看對方 Lab 的後續狀態，也不能執行操作。'
+    }
+
     if (sample.status === 'pending_receive') {
       return '樣品尚未完成收樣，下一步是確認收樣。'
     }
@@ -415,7 +690,7 @@ export default function SamplePage() {
     }
 
     if (sample.status === 'picked_up') {
-      return '樣品已由原使用者取回，流程完成。'
+      return '樣品已由原使用者取回，流程完成。此筆會保留在已取件紀錄。'
     }
 
     if (sample.status === 'in_storage') {
@@ -447,8 +722,8 @@ export default function SamplePage() {
           </h1>
           <p style={subtitleStyle}>
             {isFactoryUser
-              ? 'SAMPLE TRACKING · 廠區使用者只能查看自己已送樣後的樣品狀態與歷程'
-              : 'SAMPLE TRACKING · 目前顯示的是仍在此實驗室內的樣品，不只限待收樣'}
+              ? 'SAMPLE TRACKING · 廠區使用者可查看自己已送樣後的樣品狀態、待取件與已取件紀錄'
+              : 'SAMPLE TRACKING · 預設顯示目前仍在本 Lab 的樣品，也可切換查看待取件與歷史紀錄'}
           </p>
         </div>
 
@@ -490,12 +765,30 @@ export default function SamplePage() {
             </div>
             <div style={panelHintStyle}>
               {isFactoryUser
-                ? '只顯示目前使用者已送樣後產生的樣品。尚未確認送樣的 approved 委託單請到 /others 的委託單分頁處理。'
-                : '只要樣品 current_location 還在目前 Lab，就會顯示在這裡。'}
+                ? '可切換進行中、待取件、已取件與全部紀錄。'
+                : '預設看目前仍在本 Lab 的樣品；轉交後只顯示交接狀態，不顯示接收實驗室後續細節。'}
             </div>
           </div>
 
           <span style={countBadgeStyle}>{visibleSamples.length} 筆</span>
+        </div>
+
+        <div style={filterBarStyle}>
+          {filterOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                setSampleFilter(option.value)
+                setSelectedSampleId(null)
+                setDetailOpen(false)
+                setSampleHistories([])
+              }}
+              style={sampleFilter === option.value ? activeFilterButtonStyle : filterButtonStyle}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
 
         {loading ? (
@@ -524,6 +817,10 @@ export default function SamplePage() {
               <tbody>
                 {visibleSamples.map((sample) => {
                   const active = sample.id === selectedSampleId && detailOpen
+                  const canCurrentUserOperateThisSample = isSampleInCurrentLab(sample, currentUser)
+                  const outgoingTransfer = outgoingTransfersBySampleId.get(sample.id)
+                  const displayStatus = getDisplaySampleStatus(sample, currentUser, outgoingTransfer)
+                  const displayLocation = getDisplaySampleLocation(sample, currentUser, outgoingTransfer)
 
                   return (
                     <tr
@@ -538,9 +835,14 @@ export default function SamplePage() {
                       <td style={tdStyle}>{sample.sample_name ?? '-'}</td>
                       <td style={tdStyle}>{sample.experiment_item ?? '-'}</td>
                       <td style={tdStyle}>
-                        <StatusBadge status={sample.status} />
+                        <StatusBadge status={displayStatus} />
                       </td>
-                      <td style={tdStyle}>{sample.current_location ?? '-'}</td>
+                      <td style={tdStyle}>
+                        <div>{displayLocation}</div>
+                        {!isFactoryUser && !canCurrentUserOperateThisSample && (
+                          <div style={readonlyHintStyle}>歷史紀錄 / 只可查看</div>
+                        )}
+                      </td>
                       <td style={tdStyle}>
                         <button onClick={() => openDetail(sample.id)} style={primaryButtonStyle}>
                           查看
@@ -574,7 +876,13 @@ export default function SamplePage() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <StatusBadge status={selectedSample.status} />
+              <StatusBadge
+                status={getDisplaySampleStatus(
+                  selectedSample,
+                  currentUser,
+                  selectedSampleOutgoingTransfer,
+                )}
+              />
               <button onClick={closeDetail} style={iconButtonStyle}>
                 ✕
               </button>
@@ -598,7 +906,14 @@ export default function SamplePage() {
               <InfoItem label="實驗需求" value={selectedSample.experiment_item ?? '-'} />
               <InfoItem label="申請人" value={selectedSample.applicant_name ?? '-'} />
               <InfoItem label="申請部門" value={selectedSample.applicant_department ?? '-'} />
-              <InfoItem label="目前位置" value={selectedSample.current_location ?? '-'} />
+              <InfoItem
+                label="目前位置"
+                value={getDisplaySampleLocation(
+                  selectedSample,
+                  currentUser,
+                  selectedSampleOutgoingTransfer,
+                )}
+              />
               <InfoItem label="收樣人" value={selectedSample.received_by ?? '尚未收樣'} />
               <InfoItem label="收樣時間" value={formatDateTime(selectedSample.received_at)} />
               <InfoItem label="取件人" value={selectedSample.picked_up_by ?? '尚未取件'} />
@@ -608,8 +923,12 @@ export default function SamplePage() {
 
             <div style={sectionTitleStyle}>此樣品的 WIP / 實驗子單</div>
 
-            {selectedWips.length === 0 ? (
-              <div style={miniEmptyStyle}>目前尚未建立 WIP / 實驗子單。</div>
+            {visibleSelectedWips.length === 0 ? (
+              <div style={miniEmptyStyle}>
+                {shouldMaskSampleForLab(selectedSample, currentUser)
+                  ? '此樣品已轉出，本畫面不顯示接收實驗室的 WIP / 實驗子單細節。'
+                  : '目前尚未建立 WIP / 實驗子單。'}
+              </div>
             ) : (
               <div style={labListStyle}>
                 {Object.entries(wipsByLab).map(([labName, labWips]) => (
@@ -653,7 +972,7 @@ export default function SamplePage() {
             {historyLoading ? (
               <div style={miniEmptyStyle}>歷程載入中...</div>
             ) : sampleHistories.length === 0 ? (
-              <div style={miniEmptyStyle}>目前尚無歷程紀錄。</div>
+              <div style={miniEmptyStyle}>目前尚無可查看的歷程紀錄。</div>
             ) : (
               <>
                 <div style={timelineStyle}>
@@ -676,6 +995,7 @@ export default function SamplePage() {
                           {formatStatusChange(history.from_status, history.to_status)}
                           {' · '}
                           {history.operator_name ?? '系統'}
+                          {history.lab_name ? ` · ${history.lab_name}` : ''}
                         </div>
                       </div>
                     </div>
@@ -724,55 +1044,66 @@ export default function SamplePage() {
                     </button>
                   )}
 
-                  {!isFactoryUser && selectedSample.status === 'pending_receive' && (
-                    <button
-                      onClick={() => runSampleAction(selectedSample.id, 'receive')}
-                      disabled={submitting}
-                      style={primaryButtonStyle}
-                    >
-                      確認收樣
-                    </button>
-                  )}
+                  {!isFactoryUser &&
+                    selectedSampleInCurrentLab &&
+                    selectedSample.status === 'pending_receive' && (
+                      <button
+                        onClick={() => runSampleAction(selectedSample.id, 'receive')}
+                        disabled={submitting}
+                        style={primaryButtonStyle}
+                      >
+                        確認收樣
+                      </button>
+                    )}
 
-                  {!isFactoryUser && selectedSample.status === 'received' && (
-                    <button
-                      onClick={() => goToWipPage(selectedSample.id)}
-                      disabled={submitting}
-                      style={primaryButtonStyle}
-                    >
-                      前往 WIP / 分貨
-                    </button>
-                  )}
+                  {!isFactoryUser &&
+                    selectedSampleInCurrentLab &&
+                    selectedSample.status === 'received' && (
+                      <button
+                        onClick={() => goToWipPage(selectedSample.id)}
+                        disabled={submitting}
+                        style={primaryButtonStyle}
+                      >
+                        前往 WIP / 分貨
+                      </button>
+                    )}
 
-                  {!isFactoryUser && selectedSample.status === 'split' && (
-                    <button
-                      onClick={() => goToWipPage(selectedSample.id)}
-                      disabled={submitting}
-                      style={secondaryButtonStyle}
-                    >
-                      查看 / 管理 WIP
-                    </button>
-                  )}
+                  {!isFactoryUser &&
+                    selectedSampleInCurrentLab &&
+                    selectedSample.status === 'split' && (
+                      <button
+                        onClick={() => goToWipPage(selectedSample.id)}
+                        disabled={submitting}
+                        style={secondaryButtonStyle}
+                      >
+                        查看 / 管理 WIP
+                      </button>
+                    )}
 
-                  {!isFactoryUser && selectedSample.status === 'split' && allWipsCompleted && (
-                    <button
-                      onClick={() => runSampleAction(selectedSample.id, 'outbound')}
-                      disabled={submitting}
-                      style={primaryButtonStyle}
-                    >
-                      通知取件 / 移至待取件區
-                    </button>
-                  )}
+                  {!isFactoryUser &&
+                    selectedSampleInCurrentLab &&
+                    selectedSample.status === 'split' &&
+                    allWipsCompleted && (
+                      <button
+                        onClick={() => runSampleAction(selectedSample.id, 'outbound')}
+                        disabled={submitting}
+                        style={primaryButtonStyle}
+                      >
+                        通知取件 / 移至待取件區
+                      </button>
+                    )}
 
-                  {!isFactoryUser && selectedSample.status === 'transferring' && (
-                    <button
-                      onClick={goToTransferPage}
-                      disabled={submitting}
-                      style={secondaryButtonStyle}
-                    >
-                      前往交接流轉
-                    </button>
-                  )}
+                  {!isFactoryUser &&
+                    selectedSampleInCurrentLab &&
+                    selectedSample.status === 'transferring' && (
+                      <button
+                        onClick={goToTransferPage}
+                        disabled={submitting}
+                        style={secondaryButtonStyle}
+                      >
+                        前往交接流轉
+                      </button>
+                    )}
                 </div>
               </>
             )}
@@ -915,6 +1246,31 @@ const panelHintStyle: CSSProperties = {
   marginTop: 4,
 }
 
+const filterBarStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 8,
+  marginBottom: 12,
+}
+
+const filterButtonStyle: CSSProperties = {
+  background: 'var(--s2)',
+  border: '1px solid var(--border)',
+  color: 'var(--text2)',
+  borderRadius: 999,
+  padding: '7px 11px',
+  cursor: 'pointer',
+  fontSize: 12,
+  fontWeight: 800,
+}
+
+const activeFilterButtonStyle: CSSProperties = {
+  ...filterButtonStyle,
+  background: 'rgba(56,139,253,0.16)',
+  color: 'var(--blue)',
+  borderColor: 'rgba(56,139,253,0.55)',
+}
+
 const countBadgeStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -968,6 +1324,12 @@ const miniEmptyStyle: CSSProperties = {
   borderRadius: 10,
   padding: 12,
   fontSize: 13,
+}
+
+const readonlyHintStyle: CSSProperties = {
+  color: 'var(--text3)',
+  fontSize: 11,
+  marginTop: 4,
 }
 
 const primaryButtonStyle: CSSProperties = {

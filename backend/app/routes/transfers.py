@@ -454,7 +454,8 @@ def create_transfer(
                     from_status,
                     to_status,
                     description,
-                    operator_name
+                    operator_name,
+                    lab_name
                 )
                 VALUES (
                     :sample_id,
@@ -462,7 +463,8 @@ def create_transfer(
                     :from_status,
                     :to_status,
                     :description,
-                    :operator_name
+                    :operator_name,
+                    :lab_name
                 )
                 """
             ),
@@ -472,6 +474,7 @@ def create_transfer(
                 "to_status": current_status,
                 "description": f"建立交接申請：{from_lab} → {to_lab}，樣品移至 {waiting_location}",
                 "operator_name": handed_by,
+                "lab_name": from_lab,
             },
         )
 
@@ -635,7 +638,8 @@ def transfer_action(
                         from_status,
                         to_status,
                         description,
-                        operator_name
+                        operator_name,
+                        lab_name
                     )
                     VALUES (
                         :sample_id,
@@ -643,7 +647,8 @@ def transfer_action(
                         :from_status,
                         'pending_receive',
                         :description,
-                        :operator_name
+                        :operator_name,
+                        :lab_name
                     )
                     """
                 ),
@@ -656,6 +661,7 @@ def transfer_action(
                         f"樣品移至 {next_location}"
                     ),
                     "operator_name": operator_name,
+                    "lab_name": transfer_data.get("from_lab"),
                 },
             )
 
@@ -769,7 +775,8 @@ def transfer_action(
                         from_status,
                         to_status,
                         description,
-                        operator_name
+                        operator_name,
+                        lab_name
                     )
                     VALUES (
                         :sample_id,
@@ -777,7 +784,8 @@ def transfer_action(
                         :from_status,
                         :to_status,
                         :description,
-                        :operator_name
+                        :operator_name,
+                        :lab_name
                     )
                     """
                 ),
@@ -787,6 +795,7 @@ def transfer_action(
                     "to_status": sample.get("status"),
                     "description": f"取消交接單 {transfer_data.get('transfer_no')}",
                     "operator_name": operator_name,
+                    "lab_name": transfer_data.get("from_lab"),
                 },
             )
 
