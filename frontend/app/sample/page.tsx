@@ -77,6 +77,7 @@ const fallbackUser: CurrentUser = {
 }
 
 const sampleStatusText: Record<string, string> = {
+  approved: '已核准 / 未送樣',
   pending_receive: '待收樣',
   received: '已收樣',
   split: '已分貨',
@@ -139,11 +140,13 @@ export default function SamplePage() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyVisibleCount, setHistoryVisibleCount] = useState(5)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
 
   const isFactoryUser = currentUser.role === 'factory_user'
+
   const canOperateSample =
     currentUser.role === 'lab_staff' ||
     currentUser.role === 'lab_supervisor' ||
@@ -196,6 +199,28 @@ export default function SamplePage() {
   const pickedUpCount = visibleSamples.filter(
     (sample) => sample.status === 'picked_up',
   ).length
+
+  const visibleHistories = sampleHistories.slice(0, historyVisibleCount)
+
+  const canFactoryConfirmPickup =
+    Boolean(selectedSample) &&
+    isFactoryUser &&
+    selectedSample?.status === 'outbound' &&
+    selectedSample?.applicant_name === currentUser.name
+
+  const shouldShowFactoryAction = canFactoryConfirmPickup
+
+  const shouldShowLabActions =
+    Boolean(selectedSample) &&
+    !isFactoryUser &&
+    (
+      selectedSample?.status === 'pending_receive' ||
+      selectedSample?.status === 'received' ||
+      selectedSample?.status === 'transferring' ||
+      selectedSample?.status === 'split'
+    )
+
+  const shouldShowActionSection = shouldShowFactoryAction || shouldShowLabActions
 
   async function loadCurrentUser() {
     try {
@@ -261,6 +286,7 @@ export default function SamplePage() {
     setSelectedSampleId(sampleId)
     setDetailOpen(true)
     setSampleHistories([])
+    setHistoryVisibleCount(5)
     setError('')
     setSuccessMessage('')
     await loadSampleHistory(sampleId)
@@ -274,8 +300,21 @@ export default function SamplePage() {
     sampleId: string,
     action: 'receive' | 'outbound' | 'pickup_confirmed',
   ) {
-    if (!canOperateSample) {
-      setError('廠區使用者只能查看樣品資料，不能執行收樣或取件操作')
+    const targetSample = samples.find((sample) => sample.id === sampleId) ?? null
+
+    const isFactoryPickup =
+      isFactoryUser &&
+      action === 'pickup_confirmed' &&
+      targetSample?.status === 'outbound' &&
+      targetSample.applicant_name === currentUser.name
+
+    if (!canOperateSample && !isFactoryPickup) {
+      setError('廠區使用者只能查看樣品資料，只有待取件狀態可以確認取件')
+      return
+    }
+
+    if (isFactoryUser && action !== 'pickup_confirmed') {
+      setError('廠區使用者不能執行收樣、分貨或通知取件')
       return
     }
 
@@ -294,7 +333,7 @@ export default function SamplePage() {
       }
 
       if (action === 'pickup_confirmed') {
-        body.current_location = '已取件'
+        body.current_location = '已由使用者取回'
       }
 
       await apiPost(`/api/samples/${sampleId}/actions`, body)
@@ -337,7 +376,7 @@ export default function SamplePage() {
       }
 
       if (sample.status === 'outbound') {
-        return '實驗已完成，樣品等待取回。'
+        return '實驗已完成，樣品等待取回。實際拿到樣品後，可以確認取件。'
       }
 
       if (sample.status === 'picked_up') {
@@ -404,11 +443,11 @@ export default function SamplePage() {
       <div style={headerStyle}>
         <div>
           <h1 style={titleStyle}>
-            {isFactoryUser ? '我的送樣追蹤' : '收樣與樣品追蹤'}
+            {isFactoryUser ? '我的樣品追蹤' : '收樣與樣品追蹤'}
           </h1>
           <p style={subtitleStyle}>
             {isFactoryUser
-              ? 'SAMPLE TRACKING · 廠區使用者只能查看自己送出的樣品狀態與歷程'
+              ? 'SAMPLE TRACKING · 廠區使用者只能查看自己已送樣後的樣品狀態與歷程'
               : 'SAMPLE TRACKING · 目前顯示的是仍在此實驗室內的樣品，不只限待收樣'}
           </p>
         </div>
@@ -451,7 +490,7 @@ export default function SamplePage() {
             </div>
             <div style={panelHintStyle}>
               {isFactoryUser
-                ? '只顯示目前使用者送出的樣品。'
+                ? '只顯示目前使用者已送樣後產生的樣品。尚未確認送樣的 approved 委託單請到 /others 的委託單分頁處理。'
                 : '只要樣品 current_location 還在目前 Lab，就會顯示在這裡。'}
             </div>
           </div>
@@ -616,107 +655,126 @@ export default function SamplePage() {
             ) : sampleHistories.length === 0 ? (
               <div style={miniEmptyStyle}>目前尚無歷程紀錄。</div>
             ) : (
-              <div style={timelineStyle}>
-                {sampleHistories.map((history) => (
-                  <div key={history.id} style={timelineItemStyle}>
-                    <div style={timelineDotStyle} />
+              <>
+                <div style={timelineStyle}>
+                  {visibleHistories.map((history) => (
+                    <div key={history.id} style={timelineItemStyle}>
+                      <div style={timelineDotStyle} />
 
-                    <div style={{ flex: 1 }}>
-                      <div style={timelineTopRowStyle}>
-                        <div style={{ fontWeight: 800, fontSize: 13 }}>
-                          {history.description ?? history.action}
+                      <div style={{ flex: 1 }}>
+                        <div style={timelineTopRowStyle}>
+                          <div style={{ fontWeight: 800, fontSize: 13 }}>
+                            {history.description ?? history.action}
+                          </div>
+
+                          <div style={timelineTimeStyle}>
+                            {formatDateTime(history.created_at)}
+                          </div>
                         </div>
 
-                        <div style={timelineTimeStyle}>
-                          {formatDateTime(history.created_at)}
+                        <div style={timelineMetaStyle}>
+                          {formatStatusChange(history.from_status, history.to_status)}
+                          {' · '}
+                          {history.operator_name ?? '系統'}
                         </div>
-                      </div>
-
-                      <div style={timelineMetaStyle}>
-                        {formatStatusChange(history.from_status, history.to_status)}
-                        {' · '}
-                        {history.operator_name ?? '系統'}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+
+                <div style={historyActionRowStyle}>
+                  {sampleHistories.length > historyVisibleCount && (
+                    <button
+                      type="button"
+                      onClick={() => setHistoryVisibleCount((count) => count + 5)}
+                      style={secondaryButtonStyle}
+                    >
+                      查看更多歷程（還有 {sampleHistories.length - historyVisibleCount} 筆）
+                    </button>
+                  )}
+
+                  {sampleHistories.length > 5 &&
+                    historyVisibleCount >= sampleHistories.length && (
+                      <button
+                        type="button"
+                        onClick={() => setHistoryVisibleCount(5)}
+                        style={secondaryButtonStyle}
+                      >
+                        收合歷程
+                      </button>
+                    )}
+                </div>
+              </>
             )}
 
-            <div style={sectionTitleStyle}>
-              {isFactoryUser ? '查看權限' : '可執行動作'}
-            </div>
+            {shouldShowActionSection && (
+              <>
+                <div style={sectionTitleStyle}>
+                  {isFactoryUser ? '確認取件' : '可執行動作'}
+                </div>
 
-            {isFactoryUser ? (
-              <div style={miniEmptyStyle}>
-                廠區使用者只能查看自己送出的樣品詳細資料、WIP 進度與歷程紀錄，不能在收樣管理執行收樣、分貨、通知取件或確認取件。
-              </div>
-            ) : (
-              <div style={actionBarStyle}>
-                {selectedSample.status === 'pending_receive' && (
-                  <button
-                    onClick={() => runSampleAction(selectedSample.id, 'receive')}
-                    disabled={submitting}
-                    style={primaryButtonStyle}
-                  >
-                    確認收樣
-                  </button>
-                )}
+                <div style={actionBarStyle}>
+                  {canFactoryConfirmPickup && (
+                    <button
+                      onClick={() => runSampleAction(selectedSample.id, 'pickup_confirmed')}
+                      disabled={submitting}
+                      style={primaryButtonStyle}
+                    >
+                      我已到待取件區取回樣品，確認取件
+                    </button>
+                  )}
 
-                {selectedSample.status === 'received' && (
-                  <button
-                    onClick={() => goToWipPage(selectedSample.id)}
-                    disabled={submitting}
-                    style={primaryButtonStyle}
-                  >
-                    前往 WIP / 分貨
-                  </button>
-                )}
+                  {!isFactoryUser && selectedSample.status === 'pending_receive' && (
+                    <button
+                      onClick={() => runSampleAction(selectedSample.id, 'receive')}
+                      disabled={submitting}
+                      style={primaryButtonStyle}
+                    >
+                      確認收樣
+                    </button>
+                  )}
 
-                {selectedSample.status === 'split' && (
-                  <button
-                    onClick={() => goToWipPage(selectedSample.id)}
-                    disabled={submitting}
-                    style={secondaryButtonStyle}
-                  >
-                    查看 / 管理 WIP
-                  </button>
-                )}
+                  {!isFactoryUser && selectedSample.status === 'received' && (
+                    <button
+                      onClick={() => goToWipPage(selectedSample.id)}
+                      disabled={submitting}
+                      style={primaryButtonStyle}
+                    >
+                      前往 WIP / 分貨
+                    </button>
+                  )}
 
-                {selectedSample.status === 'split' && allWipsCompleted && (
-                  <button
-                    onClick={() => runSampleAction(selectedSample.id, 'outbound')}
-                    disabled={submitting}
-                    style={primaryButtonStyle}
-                  >
-                    通知取件 / 移至待取件區
-                  </button>
-                )}
+                  {!isFactoryUser && selectedSample.status === 'split' && (
+                    <button
+                      onClick={() => goToWipPage(selectedSample.id)}
+                      disabled={submitting}
+                      style={secondaryButtonStyle}
+                    >
+                      查看 / 管理 WIP
+                    </button>
+                  )}
 
-                {selectedSample.status === 'outbound' && (
-                  <button
-                    onClick={() => runSampleAction(selectedSample.id, 'pickup_confirmed')}
-                    disabled={submitting}
-                    style={primaryButtonStyle}
-                  >
-                    確認廠區已取件
-                  </button>
-                )}
+                  {!isFactoryUser && selectedSample.status === 'split' && allWipsCompleted && (
+                    <button
+                      onClick={() => runSampleAction(selectedSample.id, 'outbound')}
+                      disabled={submitting}
+                      style={primaryButtonStyle}
+                    >
+                      通知取件 / 移至待取件區
+                    </button>
+                  )}
 
-                {selectedSample.status === 'transferring' && (
-                  <button
-                    onClick={goToTransferPage}
-                    disabled={submitting}
-                    style={secondaryButtonStyle}
-                  >
-                    前往交接流轉
-                  </button>
-                )}
-
-                {!['pending_receive', 'received', 'split', 'outbound', 'transferring'].includes(
-                  selectedSample.status,
-                ) && <div style={miniEmptyStyle}>目前沒有可執行動作。</div>}
-              </div>
+                  {!isFactoryUser && selectedSample.status === 'transferring' && (
+                    <button
+                      onClick={goToTransferPage}
+                      disabled={submitting}
+                      style={secondaryButtonStyle}
+                    >
+                      前往交接流轉
+                    </button>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </Modal>
@@ -1152,6 +1210,12 @@ const timelineMetaStyle: CSSProperties = {
   color: 'var(--text3)',
   fontSize: 11,
   marginTop: 4,
+}
+
+const historyActionRowStyle: CSSProperties = {
+  display: 'flex',
+  gap: 10,
+  flexWrap: 'wrap',
 }
 
 const actionBarStyle: CSSProperties = {

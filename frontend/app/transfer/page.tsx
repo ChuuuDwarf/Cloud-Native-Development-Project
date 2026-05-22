@@ -125,7 +125,6 @@ const sampleStatusText: Record<string, string> = {
 }
 
 const transferStatusText: Record<string, string> = {
-  draft: '草稿',
   pending: '待送出',
   transferring: '已送出 / 待對方收樣',
   received: '已簽收',
@@ -151,7 +150,7 @@ const priorityText: Record<string, string> = {
   urgent: '急件',
 }
 
-const blockingTransferStatuses = ['draft', 'pending', 'transferring']
+const blockingTransferStatuses = ['pending', 'transferring']
 
 function normalizeLab(value: string | null | undefined) {
   return (value ?? '').trim().toLowerCase()
@@ -251,6 +250,7 @@ export default function SampleTransferPage() {
   const [wips, setWips] = useState<Wip[]>([])
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [selectedCandidateKey, setSelectedCandidateKey] = useState('')
+  const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -861,6 +861,7 @@ export default function SampleTransferPage() {
                     'To',
                     '狀態',
                     '交接人',
+                    '簽收人',
                     '操作',
                   ].map((header) => (
                     <th key={header} style={thStyle}>
@@ -882,8 +883,17 @@ export default function SampleTransferPage() {
                       <StatusBadge status={transfer.status} />
                     </td>
                     <td style={tdStyle}>{transfer.handed_by ?? '-'}</td>
+                    <td style={tdStyle}>{transfer.received_by ?? '-'}</td>
                     <td style={tdStyle}>
                       <div style={smallActionGroupStyle}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTransfer(transfer)}
+                          style={smallSecondaryButtonStyle}
+                        >
+                          查看
+                        </button>
+
                         {transfer.from_lab === currentLab && transfer.status === 'pending' && (
                           <button
                             onClick={() => sendTransfer(transfer)}
@@ -905,6 +915,7 @@ export default function SampleTransferPage() {
                         )}
 
                         {transfer.status === 'transferring' && <span style={hintStyle}>已送至對方待收樣區</span>}
+                        {transfer.status === 'received' && <span style={hintStyle}>對方已收樣</span>}
                         {transfer.status === 'cancelled' && <span style={hintStyle}>已取消</span>}
                       </div>
                     </td>
@@ -915,6 +926,126 @@ export default function SampleTransferPage() {
           </div>
         )}
       </section>
+
+      {selectedTransfer && (
+        <TransferModal
+          transfer={selectedTransfer}
+          currentLab={currentLab}
+          submitting={submitting}
+          onClose={() => setSelectedTransfer(null)}
+          onSendTransfer={sendTransfer}
+          onCancelTransfer={cancelTransfer}
+        />
+      )}
+    </div>
+  )
+}
+
+function TransferModal({
+  transfer,
+  currentLab,
+  submitting,
+  onClose,
+  onSendTransfer,
+  onCancelTransfer,
+}: {
+  transfer: Transfer
+  currentLab: string
+  submitting: boolean
+  onClose: () => void
+  onSendTransfer: (transfer: Transfer) => void
+  onCancelTransfer: (transfer: Transfer) => void
+}) {
+  return (
+    <div style={modalBackdropStyle}>
+      <div style={modalCardStyle}>
+        <div style={modalHeaderStyle}>
+          <div>
+            <div style={modalTitleStyle}>
+              {transfer.transfer_no ?? transfer.id.slice(0, 8)}
+            </div>
+            <div style={modalSubtitleStyle}>
+              {transfer.from_lab ?? '-'} → {transfer.to_lab ?? '-'}
+            </div>
+          </div>
+
+          <div style={modalHeaderActionsStyle}>
+            <StatusBadge status={transfer.status} />
+            <button type="button" onClick={onClose} style={iconButtonStyle}>
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div style={modalBodyStyle}>
+          <div style={sectionTitleStyle}>交接單詳細資訊</div>
+
+          <div style={detailGridStyle}>
+            <InfoBlock label="交接單號" value={transfer.transfer_no ?? transfer.id} />
+            <InfoBlock label="交接類型" value={transfer.target_type} />
+            <InfoBlock label="委託單號" value={transfer.order_no ?? '-'} />
+            <InfoBlock label="樣品編號" value={transfer.sample_no ?? '-'} />
+            <InfoBlock label="WIP 編號" value={transfer.wip_no ?? '-'} />
+            <InfoBlock label="來源實驗室" value={transfer.from_lab ?? '-'} />
+            <InfoBlock label="目的實驗室" value={transfer.to_lab ?? '-'} />
+            <InfoBlock label="交接人" value={transfer.handed_by ?? '-'} />
+            <InfoBlock label="送出時間" value={formatDateTime(transfer.transferred_at)} />
+            <InfoBlock label="簽收人" value={transfer.received_by ?? '-'} />
+            <InfoBlock label="簽收時間" value={formatDateTime(transfer.received_at)} />
+            <InfoBlock
+              label="狀態"
+              value={transferStatusText[transfer.status] ?? transfer.status}
+            />
+            <InfoBlock label="建立時間" value={formatDateTime(transfer.created_at)} />
+            <InfoBlock label="更新時間" value={formatDateTime(transfer.updated_at)} />
+            <InfoBlock label="備註" value={transfer.note ?? '-'} />
+          </div>
+
+          <div style={modalNoticeStyle}>
+            {transfer.status === 'pending' &&
+              '這筆交接單尚未送出，只有來源實驗室可以送出或取消。'}
+            {transfer.status === 'transferring' &&
+              '交接單已送出，樣品已移到目的實驗室收樣區，等待目的實驗室在收樣管理確認收樣。'}
+            {transfer.status === 'received' &&
+              '目的實驗室已確認收樣，交接流程完成。'}
+            {transfer.status === 'cancelled' && '這筆交接單已取消。'}
+          </div>
+
+          <div style={actionBarStyle}>
+            {transfer.from_lab === currentLab && transfer.status === 'pending' && (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => onSendTransfer(transfer)}
+                style={primaryButtonStyle}
+              >
+                送出到對方待收樣區
+              </button>
+            )}
+
+            {transfer.from_lab === currentLab && transfer.status === 'pending' && (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => onCancelTransfer(transfer)}
+                style={dangerButtonStyle}
+              >
+                取消交接
+              </button>
+            )}
+
+            <button type="button" onClick={onClose} style={secondaryButtonStyle}>
+              關閉
+            </button>
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        aria-label="close"
+        style={modalBackdropButtonStyle}
+        onClick={onClose}
+      />
     </div>
   )
 }
@@ -1148,6 +1279,18 @@ function ReturnDetail({
       </div>
     </div>
   )
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return '-'
+
+  try {
+    return new Date(value).toLocaleString('zh-TW', {
+      hour12: false,
+    })
+  } catch {
+    return value
+  }
 }
 
 function getCandidateKey(candidate: Candidate) {
@@ -1632,8 +1775,98 @@ const smallPrimaryButtonStyle: CSSProperties = {
   fontSize: 11,
 }
 
+const smallSecondaryButtonStyle: CSSProperties = {
+  ...secondaryButtonStyle,
+  padding: '5px 8px',
+  fontSize: 11,
+}
+
 const smallDangerButtonStyle: CSSProperties = {
   ...dangerButtonStyle,
   padding: '5px 8px',
   fontSize: 11,
+}
+const modalBackdropStyle: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 50,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 20,
+  background: 'rgba(0,0,0,0.55)',
+}
+
+const modalBackdropButtonStyle: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: -1,
+  opacity: 0,
+}
+
+const modalCardStyle: CSSProperties = {
+  width: 'min(920px, 96vw)',
+  maxHeight: '90vh',
+  overflowY: 'auto',
+  background: 'var(--s1)',
+  border: '1px solid var(--border2)',
+  borderRadius: 18,
+  boxShadow: '0 20px 70px rgba(0,0,0,0.35)',
+}
+
+const modalHeaderStyle: CSSProperties = {
+  position: 'sticky',
+  top: 0,
+  zIndex: 1,
+  background: 'var(--s1)',
+  borderBottom: '1px solid var(--border2)',
+  padding: 18,
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 16,
+}
+
+const modalHeaderActionsStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+}
+
+const modalTitleStyle: CSSProperties = {
+  fontSize: 20,
+  fontWeight: 900,
+}
+
+const modalSubtitleStyle: CSSProperties = {
+  color: 'var(--text3)',
+  fontSize: 12,
+  marginTop: 4,
+}
+
+const modalBodyStyle: CSSProperties = {
+  padding: 18,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 16,
+}
+
+const iconButtonStyle: CSSProperties = {
+  background: 'var(--s2)',
+  border: '1px solid var(--border)',
+  color: 'var(--text2)',
+  borderRadius: 10,
+  width: 34,
+  height: 34,
+  cursor: 'pointer',
+}
+
+const modalNoticeStyle: CSSProperties = {
+  background: 'rgba(56,139,253,0.1)',
+  border: '1px solid rgba(56,139,253,0.25)',
+  color: 'var(--text2)',
+  borderRadius: 12,
+  padding: 12,
+  fontSize: 13,
+  lineHeight: 1.6,
 }

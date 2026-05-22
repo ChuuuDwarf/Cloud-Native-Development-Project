@@ -47,26 +47,6 @@ def lab_location(lab_name: str | None, area: str):
     return f"{lab_name} {area}"
 
 
-def receive_location(lab_name: str | None):
-    return lab_location(lab_name, "收樣區")
-
-
-def experiment_temp_location(lab_name: str | None):
-    return lab_location(lab_name, "實驗暫存區")
-
-
-def machine_location(lab_name: str | None):
-    return lab_location(lab_name, "機台區")
-
-
-def transfer_waiting_location(lab_name: str | None):
-    return lab_location(lab_name, "交接待送區")
-
-
-def pickup_location(lab_name: str | None):
-    return lab_location(lab_name, "待取件區")
-
-
 def normalize_location_for_action(
     payload_location: str | None,
     current_lab: str | None,
@@ -136,6 +116,14 @@ def can_manage_sample(current_user: dict, sample: dict) -> bool:
     current_location = sample.get("current_location") or ""
 
     return bool(current_lab and current_location.startswith(current_lab))
+
+
+def can_confirm_pickup(current_user: dict, sample: dict) -> bool:
+    return (
+        current_user.get("role") == "factory_user"
+        and sample.get("applicant_name") == current_user.get("name")
+        and sample.get("status") == "outbound"
+    )
 
 
 def validate_uuid(value: str | None, field_name: str) -> None:
@@ -379,13 +367,6 @@ def sample_action(
 ):
     sample = get_sample_or_404(sample_id, db)
     current_user = get_active_user(request)
-
-    if not can_manage_sample(current_user, sample):
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to operate this sample",
-        )
-
     current_lab = get_user_lab(current_user)
     action = payload.get("action")
 
@@ -399,6 +380,21 @@ def sample_action(
         raise HTTPException(
             status_code=400,
             detail="action must be one of: receive, inbound, outbound, pickup_confirmed, split",
+        )
+
+    can_operate = can_manage_sample(current_user, sample)
+    can_pickup = action == "pickup_confirmed" and can_confirm_pickup(current_user, sample)
+
+    if not can_operate and not can_pickup:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to operate this sample",
+        )
+
+    if current_user.get("role") == "factory_user" and action != "pickup_confirmed":
+        raise HTTPException(
+            status_code=403,
+            detail="廠區使用者只能在待取件狀態確認取件",
         )
 
     operator_name = payload.get("operator_name") or current_user.get("name")
@@ -630,6 +626,12 @@ def sample_action(
         return dict(result.fetchone()._mapping)
 
     if action == "pickup_confirmed":
+        if sample["status"] != "outbound":
+            raise HTTPException(
+                status_code=400,
+                detail="只有待取件 outbound 狀態可以確認取件",
+            )
+
         next_location = payload.get("current_location") or "已由使用者取回"
 
         result = db.execute(
