@@ -1,0 +1,54 @@
+[project]
+name = "lims-backend"
+version = "0.1.0"
+description = "Cloud-Native Laboratory Information Management System — backend"
+requires-python = ">=3.12,<3.14"
+# Python 3.14 breaks the SQLAlchemy 2.0.x Union typing path; bumping the
+# upper bound waits for a SQLAlchemy release that supports 3.14.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",          # pycodestyle + pyflakes
+  "I",                     # isort
+  "B",                     # flake8-bugbear
+  "C4",                    # comprehensions
+  "UP",                    # pyupgrade
+  "SIM",                   # simplify
+  "ASYNC",                 # async correctness
+  "RUF",                   # ruff-specific
+]
+ignore = [
+  "B008",   # FastAPI Depends() in defaults is idiomatic
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/env.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.12"
+strict_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_untyped_defs = false  # relax during scaffolding; tighten later
+plugins = []
+exclude = ["alembic/versions"]
+
+[[tool.mypy.overrides]]
+module = ["jose.*", "celery.*", "sse_starlette.*", "fastapi_mail.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = ["-ra", "--strict-markers"]
+markers = [
+  "integration: cross-module integration tests",
+  "e2e: end-to-end tests requiring full stack",
+]

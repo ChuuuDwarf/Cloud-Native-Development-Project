@@ -1,14 +1,60 @@
-# Python
+# ============================================================
+# Python (backend)
+# ============================================================
 backend/venv/
-__pycache__/
+backend/.venv/
+backend/__pycache__/
+**/__pycache__/
 backend/*.pyc
+**/*.pyc
 backend/.env
+backend/dist/
+backend/node_modules/
 
-# Node
+# pytest / coverage
+.coverage
+backend/.coverage
+htmlcov/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+
+# Runtime data (keep .gitkeep)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ============================================================
+# Node (frontend)
+# ============================================================
 frontend/node_modules/
 frontend/.next/
 frontend/.env.local
+frontend/coverage/
 
-# 通用
+# ============================================================
+# E2E (Playwright)
+# ============================================================
+tests/e2e/node_modules/
+tests/e2e/playwright-report/
+tests/e2e/test-results/
+tests/e2e/blob-report/
+tests/e2e/playwright/.cache/
+
+# ============================================================
+# Claude Code (project-scoped)
+# ============================================================
+# Personal overrides — must NOT be checked in
+.claude/settings.local.json
+# Per-developer agent memory — machine-specific, can leak personal context
+.claude/agent-memory/
+.mcp.json
+
+# ============================================================
+# 通用 / test scratch
+# ============================================================
 .env
 .DS_Store
+cookie.txt
+*.cookie
+.zed
+.claude

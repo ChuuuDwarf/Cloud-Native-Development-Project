@@ -1,0 +1,51 @@
+{
+    "name": "LIMS dev",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "workspaceFolder": "/workspaces/lims",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/lims,type=bind,consistency=cached",
+    "remoteUser": "vscode",
+    "updateRemoteUserUID": true,
+    "runArgs": [
+        "--name=lims-devcontainer",
+        "-p",
+        "8000:8000",
+        "-p",
+        "3000:3000"
+    ],
+    "containerEnv": {
+        "ENV": "development",
+        "DATABASE_URL": "postgresql+asyncpg://lims:lims@host.docker.internal:5432/lims",
+        "REDIS_URL": "redis://host.docker.internal:6379/0",
+        "JWT_SECRET": "change-me-in-prod-please",
+        "JWT_ALGORITHM": "HS256",
+        "JWT_EXPIRES_MINUTES": "1440",
+        "CORS_ORIGINS": "http://localhost:3000",
+        "EMAIL_BACKEND": "file",
+        "EMAIL_FROM": "noreply@lims.local",
+        "SMTP_HOST": "",
+        "SMTP_PORT": "587",
+        "SMTP_USER": "",
+        "SMTP_PASSWORD": "",
+        "UPLOADS_DIR": "/workspaces/lims/backend/uploads",
+        "NEXT_PUBLIC_API_URL": "http://localhost:8000/api",
+        "PGHOST": "host.docker.internal",
+        "PGUSER": "lims",
+        "PGPASSWORD": "lims",
+        "PGDATABASE": "lims",
+        "VIRTUAL_ENV": "/workspaces/lims/backend/.venv",
+        // PATH is set in .devcontainer/Dockerfile (ENV PATH=...:$PATH) rather
+        // than here, because Zed's devcontainer driver doesn't resolve the
+        // ${containerEnv:PATH} spec substitution — it passes the literal
+        // string through and the UID-update step fails with "unsupported
+        // modifier (:P)". Dockerfile ENV sees a real shell $PATH.
+        // Redirect tool caches OUT of the bind mount so they don't trigger
+        // host fsevents → Zed file-tree thrash. /tmp is tmpfs-backed inside
+        // the container and survives until the container is destroyed.
+        "PYTHONPYCACHEPREFIX": "/tmp/pycache",
+        "MYPY_CACHE_DIR": "/tmp/mypy_cache",
+        "RUFF_CACHE_DIR": "/tmp/ruff_cache"
+    },
+    "postCreateCommand": "bash .devcontainer/post-create.sh"
+}

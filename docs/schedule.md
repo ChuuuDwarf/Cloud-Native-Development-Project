@@ -33,3 +33,56 @@
 | 人員不足重排 | — | ✅ | 協調 | — |
 
 ---
+
+# 派工與排程管理 API
+
+## API 總表
+
+| Method | API | 用途 |
+|---|---|---|
+| GET | `/api/schedules` | 查詢排程資料 |
+| POST | `/api/schedules/suggest` | 產生排程建議 |
+| POST | `/api/schedules/conflict-check` | 檢查排程衝突 |
+| POST | `/api/schedules/reschedule` | 依原因動態重排 |
+| PATCH | `/api/schedules/:id` | 手動調整單一排程 |
+| GET | `/api/dispatches` | 查詢派工清單 |
+| POST | `/api/dispatches` | 建立派工 |
+| GET | `/api/dispatches/:id` | 查看派工詳細資料 |
+| PATCH | `/api/dispatches/:id` | 修改派工內容 |
+| POST | `/api/dispatches/:id/actions` | 執行派工確認、開始、暫停、恢復、完成、取消 |
+
+
+## Reschedule Reason
+
+`POST /api/schedules/reschedule` 統一處理所有重排情境，不要拆成多支 API。
+
+| reason | 說明 |
+|---|---|
+| `machine_failure` | 機台故障 |
+| `urgent_order` | 特急單插單 |
+| `previous_step_delay` | 前站延誤 |
+| `sample_not_arrived` | 樣品未到 |
+| `staff_shortage` | 人員不足 |
+| `manual_adjustment` | 人工調整 |
+
+## Dispatch Actions
+
+| action | 說明 |
+|---|---|
+| `confirm` | 確認派工 |
+| `start` | 開始執行 |
+| `pause` | 暫停 |
+| `resume` | 恢復執行 |
+| `complete` | 完成派工 |
+| `cancel` | 取消派工 |
+
+## 會使用到其他 md 的 API
+
+| 來源 md | 會使用到的 API | 使用目的 |
+|---|---|---|
+| `role.md` | `GET /api/me`<br>`GET /api/users` | 判斷排程權限並取得可派工人員 |
+| `sample_management.md` | `GET /api/wips`<br>`GET /api/wips/:id`<br>`POST /api/wips/:id/actions` | 取得待排程 WIP，排程後同步 WIP 狀態 |
+| `machine_recipe.md` | `GET /api/machines`<br>`GET /api/machines/:id`<br>`GET /api/recipes` | 排程與派工需要機台狀態與 Recipe |
+| `system_setting.md` | `GET /api/system-settings/schedulingPolicy` | 取得排程策略與最佳化權重 |
+| `warn.md` | `POST /api/issues` | 排程衝突或重排失敗可建立告警 |
+

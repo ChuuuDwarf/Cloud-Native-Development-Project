@@ -1,0 +1,18 @@
+Alembic — async SQLAlchemy 2.0 migrations for LIMS.
+
+Run from `backend/`:
+
+    alembic revision --autogenerate -m "describe change"
+    alembic upgrade head
+    alembic downgrade -1
+    alembic history
+
+Migration filename convention (per docs/integration_contract.md):
+
+    <ordinal>_<member-letter>_<short_description>.py
+
+Member letters reserved: a=Order/Approval, b=Sample/WIP, c=Machine/Recipe/Schedule,
+d=ExperimentRun/Report, e=User/Role/SystemSetting/Issue/Notification/Dashboard.
+
+This keeps autogenerate-created revisions from colliding on filenames when
+multiple members work on the same week.

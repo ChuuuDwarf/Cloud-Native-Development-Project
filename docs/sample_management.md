@@ -44,3 +44,55 @@
 | 逾期未領通知觸發 | — | 系統自動 | 接收通知 | 設定規則 |
 
 ---
+
+# 樣品 / WIP API 整理
+
+## API 總表
+
+| Method | API | 用途 |
+|---|---|---|
+| GET | `/api/samples` | 查詢樣品列表 |
+| GET | `/api/samples/:id` | 查看樣品詳細資料 |
+| PATCH | `/api/samples/:id` | 更新樣品基本資料、目前位置、儲位、備註 |
+| POST | `/api/samples/:id/actions` | 執行收樣、分貨、交接、入庫、出庫、確認取件等流程動作 |
+| GET | `/api/samples/:id/history` | 查看樣品歷程 |
+| GET | `/api/wips` | 查詢 WIP 清單 |
+| POST | `/api/wips` | 建立 WIP，通常由樣品分貨流程觸發 |
+| GET | `/api/wips/:id` | 查看單一 WIP 詳細資料 |
+| PATCH | `/api/wips/:id` | 更新 WIP 非流程欄位，例如備註、優先級、負責實驗室 |
+| POST | `/api/wips/:id/actions` | 執行 WIP 狀態動作，例如送排程、暫停、恢復、標記完成、終止 |
+| GET | `/api/wips/:id/history` | 查看 WIP 歷程 |
+
+
+## Samples Actions
+
+| action | 用途 | 使用角色 |
+|---|---|---|
+| `receive` | 確認收樣 | 實驗室人員 |
+| `split` | 分貨並建立 WIP | 實驗室人員 |
+| `transfer` | 樣品交接到其他實驗室 | 實驗室人員 |
+| `inbound` | 樣品入庫 | 實驗室人員 |
+| `outbound` | 樣品出庫 | 實驗室人員 |
+| `pickup_confirmed` | 確認取件 | 廠區使用者 |
+
+## WIP Actions
+
+| action | 用途 | 使用角色 |
+|---|---|---|
+| `send_to_schedule` | WIP 送入待排程 | 實驗室人員 |
+| `mark_scheduled` | 標記已排程 | 系統 / 實驗室人員 |
+| `mark_dispatched` | 標記已派工 | 系統 / 實驗室人員 |
+| `pause` | 暫停 WIP | 實驗室人員 |
+| `resume` | 恢復 WIP | 實驗室人員 |
+| `complete` | WIP 完成 | 系統 / 實驗室人員 |
+| `terminate` | WIP 終止 | 主管核准後系統執行 |
+
+## 會使用到其他 md 的 API
+
+| 來源 md | 會使用到的 API | 使用目的 |
+|---|---|---|
+| `role.md` | `GET /api/me` | 判斷收樣、分貨、取件權限 |
+| `order_management.md` | `GET /api/orders/:id`<br>`POST /api/orders/:id/actions` | 收樣與取件流程需同步委託單狀態 |
+| `system_setting.md` | `GET /api/storage-locations`<br>`GET /api/labs`<br>`GET /api/master-data` | 取得儲位、實驗室與狀態選項 |
+| `schedule.md` | `GET /api/schedules`<br>`GET /api/dispatches` | 樣品或 WIP 詳細頁顯示排程與派工狀態 |
+| `warn.md` | `GET /api/issues`<br>`POST /api/issues` | 樣品破損、遺失或 WIP 卡關時建立事件 |
