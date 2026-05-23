@@ -37,7 +37,7 @@
 | `wips:create` | | ✅ | ✅ | ✅ (*) |
 | `wips:dispatch` | | ✅ | ✅ | ✅ (*) |
 | `machines:read` | | ✅ | ✅ | ✅ (*) |
-| `machines:manage` | | | ✅ | ✅ (*) |
+| `machines:manage` | | ✅ | ✅ | ✅ (*) |
 | `recipes:read` | | ✅ | ✅ | ✅ (*) |
 | `recipes:manage` | | | ✅ | ✅ (*) |
 | `schedules:read` | | ✅ | ✅ | ✅ (*) |
@@ -48,11 +48,11 @@
 | `experiment_runs:execute` | | ✅ | ✅ | ✅ (*) |
 | `reports:read` | | ✅ | ✅ | ✅ (*) |
 | `reports:create` | | ✅ | ✅ | ✅ (*) |
-| `reports:publish` | | | ✅ | ✅ (*) |
+| `reports:publish` | | ✅ | ✅ | ✅ (*) |
 | `issues:read` | | ✅ | ✅ | ✅ (*) |
 | `issues:create` | | ✅ | ✅ | ✅ (*) |
-| `issues:close` | | | ✅ | ✅ (*) |
-| `issues:escalate` | | | ✅ | ✅ (*) |
+| `issues:close` | | ✅ | ✅ | ✅ (*) |
+| `issues:escalate` | | ✅ | ✅ | ✅ (*) |
 | `notifications:read` | ✅ | ✅ | ✅ | ✅ (*) |
 | `dashboard:read` | | | ✅ | ✅ (*) |
 | `audit_logs:read` | | | ✅ | ✅ (*) |
@@ -70,8 +70,9 @@
 ### 業務 intent 對照（給隊友快速建構心智模型）
 
 - **plant_user**：開單 → 看自己單的進度 → 取件結案。**不能** 簽核、看 WIP / 機台 / 實驗、看儀表板。
-- **lab_engineer**：收樣 → 拆 WIP / 分貨 → 派工到機台跑 recipe → 上下機 → 回報 → 寫報告草稿。**不能** 簽核 / 結案 / 發佈報告 / 處理告警 / 看儀表板。
-- **lab_supervisor**：實驗員的所有動作 +**審核** (`orders:approve`, `orders:close`, `reports:publish`)、**告警處理** (`issues:close`, `issues:escalate`)、**監督**（看儀表板、看 audit log、機台/Recipe/排程**管理權**）。
+- **lab_engineer**：收樣 → 拆 WIP / 分貨 → 派工到機台跑 recipe → 上下機 → 回報 → 寫報告 → **管機台狀態** → **發佈報告** → **第一線處理告警**（close / escalate）。**不能** 簽核委託 (`orders:approve/close`)、不能改 recipe / 排程設定（`recipes:manage` / `schedules:manage` 是 supervisor 才有的「製程 IP + 規劃決策」）、不能看儀表板。
+- **lab_supervisor**：實驗員的**所有**動作 + **委託簽核 / 結案** (`orders:approve`, `orders:close`)、**製程 IP** (`recipes:manage`, `schedules:manage`)、**監督視角**（儀表板、audit log、部門列表）。
+  - **告警 escalation 設計**：機台異常 → 系統先通知**值班 engineer** → 一段時間（依 `alertRules` 設定）engineer 沒 close 就**自動升級**給 supervisor。因此 engineer 必須有 `issues:close` 跟 `issues:escalate` —— escalate 也包含 engineer 自己主動「我處理不來請主管支援」這個動作。
 - **system_admin**：除了業務操作以外，**only role** 能管帳號、權限、系統設定、實驗室 / 部門 / 倉位 master data。
 
 ### 怎麼新增 / 修改 permission
@@ -105,7 +106,7 @@
 2. **plant_user 可開單到任意 active lab**，不限制部門對應。
 3. **一張委託單 = 一個 lab**（`orders.lab_id` 必填，不允許跨 lab order_items）。跨 lab 工作流請開兩張單。
 4. **主管不能簽核別 lab 來的單**（接續 3，本來就不會發生）。
-5. **Audit log 也 scoped**：sysadmin 看全部、supervisor 只看自己 lab 的稽核紀錄。
+5. **Audit log 也 scoped**：sysadmin 看全部、supervisor 只看 `audit_logs.lab_id == user.lab_id` 的紀錄。**重要副作用**：`lab_id IS NULL` 的全域動作（department / system_setting / file 之類沒掛 lab 的 entity）supervisor **看不到** —— `NULL = uuid` 在 SQL 結果是 NULL、被 WHERE 過濾掉。這是 by design：全域動作只屬於 sysadmin 的稽核領域。若以後要 supervisor 也看 lab-agnostic 動作，要改 `apply_lab_scope` 加 `OR lab_id IS NULL` 分支。
 6. **`/api/master-data` 的 `labs` 永遠回全部 active labs**（plant_user 建單時要選、engineer 也需要知道自己在哪 lab）；但個別 endpoint（`/api/machines` / `/api/recipes` / `/api/wips` 等）才做 lab filter。
 7. **plant_user 的 `samples:read` 是 scoped 讀**：只看到自己單對應的樣品；前端 sidebar 不該列「收樣管理」這個 engineer 工作頁入口（Sidebar 上 `/sample` 跟 `/transfer` 用 `samples:create` 把關，非 `samples:read`）。
 

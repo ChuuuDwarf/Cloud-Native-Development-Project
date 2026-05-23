@@ -92,8 +92,19 @@ PERMISSIONS: list[tuple[str, str]] = [
 # ---------------------------------------------------------------------------
 
 # Engineer is the base "operator" role. Supervisor inherits everything
-# engineer can do PLUS approve/close/publish/escalate authority. Defined as a
-# superset so we never drift — bumping engineer perms auto-bumps supervisor.
+# engineer can do PLUS commercial-approval authority (orders, recipes,
+# schedules, audit-logs visibility, dashboard). Defined as a superset so we
+# never drift — bumping engineer perms auto-bumps supervisor.
+#
+# Note on `machines:manage`, `reports:publish`, `issues:close`,
+# `issues:escalate`: these all sit on engineer (not supervisor-only) by
+# design. The warning-escalation flow goes engineer-first: a machine
+# anomaly notifies the on-shift engineer; if they don't close the issue
+# within the configured window the system auto-escalates to supervisor.
+# So engineer needs to be able to close + escalate issues themselves (the
+# first-responder), publish their own reports, and toggle machines in/out
+# of maintenance status. Recipes + schedules stay supervisor-only (process
+# IP + planning authority).
 LAB_ENGINEER_PERMS: list[str] = [
     "orders:read",
     "samples:read",
@@ -102,6 +113,7 @@ LAB_ENGINEER_PERMS: list[str] = [
     "wips:create",
     "wips:dispatch",
     "machines:read",
+    "machines:manage",
     "recipes:read",
     "schedules:read",
     "dispatches:read",
@@ -110,8 +122,11 @@ LAB_ENGINEER_PERMS: list[str] = [
     "experiment_runs:execute",
     "reports:read",
     "reports:create",
+    "reports:publish",
     "issues:read",
     "issues:create",
+    "issues:close",
+    "issues:escalate",
     "notifications:read",
     "labs:read",
     "storage_locations:read",
@@ -121,12 +136,8 @@ LAB_SUPERVISOR_EXTRA_PERMS: list[str] = [
     "users:read",
     "orders:approve",
     "orders:close",
-    "machines:manage",
     "recipes:manage",
     "schedules:manage",
-    "reports:publish",
-    "issues:close",
-    "issues:escalate",
     "dashboard:read",
     "audit_logs:read",
     "departments:read",
