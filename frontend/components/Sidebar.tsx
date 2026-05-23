@@ -115,7 +115,7 @@ const nav: NavSection[] = [
         href: "/storage",
         icon: "📦",
         label: "倉儲取件",
-        roles: ["system_admin", "lab_engineer", "lab_supervisor", "plant_user"],
+        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
       },
       {
         id: "exception",
