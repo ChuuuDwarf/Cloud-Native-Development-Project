@@ -76,7 +76,7 @@ function renderSidebar() {
   return render(
     <QueryClientProvider client={queryClient}>
       <Sidebar />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
 }
 
@@ -96,7 +96,7 @@ describe("Sidebar", () => {
         permissions: ["*"],
         labId: null,
         departmentId: null,
-      }),
+      })
     );
 
     renderSidebar();
@@ -134,7 +134,7 @@ describe("Sidebar", () => {
         ],
         labId: "lab-a",
         departmentId: null,
-      }),
+      })
     );
 
     renderSidebar();
@@ -168,7 +168,7 @@ describe("Sidebar", () => {
         ],
         labId: "lab-a",
         departmentId: null,
-      }),
+      })
     );
 
     renderSidebar();
@@ -198,7 +198,7 @@ describe("Sidebar", () => {
         ],
         labId: null,
         departmentId: "dept-1",
-      }),
+      })
     );
 
     renderSidebar();
@@ -226,7 +226,7 @@ describe("Sidebar", () => {
         permissions: ["*"],
         labId: null,
         departmentId: null,
-      }),
+      })
     );
 
     renderSidebar();
@@ -253,7 +253,7 @@ describe("Sidebar", () => {
         ],
         labId: "lab-a",
         departmentId: null,
-      }),
+      })
     );
 
     renderSidebar();
@@ -276,8 +276,8 @@ describe("Sidebar", () => {
           labId: null,
           departmentId: null,
         },
-        logout,
-      ),
+        logout
+      )
     );
 
     renderSidebar();
