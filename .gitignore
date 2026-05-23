@@ -47,6 +47,7 @@ tests/e2e/playwright/.cache/
 .claude/settings.local.json
 # Per-developer agent memory — machine-specific, can leak personal context
 .claude/agent-memory/
+.mcp.json
 
 # ============================================================
 # 通用 / test scratch
