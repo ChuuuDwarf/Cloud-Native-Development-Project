@@ -69,7 +69,9 @@ describe("AuthGate", () => {
     );
 
     // LoginForm renders this placeholder
-    expect(screen.getByPlaceholderText("admin@example.com")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("admin@example.com"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("protected child")).not.toBeInTheDocument();
     expect(screen.queryByTestId("sidebar-stub")).not.toBeInTheDocument();
   });

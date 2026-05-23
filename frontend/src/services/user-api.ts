@@ -28,10 +28,7 @@ export const userApi = {
     return res.data.data;
   },
 
-  async update(
-    id: string,
-    payload: UpdateUserPayload,
-  ): Promise<UserResponse> {
+  async update(id: string, payload: UpdateUserPayload): Promise<UserResponse> {
     const res = await httpClient.patch<ApiResponse<UserResponse>>(
       `/users/${id}`,
       payload,

@@ -15,12 +15,17 @@ const dualRootAlias = {
   resolveId(source: string) {
     if (!source.startsWith("@/")) return null;
     const rest = source.slice(2);
-    const candidates = [
-      path.join(root, "src", rest),
-      path.join(root, rest),
-    ];
+    const candidates = [path.join(root, "src", rest), path.join(root, rest)];
     for (const base of candidates) {
-      for (const ext of ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx"]) {
+      for (const ext of [
+        "",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        "/index.ts",
+        "/index.tsx",
+      ]) {
         const p = base + ext;
         if (existsSync(p)) return p;
       }

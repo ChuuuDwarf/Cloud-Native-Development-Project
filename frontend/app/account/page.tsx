@@ -21,7 +21,8 @@ export default function AccountPage() {
 
   const usersQuery = useQuery({
     queryKey: ["users", { keyword }],
-    queryFn: () => userApi.list({ keyword: keyword || undefined, pageSize: 100 }),
+    queryFn: () =>
+      userApi.list({ keyword: keyword || undefined, pageSize: 100 }),
   });
 
   const masterQuery = useQuery({
@@ -30,13 +31,8 @@ export default function AccountPage() {
   });
 
   const toggleStatus = useMutation({
-    mutationFn: ({
-      id,
-      status,
-    }: {
-      id: string;
-      status: UserStatus;
-    }) => userApi.update(id, { status }),
+    mutationFn: ({ id, status }: { id: string; status: UserStatus }) =>
+      userApi.update(id, { status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
   });
 
@@ -107,14 +103,20 @@ export default function AccountPage() {
           <tbody>
             {usersQuery.isLoading && (
               <tr>
-                <Td colSpan={6} style={{ textAlign: "center", color: "var(--text3)" }}>
+                <Td
+                  colSpan={6}
+                  style={{ textAlign: "center", color: "var(--text3)" }}
+                >
                   Loading…
                 </Td>
               </tr>
             )}
             {usersQuery.isError && (
               <tr>
-                <Td colSpan={6} style={{ textAlign: "center", color: "var(--red)" }}>
+                <Td
+                  colSpan={6}
+                  style={{ textAlign: "center", color: "var(--red)" }}
+                >
                   讀取失敗
                 </Td>
               </tr>
@@ -131,7 +133,10 @@ export default function AccountPage() {
             ))}
             {usersQuery.data?.items.length === 0 && (
               <tr>
-                <Td colSpan={6} style={{ textAlign: "center", color: "var(--text3)" }}>
+                <Td
+                  colSpan={6}
+                  style={{ textAlign: "center", color: "var(--text3)" }}
+                >
                   沒有符合條件的使用者
                 </Td>
               </tr>
@@ -183,7 +188,9 @@ function UserRow({
       <Td>
         <StatusPill status={user.status} />
       </Td>
-      <Td style={{ color: "var(--text3)", fontFamily: "monospace", fontSize: 11 }}>
+      <Td
+        style={{ color: "var(--text3)", fontFamily: "monospace", fontSize: 11 }}
+      >
         {new Date(user.createdAt).toLocaleString("zh-TW")}
       </Td>
       <Td style={{ textAlign: "right" }}>
@@ -208,9 +215,7 @@ function StatusPill({ status }: { status: UserStatus }) {
   return (
     <span
       style={{
-        background: isActive
-          ? "rgba(63,185,80,0.15)"
-          : "rgba(255,68,68,0.15)",
+        background: isActive ? "rgba(63,185,80,0.15)" : "rgba(255,68,68,0.15)",
         color: isActive ? "var(--green)" : "var(--red)",
         border: `1px solid ${isActive ? "rgba(63,185,80,0.4)" : "rgba(255,68,68,0.4)"}`,
         padding: "2px 8px",

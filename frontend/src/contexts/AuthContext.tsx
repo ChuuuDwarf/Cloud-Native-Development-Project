@@ -72,8 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await authApi.login(payload);
         await refresh();
       } catch (err: unknown) {
-        const body = (err as { response?: { data?: { error?: { message?: string } } } })
-          ?.response?.data?.error;
+        const body = (
+          err as { response?: { data?: { error?: { message?: string } } } }
+        )?.response?.data?.error;
         setError(body?.message ?? "Login failed");
         throw err;
       }

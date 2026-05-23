@@ -70,8 +70,8 @@ describe("authApi", () => {
     const err = { response: { status: 401 } };
     postMock.mockRejectedValue(err);
 
-    await expect(
-      authApi.login({ email: "x", password: "y" }),
-    ).rejects.toEqual(err);
+    await expect(authApi.login({ email: "x", password: "y" })).rejects.toEqual(
+      err,
+    );
   });
 });

@@ -159,7 +159,9 @@ export default function Sidebar() {
   const visibleSections = nav
     .map((g) => ({
       ...g,
-      items: g.items.filter((i) => !i.permission || hasPermission(i.permission)),
+      items: g.items.filter(
+        (i) => !i.permission || hasPermission(i.permission),
+      ),
     }))
     .filter((g) => g.items.length > 0);
 

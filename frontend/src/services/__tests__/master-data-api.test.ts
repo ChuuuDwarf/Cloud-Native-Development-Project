@@ -16,7 +16,14 @@ describe("masterDataApi", () => {
 
   it("fetch() GETs /master-data and unwraps data", async () => {
     const payload = {
-      roles: [{ id: "r-1", name: "system_admin", description: "", permissions: ["*"] }],
+      roles: [
+        {
+          id: "r-1",
+          name: "system_admin",
+          description: "",
+          permissions: ["*"],
+        },
+      ],
       permissions: [],
       labs: [],
       departments: [],

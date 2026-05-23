@@ -29,7 +29,9 @@ describe("LoginForm", () => {
       </AuthProvider>,
     );
 
-    expect(screen.getByPlaceholderText("admin@example.com")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("admin@example.com"),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/密碼/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /登入/ })).toBeInTheDocument();
   });
