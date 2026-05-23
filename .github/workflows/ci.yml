@@ -162,6 +162,13 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Format check (prettier)
+        working-directory: frontend
+        # Was previously enforced by .github/workflows/code_quality.yml; folded
+        # into this workflow so ci.yml is the single source of truth and the
+        # other workflow can be deleted.
+        run: npm run format:check
+
       - name: Lint (eslint)
         working-directory: frontend
         # `npm run lint` runs eslint --max-warnings 0. Pipe to a file too so
