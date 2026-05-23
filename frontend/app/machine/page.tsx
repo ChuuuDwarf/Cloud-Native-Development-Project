@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import UserSwitcher, { authHeaders } from '@/components/UserSwitcher'
+import UserSwitcher, { authHeaders, type AppUser } from '@/components/UserSwitcher'
+import { formatLab } from '@/components/labDisplay'
 import Chip from '@/components/ui/Chip'
 import KpiCard from '@/components/ui/KpiCard'
 
@@ -31,7 +32,7 @@ const statusTypes: Record<MachineStatus, 'idle' | 'running' | 'pending' | 'rejec
 const demoMachineForm = {
   machineId: 'AFM-004',
   name: '原子力顯微鏡',
-  lab: '表面分析實驗室',
+  lab: 'LAB A',
   supportedItems: '表面形貌分析, 粗糙度量測',
   owner: '林育誠',
   utilization: '18',
@@ -52,8 +53,8 @@ export default function MachinePage() {
     lastMaintenance: '尚未保養',
   })
 
-  const loadMachines = useCallback(() => {
-    fetch(`${apiUrl}/api/machines`)
+  const loadMachines = useCallback((user?: AppUser) => {
+    fetch(`${apiUrl}/api/machines`, { headers: authHeaders(user?.userId) })
       .then(res => res.ok ? res.json() : Promise.reject(new Error('load failed')))
       .then((payload: { data: Machine[] }) => {
         setMachines(payload.data)
@@ -129,7 +130,7 @@ export default function MachinePage() {
           <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4, fontFamily: 'monospace' }}>ROLE C · POSTGRESQL · {message}</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <UserSwitcher />
+          <UserSwitcher onChange={loadMachines} />
           <select value={selectedStatus} onChange={event => setSelectedStatus(event.target.value as MachineStatus)} style={inputStyle}>
             {statuses.map(status => <option key={status}>{status}</option>)}
           </select>
@@ -152,7 +153,10 @@ export default function MachinePage() {
           <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <input placeholder="機台 ID，例如 XRD-002" value={form.machineId} onChange={event => setForm({ ...form, machineId: event.target.value })} style={inputStyle} />
             <input placeholder="機台名稱" value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} style={inputStyle} />
-            <input placeholder="實驗室，例如 結構分析實驗室" value={form.lab} onChange={event => setForm({ ...form, lab: event.target.value })} style={inputStyle} />
+            <select value={form.lab} onChange={event => setForm({ ...form, lab: event.target.value })} style={inputStyle}>
+              <option value="">選擇實驗室</option>
+              {['LAB A', 'LAB B', 'LAB C'].map(lab => <option key={lab} value={lab}>{formatLab(lab)}</option>)}
+            </select>
             <input placeholder="支援項目，用逗號分隔" value={form.supportedItems} onChange={event => setForm({ ...form, supportedItems: event.target.value })} style={inputStyle} />
             <input placeholder="負責人" value={form.owner} onChange={event => setForm({ ...form, owner: event.target.value })} style={inputStyle} />
             <input placeholder="稼動率 0-100" value={form.utilization} onChange={event => setForm({ ...form, utilization: event.target.value })} style={inputStyle} />
@@ -181,7 +185,7 @@ export default function MachinePage() {
                     <div style={{ fontFamily: 'monospace', color: 'var(--text)' }}>{machine.machineId}</div>
                     <div style={{ color: 'var(--text3)', fontSize: 11 }}>{machine.name} · {machine.owner}</div>
                   </td>
-                  <td style={tdStyle}>{machine.lab}</td>
+                  <td style={tdStyle}>{formatLab(machine.lab)}</td>
                   <td style={tdStyle}><Chip type={statusTypes[machine.status]} label={machine.status} /></td>
                   <td style={tdStyle}>{machine.supportedItems.join('、')}</td>
                   <td style={tdStyle}>{machine.utilization}%</td>

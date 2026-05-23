@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import UserSwitcher, { authHeaders } from '@/components/UserSwitcher'
+import UserSwitcher, { authHeaders, type AppUser } from '@/components/UserSwitcher'
+import { formatLab } from '@/components/labDisplay'
 import Chip from '@/components/ui/Chip'
 import KpiCard from '@/components/ui/KpiCard'
 
@@ -20,6 +21,7 @@ type Recipe = {
 type Machine = {
   machineId: string
   name: string
+  lab: string
   supportedItems: string[]
 }
 
@@ -51,10 +53,10 @@ export default function RecipePage() {
   })
   const [message, setMessage] = useState('讀取資料庫中')
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback((user?: AppUser) => {
     Promise.all([
-      fetch(`${apiUrl}/api/recipes`).then(res => res.ok ? res.json() : Promise.reject(new Error('recipes failed'))),
-      fetch(`${apiUrl}/api/machines`).then(res => res.ok ? res.json() : Promise.reject(new Error('machines failed'))),
+      fetch(`${apiUrl}/api/recipes`, { headers: authHeaders(user?.userId) }).then(res => res.ok ? res.json() : Promise.reject(new Error('recipes failed'))),
+      fetch(`${apiUrl}/api/machines`, { headers: authHeaders(user?.userId) }).then(res => res.ok ? res.json() : Promise.reject(new Error('machines failed'))),
     ])
       .then(([recipePayload, machinePayload]: [{ data: Recipe[] }, { data: Machine[] }]) => {
         setRecipes(recipePayload.data)
@@ -107,7 +109,7 @@ export default function RecipePage() {
           <h1 style={{ fontSize: 22, fontWeight: 800 }}>Recipe 管理</h1>
           <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4, fontFamily: 'monospace' }}>ROLE C · POSTGRESQL · {message}</p>
         </div>
-        <UserSwitcher />
+        <UserSwitcher onChange={loadData} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 20 }}>
@@ -134,7 +136,7 @@ export default function RecipePage() {
             <select value={form.machineId} onChange={event => setForm({ ...form, machineId: event.target.value })} style={inputStyle}>
               <option value="">選擇相容機台</option>
               {(compatibleMachines.length ? compatibleMachines : machines).map(machine => (
-                <option key={machine.machineId} value={machine.machineId}>{machine.machineId} · {machine.name}</option>
+                <option key={machine.machineId} value={machine.machineId}>{machine.machineId} · {machine.name} · {formatLab(machine.lab)}</option>
               ))}
             </select>
             <textarea placeholder="實驗方法" value={form.method} onChange={event => setForm({ ...form, method: event.target.value })} style={{ ...inputStyle, minHeight: 90 }} />

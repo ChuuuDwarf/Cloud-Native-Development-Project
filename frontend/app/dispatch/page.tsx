@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import UserSwitcher, { authHeaders } from '@/components/UserSwitcher'
+import UserSwitcher, { authHeaders, type AppUser } from '@/components/UserSwitcher'
+import { formatLab } from '@/components/labDisplay'
 import Chip from '@/components/ui/Chip'
 import KpiCard from '@/components/ui/KpiCard'
 
@@ -29,6 +30,7 @@ type Dispatch = {
   orderId: string
   experimentItem: string
   priority: string
+  lab: string
   dueAt: string
   status: WipStatus
   suggestedMachineId?: string | null
@@ -99,11 +101,11 @@ export default function DispatchPage() {
     dueAt: '',
   })
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback((user?: AppUser) => {
     Promise.all([
-      fetch(`${apiUrl}/api/machines`).then(res => res.ok ? res.json() : Promise.reject(new Error('machines failed'))),
-      fetch(`${apiUrl}/api/recipes`).then(res => res.ok ? res.json() : Promise.reject(new Error('recipes failed'))),
-      fetch(`${apiUrl}/api/dispatches`).then(res => res.ok ? res.json() : Promise.reject(new Error('dispatches failed'))),
+      fetch(`${apiUrl}/api/machines`, { headers: authHeaders(user?.userId) }).then(res => res.ok ? res.json() : Promise.reject(new Error('machines failed'))),
+      fetch(`${apiUrl}/api/recipes`, { headers: authHeaders(user?.userId) }).then(res => res.ok ? res.json() : Promise.reject(new Error('recipes failed'))),
+      fetch(`${apiUrl}/api/dispatches`, { headers: authHeaders(user?.userId) }).then(res => res.ok ? res.json() : Promise.reject(new Error('dispatches failed'))),
     ])
       .then(([machinePayload, recipePayload, dispatchPayload]: [{ data: Machine[] }, { data: Recipe[] }, { data: Dispatch[] }]) => {
         setMachines(machinePayload.data)
@@ -210,7 +212,7 @@ export default function DispatchPage() {
           <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4, fontFamily: 'monospace' }}>ROLE C · POSTGRESQL · {message}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <UserSwitcher />
+          <UserSwitcher onChange={loadData} />
           <select value={strategy} onChange={event => setStrategy(event.target.value as Strategy)} style={inputStyle}>
             {strategies.map(item => <option key={item}>{item}</option>)}
           </select>
@@ -265,7 +267,7 @@ export default function DispatchPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--s2)' }}>
-                {['WIP', '實驗項目', '優先', '交期', '狀態', '建議 / 指派', '系統預估', '重排 / 策略'].map(header => (
+                {['WIP', '實驗室', '實驗項目', '優先', '交期', '狀態', '建議 / 指派', '系統預估', '重排 / 策略'].map(header => (
                   <th key={header} style={thStyle}>{header}</th>
                 ))}
               </tr>
@@ -274,6 +276,7 @@ export default function DispatchPage() {
               {dispatches.map(dispatch => (
                 <tr key={dispatch.dispatchId} onClick={() => setActiveDispatchId(dispatch.dispatchId)} style={{ borderBottom: '1px solid var(--border2)', background: activeDispatchId === dispatch.dispatchId ? 'rgba(56,139,253,0.08)' : 'transparent', cursor: 'pointer' }}>
                   <td style={tdStyle}>{dispatch.wipId}<br /><span style={{ color: 'var(--text3)' }}>{dispatch.orderId}</span></td>
+                  <td style={tdStyle}>{formatLab(dispatch.lab)}</td>
                   <td style={tdStyle}>{dispatch.experimentItem}</td>
                   <td style={tdStyle}>{dispatch.priority}</td>
                   <td style={tdStyle}>{dispatch.dueAt}</td>
@@ -288,7 +291,7 @@ export default function DispatchPage() {
                 </tr>
               ))}
               {!dispatches.length && (
-                <tr><td colSpan={8} style={{ ...tdStyle, textAlign: 'center', padding: 28 }}>尚無 WIP，請從左側新增。</td></tr>
+                <tr><td colSpan={9} style={{ ...tdStyle, textAlign: 'center', padding: 28 }}>尚無 WIP，請從左側新增。</td></tr>
               )}
             </tbody>
           </table>

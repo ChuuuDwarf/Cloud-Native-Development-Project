@@ -2,15 +2,23 @@
 
 目前「派工排程、機台管理、Recipe 管理」後端會建立 4 張資料表：`users`、`machines`、`recipes`、`dispatches`。
 
+### LAB 對照
+
+| LAB 代碼 | 實驗室名稱 |
+|----------|------------|
+| LAB A | 材料分析實驗室 |
+| LAB B | 結構分析實驗室 |
+| LAB C | 光學量測實驗室 |
+
 ### users（使用者與角色）
 
 | 欄位名稱 | 型態 | 說明 |
 |----------|------|------|
-| user_id | TEXT PK | 使用者 ID，例如 `u-lab`、`u-supervisor` |
+| user_id | TEXT PK | 使用者 ID，例如 `u-lab-a`、`u-supervisor-a`、`u-chief` |
 | name | TEXT NOT NULL | 使用者姓名 |
-| role | TEXT NOT NULL | 使用者角色：`廠區使用者` / `實驗室人員` / `實驗室主管` / `系統管理者` |
+| role | TEXT NOT NULL | 使用者角色：`廠區使用者` / `實驗室人員` / `實驗室小主管` / `實驗室大主管` / `系統管理者` |
 | department | TEXT NOT NULL | 所屬部門，例如 `實驗室`、`資訊部`、`F12 廠` |
-| lab | TEXT | 所屬實驗室，可為空；例如 `材料分析實驗室` |
+| lab | TEXT | 所屬實驗室，可為空；例如 `LAB A`、`LAB B`、`LAB C`；大主管與系統管理者可為空 |
 
 ### machines（機台主檔）
 
@@ -18,7 +26,7 @@
 |----------|------|------|
 | machine_id | TEXT PK | 機台 ID，例如 `OPT-001` |
 | name | TEXT NOT NULL | 機台名稱 |
-| lab | TEXT NOT NULL | 機台所在實驗室 |
+| lab | TEXT NOT NULL | 機台所在實驗室：`LAB A` / `LAB B` / `LAB C` |
 | status | TEXT NOT NULL | 機台狀態：`閒置` / `使用中` / `保養中` / `故障中` / `停用` |
 | supported_items | TEXT[] NOT NULL | 支援的實驗項目清單 |
 | utilization | INTEGER NOT NULL DEFAULT 0 | 稼動率，0 到 100 |
@@ -48,6 +56,7 @@
 | order_id | TEXT NOT NULL | 委託單 ID，例如 `WO-001` |
 | experiment_item | TEXT NOT NULL | 實驗項目，需對應機台支援項目與 Recipe 實驗項目 |
 | priority | TEXT NOT NULL | 優先級：`一般` / `高` / `特急` |
+| lab | TEXT NOT NULL DEFAULT 'LAB A' | WIP 所屬實驗室：`LAB A` / `LAB B` / `LAB C` |
 | due_at | TEXT NOT NULL | 交期，目前以前端日期時間選擇器填入，格式建議 `YYYY-MM-DD HH:mm` |
 | status | TEXT NOT NULL | WIP 派工狀態：`待派工` / `排程中` / `待上機` |
 | suggested_machine_id | TEXT | 系統建議機台 ID |
@@ -66,5 +75,15 @@
 |------|------|
 | dispatches.experiment_item -> machines.supported_items | WIP 的實驗項目必須存在於機台支援項目清單 |
 | dispatches.experiment_item -> recipes.experiment_item | WIP 的實驗項目必須等於 Recipe 實驗項目 |
+| dispatches.lab -> machines.lab | WIP 只能排到同一個 LAB 的機台 |
 | dispatches.assigned_machine_id -> recipes.machine_ids | 實際派工機台必須存在於 Recipe 可用機台清單 |
 | dispatches.assigned_recipe_id -> recipes.recipe_id | 實際派工 Recipe 需存在於 Recipe 主檔 |
+
+### 權限與資料範圍
+
+| 角色 | 可見資料範圍 | 說明 |
+|------|--------------|------|
+| 實驗室人員 | 自己所屬 LAB | 可維護自己 LAB 的機台、Recipe、WIP 與派工 |
+| 實驗室小主管 | 自己所屬 LAB | 可查看與操作自己 LAB 的排程與機台情況 |
+| 實驗室大主管 | 全部 LAB | 可在主管儀表板查看 LAB A/B/C 的總覽與統計 |
+| 系統管理者 | 全部 LAB | 可跨 LAB 管理資料 |

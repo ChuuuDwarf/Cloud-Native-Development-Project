@@ -16,7 +16,13 @@ WipStatus = Literal["待派工", "排程中", "待上機"]
 ScheduleStrategy = Literal[
     "FIFO", "Priority First", "Earliest Due Date", "Least Setup Change", "Hybrid"
 ]
-UserRole = Literal["廠區使用者", "實驗室人員", "實驗室主管", "系統管理者"]
+UserRole = Literal[
+    "廠區使用者",
+    "實驗室人員",
+    "實驗室小主管",
+    "實驗室大主管",
+    "系統管理者",
+]
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql://lims:lims@127.0.0.1:5432/lims"
@@ -94,6 +100,7 @@ class Dispatch(BaseModel):
     orderId: str
     experimentItem: str
     priority: str
+    lab: str
     dueAt: str
     status: WipStatus
     suggestedMachineId: str | None = None
@@ -113,6 +120,7 @@ class DispatchCreate(BaseModel):
     orderId: str
     experimentItem: str
     priority: str
+    lab: str | None = None
     dueAt: str
 
 
@@ -207,6 +215,7 @@ def dispatch_from_row(row: dict[str, object]) -> Dispatch:
         orderId=str(row["order_id"]),
         experimentItem=str(row["experiment_item"]),
         priority=str(row["priority"]),
+        lab=str(row["lab"]),
         dueAt=str(row["due_at"]),
         status=row["status"],
         suggestedMachineId=row["suggested_machine_id"],
@@ -238,6 +247,29 @@ def require_role(user: User, allowed_roles: set[UserRole]) -> None:
         )
 
 
+def can_view_all_labs(user: User) -> bool:
+    return user.role in {"實驗室大主管", "系統管理者"}
+
+
+def require_lab_scope(user: User) -> str:
+    if not user.lab:
+        raise HTTPException(status_code=403, detail="This operation requires a lab-scoped user")
+    return user.lab
+
+
+def lab_filter_sql(user: User, column: str = "lab") -> tuple[str, tuple[object, ...]]:
+    if can_view_all_labs(user):
+        return "", ()
+    return f" WHERE {column} = %s", (require_lab_scope(user),)
+
+
+def ensure_same_lab(user: User, lab: str) -> None:
+    if can_view_all_labs(user):
+        return
+    if lab != require_lab_scope(user):
+        raise HTTPException(status_code=403, detail="Cannot access another lab")
+
+
 def priority_rank(priority: str) -> int:
     return {"特急": 0, "高": 1, "一般": 2}.get(priority, 3)
 
@@ -266,24 +298,31 @@ def sorted_dispatches(
 def apply_schedule_suggestion(
     conn: psycopg.Connection,
     strategy: ScheduleStrategy,
+    user: User,
     replan_reason: str | None = None,
 ) -> list[dict[str, object]]:
+    dispatch_filter, dispatch_params = lab_filter_sql(user)
     dispatch_rows = conn.execute(
-        """
+        f"""
         SELECT *
         FROM dispatches
-        WHERE status IN ('待派工', '排程中')
+        {dispatch_filter if dispatch_filter else "WHERE TRUE"}
+          AND status IN ('待派工', '排程中')
         ORDER BY dispatch_id
-        """
+        """,
+        dispatch_params,
     ).fetchall()
     dispatch_rows = sorted_dispatches(dispatch_rows, strategy)
+    machine_filter, machine_params = lab_filter_sql(user)
     machine_rows = conn.execute(
-        """
+        f"""
         SELECT *
         FROM machines
-        WHERE status NOT IN ('故障中', '保養中', '停用')
+        {machine_filter if machine_filter else "WHERE TRUE"}
+          AND status NOT IN ('故障中', '保養中', '停用')
         ORDER BY utilization ASC, machine_id ASC
-        """
+        """,
+        machine_params,
     ).fetchall()
 
     shift_start = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
@@ -293,6 +332,7 @@ def apply_schedule_suggestion(
                 machine
                 for machine in machine_rows
                 if dispatch["experiment_item"] in machine["supported_items"]
+                and dispatch["lab"] == machine["lab"]
             ),
             None,
         )
@@ -321,14 +361,16 @@ def apply_schedule_suggestion(
             )
 
     return conn.execute(
-        """
+        f"""
         SELECT *
         FROM dispatches
+        {dispatch_filter}
         ORDER BY
             CASE WHEN scheduled_start IS NULL THEN 1 ELSE 0 END,
             scheduled_start ASC,
             dispatch_id ASC
-        """
+        """,
+        dispatch_params,
     ).fetchall()
 
 
@@ -389,6 +431,7 @@ def init_db() -> None:
                 order_id TEXT NOT NULL,
                 experiment_item TEXT NOT NULL,
                 priority TEXT NOT NULL,
+                lab TEXT NOT NULL DEFAULT 'LAB A',
                 due_at TEXT NOT NULL,
                 status TEXT NOT NULL,
                 suggested_machine_id TEXT,
@@ -407,10 +450,25 @@ def init_db() -> None:
         conn.execute("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS assigned_by TEXT")
         conn.execute("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS strategy TEXT")
         conn.execute("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS replan_reason TEXT")
+        conn.execute("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS lab TEXT DEFAULT 'LAB A'")
+        conn.execute("UPDATE dispatches SET lab = 'LAB A' WHERE lab IS NULL")
+        conn.execute("ALTER TABLE dispatches ALTER COLUMN lab SET NOT NULL")
         seed_db(conn)
 
 
 def seed_db(conn: psycopg.Connection) -> None:
+    lab_users = [
+        ("u-lab", "林育誠", "實驗室人員", "實驗室", "LAB A"),
+        ("u-supervisor", "陳雅婷", "實驗室小主管", "實驗室", "LAB A"),
+        ("u-lab-a", "林育誠", "實驗室人員", "實驗室", "LAB A"),
+        ("u-supervisor-a", "陳雅婷", "實驗室小主管", "實驗室", "LAB A"),
+        ("u-lab-b", "吳佳穎", "實驗室人員", "實驗室", "LAB B"),
+        ("u-supervisor-b", "黃柏翰", "實驗室小主管", "實驗室", "LAB B"),
+        ("u-lab-c", "周品妤", "實驗室人員", "實驗室", "LAB C"),
+        ("u-supervisor-c", "許冠廷", "實驗室小主管", "實驗室", "LAB C"),
+        ("u-chief", "謝雅雯", "實驗室大主管", "實驗室", None),
+        ("u-admin", "張志明", "系統管理者", "資訊部", None),
+    ]
     user_count = conn.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
     if user_count == 0:
         execute_many(
@@ -421,11 +479,43 @@ def seed_db(conn: psycopg.Connection) -> None:
             """,
             [
                 ("u-factory", "王建國", "廠區使用者", "F12 廠", None),
-                ("u-lab", "林育誠", "實驗室人員", "實驗室", "材料分析實驗室"),
-                ("u-supervisor", "陳雅婷", "實驗室主管", "實驗室", "結構分析實驗室"),
+                ("u-lab-a", "林育誠", "實驗室人員", "實驗室", "LAB A"),
+                ("u-supervisor-a", "陳雅婷", "實驗室小主管", "實驗室", "LAB A"),
+                ("u-lab-b", "吳佳穎", "實驗室人員", "實驗室", "LAB B"),
+                ("u-supervisor-b", "黃柏翰", "實驗室小主管", "實驗室", "LAB B"),
+                ("u-lab-c", "周品妤", "實驗室人員", "實驗室", "LAB C"),
+                ("u-supervisor-c", "許冠廷", "實驗室小主管", "實驗室", "LAB C"),
+                ("u-chief", "謝雅雯", "實驗室大主管", "實驗室", None),
                 ("u-admin", "張志明", "系統管理者", "資訊部", None),
             ],
         )
+    execute_many(
+        conn,
+        """
+        INSERT INTO users (user_id, name, role, department, lab)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (user_id)
+        DO UPDATE SET name = EXCLUDED.name,
+                      role = EXCLUDED.role,
+                      department = EXCLUDED.department,
+                      lab = EXCLUDED.lab
+        """,
+        lab_users,
+    )
+    conn.execute("UPDATE machines SET lab = 'LAB A' WHERE lab = '材料分析實驗室'")
+    conn.execute("UPDATE machines SET lab = 'LAB B' WHERE lab = '結構分析實驗室'")
+    conn.execute("UPDATE machines SET lab = 'LAB C' WHERE lab = '光學實驗室'")
+    conn.execute(
+        """
+        UPDATE dispatches
+        SET lab = CASE
+            WHEN experiment_item IN ('材料成份分析', '晶格缺陷觀察', '表面形貌分析') THEN 'LAB A'
+            WHEN experiment_item IN ('晶體結構分析', '薄膜應力分析') THEN 'LAB B'
+            WHEN experiment_item IN ('光學量測', '膜厚量測') THEN 'LAB C'
+            ELSE lab
+        END
+        """
+    )
 
     machine_count = conn.execute("SELECT COUNT(*) AS count FROM machines").fetchone()["count"]
     if machine_count == 0:
@@ -442,7 +532,7 @@ def seed_db(conn: psycopg.Connection) -> None:
                 (
                     "TEM-001",
                     "穿透式電子顯微鏡",
-                    "材料分析實驗室",
+                    "LAB A",
                     "閒置",
                     ["材料成份分析", "晶格缺陷觀察"],
                     48,
@@ -452,7 +542,7 @@ def seed_db(conn: psycopg.Connection) -> None:
                 (
                     "XRD-002",
                     "X 光繞射儀",
-                    "結構分析實驗室",
+                    "LAB B",
                     "閒置",
                     ["晶體結構分析", "薄膜應力分析"],
                     35,
@@ -462,7 +552,7 @@ def seed_db(conn: psycopg.Connection) -> None:
                 (
                     "SEM-001",
                     "掃描式電子顯微鏡",
-                    "材料分析實驗室",
+                    "LAB A",
                     "故障中",
                     ["表面形貌分析", "材料成份分析"],
                     72,
@@ -472,7 +562,7 @@ def seed_db(conn: psycopg.Connection) -> None:
                 (
                     "OPT-001",
                     "光學量測平台",
-                    "光學實驗室",
+                    "LAB C",
                     "閒置",
                     ["光學量測", "膜厚量測"],
                     22,
@@ -539,9 +629,9 @@ def seed_db(conn: psycopg.Connection) -> None:
             """
             INSERT INTO dispatches (
                 dispatch_id, wip_id, order_id, experiment_item,
-                priority, due_at, status, created_by
+                priority, lab, due_at, status, created_by
             )
-            VALUES (%s, %s, %s, %s, %s, %s, '待派工', %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, '待派工', %s)
             """,
             [
                 (
@@ -550,6 +640,7 @@ def seed_db(conn: psycopg.Connection) -> None:
                     "WO-001",
                     "材料成份分析",
                     "特急",
+                    "LAB A",
                     "2026-05-22 18:00",
                     "王建國",
                 ),
@@ -559,6 +650,7 @@ def seed_db(conn: psycopg.Connection) -> None:
                     "WO-002",
                     "薄膜應力分析",
                     "高",
+                    "LAB B",
                     "2026-05-23 10:00",
                     "王建國",
                 ),
@@ -568,6 +660,7 @@ def seed_db(conn: psycopg.Connection) -> None:
                     "WO-003",
                     "表面形貌分析",
                     "一般",
+                    "LAB A",
                     "2026-05-23 17:00",
                     "王建國",
                 ),
@@ -577,6 +670,7 @@ def seed_db(conn: psycopg.Connection) -> None:
                     "WO-004",
                     "光學量測",
                     "一般",
+                    "LAB C",
                     "2026-05-22 09:00",
                     "王建國",
                 ),
@@ -586,6 +680,7 @@ def seed_db(conn: psycopg.Connection) -> None:
                     "WO-005",
                     "薄膜應力分析",
                     "特急",
+                    "LAB B",
                     "2026-05-24 16:00",
                     "王建國",
                 ),
@@ -619,10 +714,97 @@ def get_users() -> dict[str, object]:
     return list_response([user_from_row(row) for row in rows])
 
 
-@app.get("/api/machines")
-def get_machines() -> dict[str, object]:
+@app.get("/api/dashboard")
+def get_dashboard(x_user_id: str | None = Header(default=None)) -> dict[str, object]:
     with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM machines ORDER BY machine_id").fetchall()
+        user = get_user(conn, x_user_id)
+        filter_sql, params = lab_filter_sql(user)
+        machines = conn.execute(
+            f"SELECT * FROM machines{filter_sql} ORDER BY lab, machine_id",
+            params,
+        ).fetchall()
+        dispatches = conn.execute(
+            f"SELECT * FROM dispatches{filter_sql} ORDER BY lab, due_at, dispatch_id",
+            params,
+        ).fetchall()
+        lab_rows = conn.execute(
+            f"""
+            SELECT
+                labs.lab,
+                COUNT(DISTINCT machines.machine_id) AS machine_count,
+                COUNT(DISTINCT dispatches.dispatch_id) AS dispatch_count,
+                COUNT(DISTINCT dispatches.dispatch_id)
+                    FILTER (WHERE dispatches.status = '待派工') AS pending_count,
+                COUNT(DISTINCT dispatches.dispatch_id)
+                    FILTER (WHERE dispatches.status = '排程中') AS scheduling_count,
+                COUNT(DISTINCT dispatches.dispatch_id)
+                    FILTER (WHERE dispatches.status = '待上機') AS ready_count,
+                COUNT(DISTINCT machines.machine_id)
+                    FILTER (WHERE machines.status IN ('故障中', '保養中', '停用')) AS blocked_machine_count,
+                COALESCE(ROUND(AVG(machines.utilization)), 0) AS avg_utilization
+            FROM (
+                SELECT lab FROM machines
+                UNION
+                SELECT lab FROM dispatches
+            ) labs
+            LEFT JOIN machines ON machines.lab = labs.lab
+            LEFT JOIN dispatches ON dispatches.lab = labs.lab
+            {filter_sql.replace("lab", "labs.lab") if filter_sql else ""}
+            GROUP BY labs.lab
+            ORDER BY labs.lab
+            """,
+            params,
+        ).fetchall()
+
+    pending = sum(1 for row in dispatches if row["status"] == "待派工")
+    scheduling = sum(1 for row in dispatches if row["status"] == "排程中")
+    ready = sum(1 for row in dispatches if row["status"] == "待上機")
+    blocked = sum(1 for row in machines if row["status"] in ["故障中", "保養中", "停用"])
+    avg_utilization = round(
+        sum(int(row["utilization"]) for row in machines) / len(machines)
+    ) if machines else 0
+
+    return response(
+        {
+            "scope": "all" if can_view_all_labs(user) else user.lab,
+            "user": user,
+            "kpis": {
+                "pendingDispatches": pending,
+                "schedulingDispatches": scheduling,
+                "readyDispatches": ready,
+                "blockedMachines": blocked,
+                "machineCount": len(machines),
+                "avgUtilization": avg_utilization,
+            },
+            "labs": [
+                {
+                    "lab": row["lab"],
+                    "machineCount": int(row["machine_count"]),
+                    "dispatchCount": int(row["dispatch_count"]),
+                    "pendingCount": int(row["pending_count"]),
+                    "schedulingCount": int(row["scheduling_count"]),
+                    "readyCount": int(row["ready_count"]),
+                    "blockedMachineCount": int(row["blocked_machine_count"]),
+                    "avgUtilization": int(row["avg_utilization"]),
+                }
+                for row in lab_rows
+            ],
+            "machines": [machine_from_row(row) for row in machines],
+            "dispatches": [dispatch_from_row(row) for row in dispatches],
+        },
+        "dashboard loaded",
+    )
+
+
+@app.get("/api/machines")
+def get_machines(x_user_id: str | None = Header(default=None)) -> dict[str, object]:
+    with get_connection() as conn:
+        user = get_user(conn, x_user_id)
+        filter_sql, params = lab_filter_sql(user)
+        rows = conn.execute(
+            f"SELECT * FROM machines{filter_sql} ORDER BY machine_id",
+            params,
+        ).fetchall()
     return list_response([machine_from_row(row) for row in rows])
 
 
@@ -632,7 +814,8 @@ def create_machine(
 ) -> dict[str, object]:
     with get_connection() as conn:
         user = get_user(conn, x_user_id)
-        require_role(user, {"實驗室人員", "系統管理者"})
+        require_role(user, {"實驗室人員", "實驗室小主管", "系統管理者"})
+        ensure_same_lab(user, payload.lab)
         try:
             row = conn.execute(
                 """
@@ -666,7 +849,13 @@ def update_machine_status(
 ) -> dict[str, object]:
     with get_connection() as conn:
         user = get_user(conn, x_user_id)
-        require_role(user, {"實驗室人員", "系統管理者"})
+        require_role(user, {"實驗室人員", "實驗室小主管", "系統管理者"})
+        machine = conn.execute(
+            "SELECT * FROM machines WHERE machine_id = %s", (machine_id,)
+        ).fetchone()
+        if machine is None:
+            raise HTTPException(status_code=404, detail="Machine not found")
+        ensure_same_lab(user, str(machine["lab"]))
         row = conn.execute(
             """
             UPDATE machines
@@ -676,8 +865,6 @@ def update_machine_status(
             """,
             (payload.status, machine_id),
         ).fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Machine not found")
     return response(machine_from_row(row), "machine status updated")
 
 
@@ -689,7 +876,14 @@ def update_machine(
 ) -> dict[str, object]:
     with get_connection() as conn:
         user = get_user(conn, x_user_id)
-        require_role(user, {"實驗室人員", "系統管理者"})
+        require_role(user, {"實驗室人員", "實驗室小主管", "系統管理者"})
+        machine = conn.execute(
+            "SELECT * FROM machines WHERE machine_id = %s", (machine_id,)
+        ).fetchone()
+        if machine is None:
+            raise HTTPException(status_code=404, detail="Machine not found")
+        ensure_same_lab(user, str(machine["lab"]))
+        ensure_same_lab(user, payload.lab)
         row = conn.execute(
             """
             UPDATE machines
@@ -712,15 +906,26 @@ def update_machine(
                 machine_id,
             ),
         ).fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Machine not found")
     return response(machine_from_row(row), "machine updated")
 
 
 @app.get("/api/recipes")
-def get_recipes() -> dict[str, object]:
+def get_recipes(x_user_id: str | None = Header(default=None)) -> dict[str, object]:
     with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM recipes ORDER BY updated_at DESC").fetchall()
+        user = get_user(conn, x_user_id)
+        if can_view_all_labs(user):
+            rows = conn.execute("SELECT * FROM recipes ORDER BY updated_at DESC").fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT recipes.*
+                FROM recipes
+                JOIN machines ON machines.machine_id = ANY(recipes.machine_ids)
+                WHERE machines.lab = %s
+                ORDER BY updated_at DESC
+                """,
+                (require_lab_scope(user),),
+            ).fetchall()
     return list_response([recipe_from_row(row) for row in rows])
 
 
@@ -730,10 +935,15 @@ def create_recipe(
 ) -> dict[str, object]:
     with get_connection() as conn:
         user = get_user(conn, x_user_id)
-        require_role(user, {"實驗室人員"})
+        require_role(user, {"實驗室人員", "實驗室小主管"})
         machine_count = conn.execute(
-            "SELECT COUNT(*) AS count FROM machines WHERE machine_id = ANY(%s)",
-            (payload.machineIds,),
+            """
+            SELECT COUNT(*) AS count
+            FROM machines
+            WHERE machine_id = ANY(%s)
+              AND lab = %s
+            """,
+            (payload.machineIds, require_lab_scope(user)),
         ).fetchone()["count"]
         if machine_count != len(payload.machineIds):
             raise HTTPException(status_code=400, detail="Some machines do not exist")
@@ -766,17 +976,21 @@ def create_recipe(
 
 
 @app.get("/api/dispatches")
-def get_dispatches() -> dict[str, object]:
+def get_dispatches(x_user_id: str | None = Header(default=None)) -> dict[str, object]:
     with get_connection() as conn:
+        user = get_user(conn, x_user_id)
+        filter_sql, params = lab_filter_sql(user)
         rows = conn.execute(
-            """
+            f"""
             SELECT *
             FROM dispatches
+            {filter_sql}
             ORDER BY
                 CASE WHEN scheduled_start IS NULL THEN 1 ELSE 0 END,
                 scheduled_start ASC,
                 dispatch_id ASC
-            """
+            """,
+            params,
         ).fetchall()
     return list_response([dispatch_from_row(row) for row in rows])
 
@@ -787,15 +1001,17 @@ def create_dispatch(
 ) -> dict[str, object]:
     with get_connection() as conn:
         user = get_user(conn, x_user_id)
-        require_role(user, {"實驗室人員"})
+        require_role(user, {"實驗室人員", "實驗室小主管"})
+        lab = payload.lab or require_lab_scope(user)
+        ensure_same_lab(user, lab)
         try:
             row = conn.execute(
                 """
                 INSERT INTO dispatches (
                     dispatch_id, wip_id, order_id, experiment_item,
-                    priority, due_at, status, created_by
+                    priority, lab, due_at, status, created_by
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, '待派工', %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, '待派工', %s)
                 RETURNING *
                 """,
                 (
@@ -804,6 +1020,7 @@ def create_dispatch(
                     payload.orderId,
                     payload.experimentItem,
                     payload.priority,
+                    lab,
                     payload.dueAt,
                     user.name,
                 ),
@@ -819,8 +1036,8 @@ def suggest_dispatches(
 ) -> dict[str, object]:
     with get_connection() as conn:
         user = get_user(conn, x_user_id)
-        require_role(user, {"實驗室人員", "實驗室主管", "系統管理者"})
-        rows = apply_schedule_suggestion(conn, payload.strategy)
+        require_role(user, {"實驗室人員", "實驗室小主管", "系統管理者"})
+        rows = apply_schedule_suggestion(conn, payload.strategy, user)
 
     return response(
         {
@@ -837,10 +1054,11 @@ def replan_dispatches(
 ) -> dict[str, object]:
     with get_connection() as conn:
         user = get_user(conn, x_user_id)
-        require_role(user, {"實驗室人員", "實驗室主管", "系統管理者"})
+        require_role(user, {"實驗室人員", "實驗室小主管", "系統管理者"})
         strategy = REPLAN_STRATEGIES.get(payload.reason, payload.strategy)
+        filter_sql, params = lab_filter_sql(user)
         conn.execute(
-            """
+            f"""
             UPDATE dispatches
             SET status = '待派工',
                 suggested_machine_id = NULL,
@@ -849,10 +1067,11 @@ def replan_dispatches(
                 strategy = NULL,
                 replan_reason = %s
             WHERE status = '排程中'
+            {"AND lab = %s" if filter_sql else ""}
             """,
-            (payload.reason,),
+            (payload.reason, *params),
         )
-        rows = apply_schedule_suggestion(conn, strategy, payload.reason)
+        rows = apply_schedule_suggestion(conn, strategy, user, payload.reason)
     return response(
         {
             "reason": payload.reason,
@@ -871,7 +1090,7 @@ def assign_dispatch(
 ) -> dict[str, object]:
     with get_connection() as conn:
         user = get_user(conn, x_user_id)
-        require_role(user, {"實驗室人員"})
+        require_role(user, {"實驗室人員", "實驗室小主管"})
         dispatch = conn.execute(
             "SELECT * FROM dispatches WHERE dispatch_id = %s", (dispatch_id,)
         ).fetchone()
@@ -888,6 +1107,10 @@ def assign_dispatch(
             raise HTTPException(status_code=404, detail="Machine not found")
         if recipe is None:
             raise HTTPException(status_code=404, detail="Recipe not found")
+        ensure_same_lab(user, str(dispatch["lab"]))
+        ensure_same_lab(user, str(machine["lab"]))
+        if dispatch["lab"] != machine["lab"]:
+            raise HTTPException(status_code=400, detail="Dispatch and machine are in different labs")
         if machine["status"] in ["故障中", "保養中", "停用"]:
             raise HTTPException(status_code=400, detail="Machine is not assignable")
         if dispatch["experiment_item"] not in machine["supported_items"]:
