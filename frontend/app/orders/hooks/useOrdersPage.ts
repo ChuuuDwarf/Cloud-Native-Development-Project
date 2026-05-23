@@ -1,17 +1,45 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { userApi } from "@/services/user-api";
-import { actionLabel, emptyFormItem, emptyMasterData, orderStatusFilters } from "../constants";
+import {
+  actionLabel,
+  emptyFormItem,
+  emptyMasterData,
+  orderStatusFilters,
+} from "../constants";
 import { requestJson } from "../lib/api";
-import { createDefaultItem, getNextSampleId, groupItemsBySample, toggleExperimentInGroup } from "../lib/formItems";
+import {
+  createDefaultItem,
+  getNextSampleId,
+  getNextSampleIdFromOrders,
+  groupItemsBySample,
+  toggleExperimentInGroup,
+} from "../lib/formItems";
 import { readTemplates, writeTemplates } from "../lib/templates";
-import type { Experiment, FormItem, MasterData, ModalState, Order, OrderAction, OrderHistory, OrderStatus, OrderStatusFilter, OrderTemplate, PriorityLevel, QuotaCheck, QuotaSetting, SampleFormGroup } from "../types";
+import type {
+  Experiment,
+  FormItem,
+  MasterData,
+  ModalState,
+  Order,
+  OrderAction,
+  OrderHistory,
+  OrderStatus,
+  OrderStatusFilter,
+  OrderTemplate,
+  PriorityLevel,
+  QuotaCheck,
+  QuotaSetting,
+  SampleFormGroup,
+} from "../types";
 
 export function useOrdersPage() {
   const { user } = useAuth();
+
   const currentUserId = user?.id ?? "";
   const currentUserName = user?.name ?? currentUserId;
   const currentDepartmentId = user?.departmentId ?? "";
+  const currentUserRole = user?.role ?? "";
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [masterData, setMasterData] = useState<MasterData>(emptyMasterData);
@@ -28,15 +56,23 @@ export function useOrdersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [quotaCheck, setQuotaCheck] = useState<QuotaCheck | null>(null);
   const [quotaSettings, setQuotaSettings] = useState<QuotaSetting[]>([]);
-  const [activeStatusFilter, setActiveStatusFilter] = useState<OrderStatusFilter>("all");
+  const [activeStatusFilter, setActiveStatusFilter] =
+    useState<OrderStatusFilter>("all");
   const [templates, setTemplates] = useState<OrderTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateName, setTemplateName] = useState("");
-  const [usersById, setUsersById] = useState<Record<string, string | undefined>>({});
+  const [usersById, setUsersById] = useState<Record<string, string | undefined>>(
+    {},
+  );
 
   function resolveDepartmentId(source: MasterData) {
-    const userDepartmentExists = source.departments.some((department) => department.id === currentDepartmentId);
-    return userDepartmentExists ? currentDepartmentId : source.departments[0]?.id || "";
+    const userDepartmentExists = source.departments.some(
+      (department) => department.id === currentDepartmentId,
+    );
+
+    return userDepartmentExists
+      ? currentDepartmentId
+      : source.departments[0]?.id || "";
   }
 
   async function loadMasterData() {
@@ -46,24 +82,40 @@ export function useOrdersPage() {
 
       const firstDepartment = resolveDepartmentId(response.data);
       const firstItem = createDefaultItem(response.data);
+
       setDepartmentId(firstDepartment);
       setItems([firstItem]);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "載入主資料失敗";
+      const message =
+        error instanceof Error ? error.message : "載入主資料失敗";
       setMasterData(emptyMasterData);
       setLog(message);
     }
   }
 
   async function loadOrders() {
+    if (!currentUserId) return;
+
     try {
       setLoading(true);
-      const response = await requestJson<Order[]>("/api/orders");
+
+      const searchParams = new URLSearchParams();
+
+      if (currentUserRole === "plant_user") {
+        searchParams.set("applicantId", currentUserId);
+      }
+
+      const queryString = searchParams.toString();
+      const path = queryString ? `/api/orders?${queryString}` : "/api/orders";
+
+      const response = await requestJson<Order[]>(path);
       const nextOrders = Array.isArray(response.data) ? response.data : [];
+
       setOrders(nextOrders);
       setLog(`已載入 ${nextOrders.length} 筆委託單`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "載入委託單失敗";
+      const message =
+        error instanceof Error ? error.message : "載入委託單失敗";
       setOrders([]);
       setLog(message);
       setModal({ type: "message", title: "載入失敗", message });
@@ -82,7 +134,10 @@ export function useOrdersPage() {
   }
 
   async function loadUserNames(userIds: string[]) {
-    const missingIds = Array.from(new Set(userIds.filter(Boolean))).filter((id) => id !== currentUserId && !(id in usersById));
+    const missingIds = Array.from(new Set(userIds.filter(Boolean))).filter(
+      (id) => id !== currentUserId && !(id in usersById),
+    );
+
     if (missingIds.length === 0) return;
 
     const entries = await Promise.all(
@@ -93,10 +148,13 @@ export function useOrdersPage() {
         } catch {
           return [id, undefined] as const;
         }
-      })
+      }),
     );
 
-    setUsersById((current) => ({ ...current, ...Object.fromEntries(entries) }));
+    setUsersById((current) => ({
+      ...current,
+      ...Object.fromEntries(entries),
+    }));
   }
 
   function loadTemplatesForUser(userId: string) {
@@ -111,8 +169,13 @@ export function useOrdersPage() {
 
   function saveCurrentTemplate() {
     const name = templateName.trim();
+
     if (!name) {
-      setModal({ type: "message", title: "模板名稱不可為空", message: "請先輸入模板名稱，再儲存目前的實驗明細。" });
+      setModal({
+        type: "message",
+        title: "模板名稱不可為空",
+        message: "請先輸入模板名稱，再儲存目前的實驗明細。",
+      });
       return;
     }
 
@@ -130,7 +193,9 @@ export function useOrdersPage() {
 
   function applyTemplate(templateId: string) {
     setSelectedTemplateId(templateId);
+
     const template = templates.find((item) => item.id === templateId);
+
     if (!template) return;
 
     setItems(template.items.map((item) => ({ ...item })));
@@ -139,8 +204,11 @@ export function useOrdersPage() {
 
   async function checkQuotaForForm() {
     const response = await requestJson<QuotaCheck>(
-      `/api/quotas/check?departmentId=${encodeURIComponent(departmentId)}&itemCount=${items.length}&priority=${priority}`
+      `/api/quotas/check?departmentId=${encodeURIComponent(
+        departmentId,
+      )}&itemCount=${items.length}&priority=${priority}`,
     );
+
     setQuotaCheck(response.data);
     return response.data;
   }
@@ -150,11 +218,26 @@ export function useOrdersPage() {
     if (!departmentId.trim()) return "部門不可為空";
     if (items.length === 0) return "至少需要一筆實驗明細";
 
-    const invalidIndex = items.findIndex((item) => !item.sampleId.trim() || !item.labId.trim() || !item.experimentId.trim());
-    if (invalidIndex >= 0) return `明細 ${invalidIndex + 1} 的樣品、實驗室、實驗項目都需要填寫`;
+    const invalidIndex = items.findIndex(
+      (item) =>
+        !item.sampleId.trim() ||
+        !item.labId.trim() ||
+        !item.experimentId.trim(),
+    );
+
+    if (invalidIndex >= 0) {
+      return `明細 ${invalidIndex + 1} 的樣品、實驗室、實驗項目都需要填寫`;
+    }
 
     return null;
   }
+
+  const safeOrders = Array.isArray(orders) ? orders : [];
+
+  const visibleOrders =
+    currentUserRole === "plant_user"
+      ? safeOrders.filter((order) => order.applicantId === currentUserId)
+      : safeOrders;
 
   function resetForm() {
     setEditingOrderId(null);
@@ -162,7 +245,10 @@ export function useOrdersPage() {
     setApplicantId(currentUserId);
     setDepartmentId(resolveDepartmentId(masterData));
     setPriority("normal");
-    setItems([createDefaultItem(masterData)]);
+
+    const nextSampleId = getNextSampleIdFromOrders(visibleOrders);
+    setItems([createDefaultItem(masterData, nextSampleId)]);
+
     setQuotaCheck(null);
   }
 
@@ -178,7 +264,11 @@ export function useOrdersPage() {
 
   function startEditOrder(order: Order) {
     if (order.status !== "draft" && order.status !== "returned") {
-      setModal({ type: "message", title: "不可編輯", message: "只有草稿或退回補件的委託單可以修改。" });
+      setModal({
+        type: "message",
+        title: "不可編輯",
+        message: "只有草稿或退回補件的委託單可以修改。",
+      });
       return;
     }
 
@@ -187,7 +277,15 @@ export function useOrdersPage() {
     setApplicantId(order.applicantId);
     setDepartmentId(order.departmentId);
     setPriority(order.priority || "normal");
-    setItems(order.items?.length ? order.items.map(({ sampleId, labId, experimentId }) => ({ sampleId, labId, experimentId })) : [createDefaultItem(masterData)]);
+    setItems(
+      order.items?.length
+        ? order.items.map(({ sampleId, labId, experimentId }) => ({
+            sampleId,
+            labId,
+            experimentId,
+          }))
+        : [createDefaultItem(masterData)],
+    );
     setFormModalOpen(true);
   }
 
@@ -195,30 +293,42 @@ export function useOrdersPage() {
     if (submitting) return;
 
     const error = validateForm();
+
     if (error) {
-      setModal({ type: "message", title: "表單資料不完整", message: error });
+      setModal({
+        type: "message",
+        title: "表單資料不完整",
+        message: error,
+      });
       return;
     }
 
     try {
       setSubmitting(true);
+
       const response = await requestJson<Order>("/api/orders", {
         method: "POST",
         body: JSON.stringify({ departmentId, priority, items }),
       });
 
       let check: QuotaCheck | null = null;
+
       try {
         check = await checkQuotaForForm();
       } catch (quotaError) {
-        setLog(quotaError instanceof Error ? quotaError.message : "配額檢查失敗");
+        setLog(
+          quotaError instanceof Error ? quotaError.message : "配額檢查失敗",
+        );
       }
 
       if (submitAfterCreate) {
-        await requestJson<{ id: number; status: OrderStatus }>(`/api/orders/${response.data.id}/actions`, {
-          method: "POST",
-          body: JSON.stringify({ action: "submit" }),
-        });
+        await requestJson<{ id: number; status: OrderStatus }>(
+          `/api/orders/${response.data.id}/actions`,
+          {
+            method: "POST",
+            body: JSON.stringify({ action: "submit" }),
+          },
+        );
       }
 
       setLog(JSON.stringify(response, null, 2));
@@ -226,7 +336,9 @@ export function useOrdersPage() {
         type: "message",
         title: submitAfterCreate ? "已建立並送出" : "已建立草稿",
         message: submitAfterCreate
-          ? `委託單 ${response.data.orderNo} 已建立並送出簽核。${check?.needOverride ? " 部分子單需主管特批。" : ""}`
+          ? `委託單 ${response.data.orderNo} 已建立並送出簽核。${
+              check?.needOverride ? " 部分子單需主管特批。" : ""
+            }`
           : `委託單 ${response.data.orderNo} 已儲存為草稿。`,
       });
 
@@ -235,7 +347,8 @@ export function useOrdersPage() {
       await loadOrders();
       await loadQuotas();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "建立委託單失敗";
+      const message =
+        error instanceof Error ? error.message : "建立委託單失敗";
       setLog(message);
       setModal({ type: "message", title: "建立失敗", message });
     } finally {
@@ -245,13 +358,22 @@ export function useOrdersPage() {
 
   async function updateOrder() {
     if (editingOrderId === null) {
-      setModal({ type: "message", title: "尚未選擇委託單", message: "請先從列表選擇要修改的草稿或退回補件委託單。" });
+      setModal({
+        type: "message",
+        title: "尚未選擇委託單",
+        message: "請先從列表選擇要修改的草稿或退回補件委託單。",
+      });
       return;
     }
 
     const error = validateForm();
+
     if (error) {
-      setModal({ type: "message", title: "表單資料不完整", message: error });
+      setModal({
+        type: "message",
+        title: "表單資料不完整",
+        message: error,
+      });
       return;
     }
 
@@ -260,13 +382,20 @@ export function useOrdersPage() {
         method: "PATCH",
         body: JSON.stringify({ departmentId, priority, items }),
       });
+
       setLog(JSON.stringify(response, null, 2));
-      setModal({ type: "message", title: "更新成功", message: `委託單 ${editingOrderNo} 已更新，可以重新送出簽核。` });
+      setModal({
+        type: "message",
+        title: "更新成功",
+        message: `委託單 ${editingOrderNo} 已更新，可以重新送出簽核。`,
+      });
+
       resetForm();
       setFormModalOpen(false);
       await loadOrders();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "更新委託單失敗";
+      const message =
+        error instanceof Error ? error.message : "更新委託單失敗";
       setLog(message);
       setModal({ type: "message", title: "更新失敗", message });
     }
@@ -275,30 +404,59 @@ export function useOrdersPage() {
   async function getDetail(orderId: number) {
     try {
       const response = await requestJson<Order>(`/api/orders/${orderId}`);
-      setModal({ type: "detail", title: `委託單詳細 #${orderId}`, order: response.data });
+      setModal({
+        type: "detail",
+        title: `委託單詳細 #${orderId}`,
+        order: response.data,
+      });
     } catch (error) {
-      setModal({ type: "message", title: "讀取失敗", message: error instanceof Error ? error.message : "載入委託單失敗" });
+      setModal({
+        type: "message",
+        title: "讀取失敗",
+        message: error instanceof Error ? error.message : "載入委託單失敗",
+      });
     }
   }
 
   async function getHistory(orderId: number) {
     try {
-      const response = await requestJson<OrderHistory[]>(`/api/orders/${orderId}/history`);
-      setModal({ type: "history", title: `委託單流程歷程 #${orderId}`, history: response.data });
+      const response = await requestJson<OrderHistory[]>(
+        `/api/orders/${orderId}/history`,
+      );
+
+      setModal({
+        type: "history",
+        title: `委託單流程歷程 #${orderId}`,
+        history: response.data,
+      });
     } catch (error) {
-      setModal({ type: "message", title: "讀取失敗", message: error instanceof Error ? error.message : "載入委託單失敗" });
+      setModal({
+        type: "message",
+        title: "讀取失敗",
+        message: error instanceof Error ? error.message : "載入委託單失敗",
+      });
     }
   }
 
   async function doAction(order: Order, action: OrderAction) {
     try {
-      const response = await requestJson<{ id: number; status: OrderStatus }>(`/api/orders/${order.id}/actions`, {
-        method: "POST",
-        body: JSON.stringify({ action }),
-      });
+      const response = await requestJson<{ id: number; status: OrderStatus }>(
+        `/api/orders/${order.id}/actions`,
+        {
+          method: "POST",
+          body: JSON.stringify({ action }),
+        },
+      );
+
       setLog(JSON.stringify(response, null, 2));
-      setModal({ type: "message", title: "操作成功", message: `委託單 ${order.orderNo} 已執行：${actionLabel[action]}。` });
+      setModal({
+        type: "message",
+        title: "操作成功",
+        message: `委託單 ${order.orderNo} 已執行：${actionLabel[action]}。`,
+      });
+
       await loadOrders();
+      await loadQuotas();
     } catch (error) {
       const message = error instanceof Error ? error.message : "操作失敗";
       setLog(message);
@@ -308,17 +466,31 @@ export function useOrdersPage() {
 
   async function deleteOrder(order: Order) {
     if (order.status !== "draft") {
-      setModal({ type: "message", title: "不可刪除", message: "只有草稿委託單可以刪除。" });
+      setModal({
+        type: "message",
+        title: "不可刪除",
+        message: "只有草稿委託單可以刪除。",
+      });
       return;
     }
 
     if (!window.confirm(`確認刪除草稿委託單 ${order.orderNo}？`)) return;
 
     try {
-      const response = await requestJson<{ id: number }>(`/api/orders/${order.id}`, { method: "DELETE" });
+      const response = await requestJson<{ id: number }>(
+        `/api/orders/${order.id}`,
+        { method: "DELETE" },
+      );
+
       setLog(JSON.stringify(response, null, 2));
-      setModal({ type: "message", title: "刪除成功", message: `委託單 ${order.orderNo} 已刪除。` });
+      setModal({
+        type: "message",
+        title: "刪除成功",
+        message: `委託單 ${order.orderNo} 已刪除。`,
+      });
+
       await loadOrders();
+      await loadQuotas();
     } catch (error) {
       const message = error instanceof Error ? error.message : "操作失敗";
       setLog(message);
@@ -327,15 +499,28 @@ export function useOrdersPage() {
   }
 
   function addSample() {
-    setItems((current) => [...current, createDefaultItem(masterData, getNextSampleId(current))]);
+    setItems((current) => [
+      ...current,
+      createDefaultItem(masterData, getNextSampleId(current)),
+    ]);
   }
 
   function removeItem(index: number) {
-    setItems((current) => (current.length <= 1 ? current : current.filter((_, itemIndex) => itemIndex !== index)));
+    setItems((current) =>
+      current.length <= 1
+        ? current
+        : current.filter((_, itemIndex) => itemIndex !== index),
+    );
   }
 
   function updateSampleGroup(group: SampleFormGroup, sampleId: string) {
-    setItems((current) => current.map((item, index) => (index >= group.startIndex && index <= group.endIndex ? { ...item, sampleId } : item)));
+    setItems((current) =>
+      current.map((item, index) =>
+        index >= group.startIndex && index <= group.endIndex
+          ? { ...item, sampleId }
+          : item,
+      ),
+    );
   }
 
   function moveExperiment(index: number, direction: -1 | 1) {
@@ -343,48 +528,74 @@ export function useOrdersPage() {
       const targetIndex = index + direction;
       const item = current[index];
       const target = current[targetIndex];
-      if (!item || !target || item.sampleId !== target.sampleId) return current;
+
+      if (!item || !target || item.sampleId !== target.sampleId) {
+        return current;
+      }
+
       const next = [...current];
       [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
       return next;
     });
   }
 
-  function toggleExperimentForSample(group: SampleFormGroup, experiment: Experiment, checked: boolean) {
-    setItems((current) => toggleExperimentInGroup(current, group, experiment, checked));
+  function toggleExperimentForSample(
+    group: SampleFormGroup,
+    experiment: Experiment,
+    checked: boolean,
+  ) {
+    setItems((current) =>
+      toggleExperimentInGroup(current, group, experiment, checked),
+    );
   }
-
-  const safeOrders = Array.isArray(orders) ? orders : [];
 
   useEffect(() => {
     if (!currentUserId) return;
+
     setApplicantId(currentUserId);
-    if (currentDepartmentId && masterData.departments.some((department) => department.id === currentDepartmentId)) setDepartmentId(currentDepartmentId);
+
+    if (
+      currentDepartmentId &&
+      masterData.departments.some(
+        (department) => department.id === currentDepartmentId,
+      )
+    ) {
+      setDepartmentId(currentDepartmentId);
+    }
   }, [currentUserId, currentDepartmentId, masterData.departments]);
 
   useEffect(() => {
+    if (!currentUserId) return;
+
     queueMicrotask(() => {
       void loadMasterData();
       void loadOrders();
       void loadQuotas();
     });
-  }, [currentDepartmentId]);
+  }, [currentUserId, currentUserRole, currentDepartmentId]);
 
   useEffect(() => {
+    if (!applicantId) return;
+
     queueMicrotask(() => loadTemplatesForUser(applicantId));
   }, [applicantId]);
 
   useEffect(() => {
-    const userIds = safeOrders.flatMap((order) => [
+    const userIds = visibleOrders.flatMap((order) => [
       order.applicantId,
       ...(order.items || []).flatMap((item) => [item.approvedBy || ""]),
     ]);
-    userIds.push(...quotaSettings.filter((quota) => quota.scopeType === "user").map((quota) => quota.scopeId));
+
+    userIds.push(
+      ...quotaSettings
+        .filter((quota) => quota.scopeType === "user")
+        .map((quota) => quota.scopeId),
+    );
 
     if (modal.type === "detail") {
       userIds.push(
         modal.order.applicantId,
-        ...(modal.order.items || []).flatMap((item) => [item.approvedBy || ""])
+        ...(modal.order.items || []).flatMap((item) => [item.approvedBy || ""]),
       );
     }
 
@@ -393,19 +604,37 @@ export function useOrdersPage() {
     }
 
     queueMicrotask(() => void loadUserNames(userIds));
-  }, [safeOrders, quotaSettings, modal, currentUserId, usersById]);
+  }, [visibleOrders, quotaSettings, modal, currentUserId, usersById]);
 
-  const statusCounts = useMemo(() => orderStatusFilters.reduce<Record<OrderStatusFilter, number>>((counts, filter) => {
-    counts[filter.value] = filter.value === "all" ? safeOrders.length : safeOrders.filter((order) => order.status === filter.value).length;
-    return counts;
-  }, {} as Record<OrderStatusFilter, number>), [safeOrders]);
+  const statusCounts = useMemo(
+    () =>
+      orderStatusFilters.reduce<Record<OrderStatusFilter, number>>(
+        (counts, filter) => {
+          counts[filter.value] =
+            filter.value === "all"
+              ? visibleOrders.length
+              : visibleOrders.filter((order) => order.status === filter.value)
+                  .length;
 
-  const filteredOrders = activeStatusFilter === "all" ? safeOrders : safeOrders.filter((order) => order.status === activeStatusFilter);
+          return counts;
+        },
+        {} as Record<OrderStatusFilter, number>,
+      ),
+    [visibleOrders],
+  );
+
+  const filteredOrders =
+    activeStatusFilter === "all"
+      ? visibleOrders
+      : visibleOrders.filter((order) => order.status === activeStatusFilter);
+
   const sampleGroups = groupItemsBySample(items);
 
   return {
     currentUserId,
     currentUserName,
+    currentUserRole,
+    currentDepartmentId,
     applicantId,
     departmentId,
     setDepartmentId,
@@ -430,7 +659,7 @@ export function useOrdersPage() {
     activeStatusFilter,
     setActiveStatusFilter,
     filteredOrders,
-    orders,
+    orders: visibleOrders,
     statusCounts,
     sampleGroups,
     loadOrders,

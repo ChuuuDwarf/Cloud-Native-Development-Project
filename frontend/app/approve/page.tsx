@@ -53,10 +53,6 @@ export default function ApprovePage() {
             onQuotaOverrideChange={setQuotaOverride}
             onReload={() => void loadPendingOrders()}
           />
-
-          <Panel title="API 執行結果">
-            <pre style={logStyle}>{log}</pre>
-          </Panel>
         </div>
 
         <div>

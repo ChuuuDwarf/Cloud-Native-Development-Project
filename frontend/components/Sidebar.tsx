@@ -3,13 +3,21 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { masterDataApi } from "@/services/master-data-api";
+
+type RoleName =
+  | "system_admin"
+  | "lab_supervisor"
+  | "lab_engineer"
+  | "plant_user";
 
 interface NavItem {
   id: string;
   href: string;
   icon: string;
   label: string;
-  permission?: string; // omit -> visible to every authenticated user
+  roles?: RoleName[]; // omit -> 所有已登入使用者都看得到
   badge?: number;
 }
 
@@ -27,7 +35,7 @@ const nav: NavSection[] = [
         href: "/",
         icon: "⬛",
         label: "主管儀表板",
-        permission: "dashboard:read",
+        roles: ["system_admin", "lab_supervisor"],
       },
     ],
   },
@@ -36,17 +44,17 @@ const nav: NavSection[] = [
     items: [
       {
         id: "orders",
-        href: "/orders",
-        icon: "📋",
-        label: "委託單管理",
-        permission: "orders:read",
-      },
-      {
-        id: "approve",
+          href: "/orders",
+          icon: "📋",
+          label: "委託單管理",
+          roles: ["plant_user"],
+        },
+        {
+          id: "approve",
         href: "/approve",
         icon: "✅",
         label: "簽核管理",
-        permission: "orders:approve",
+        roles: ["system_admin", "lab_supervisor"],
       },
       {
         id: "sample",
@@ -58,14 +66,14 @@ const nav: NavSection[] = [
         // inside their own order detail page, but shouldn't see this top-
         // level nav entry — gate by `samples:create` which only engineers
         // and supervisors hold.
-        permission: "samples:create",
+        roles: ["system_admin", "lab_engineer", "lab_supervisor", "plant_user"],
       },
       {
         id: "wip",
         href: "/wip",
         icon: "🔬",
         label: "分貨 / WIP",
-        permission: "wips:read",
+        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
       },
     ],
   },
@@ -77,21 +85,21 @@ const nav: NavSection[] = [
         href: "/dispatch",
         icon: "🗂️",
         label: "派工排程",
-        permission: "dispatches:read",
+        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
       },
       {
         id: "machine",
         href: "/machine",
         icon: "⚙️",
         label: "機台管理",
-        permission: "machines:read",
+        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
       },
       {
         id: "recipe",
         href: "/recipe",
         icon: "📐",
         label: "Recipe 管理",
-        permission: "recipes:read",
+        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
       },
       {
         id: "transfer",
@@ -99,7 +107,7 @@ const nav: NavSection[] = [
         icon: "🔄",
         label: "樣品交接",
         // Engineer-only workflow; see comment on `/sample` above.
-        permission: "samples:create",
+        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
       },
     ],
   },
@@ -111,21 +119,21 @@ const nav: NavSection[] = [
         href: "/storage",
         icon: "📦",
         label: "倉儲取件",
-        permission: "storage_locations:read",
+        roles: ["system_admin", "lab_engineer", "lab_supervisor", "plant_user"],
       },
       {
         id: "exception",
         href: "/exception",
         icon: "⚠️",
         label: "異常管理",
-        permission: "issues:read",
+        roles: ["system_admin", "lab_supervisor", "lab_engineer"],
       },
       {
         id: "alert",
         href: "/alert",
         icon: "🔔",
         label: "告警升級",
-        permission: "issues:read",
+        roles: ["system_admin", "lab_supervisor", "lab_engineer"],
       },
     ],
   },
@@ -137,14 +145,14 @@ const nav: NavSection[] = [
         href: "/account",
         icon: "👥",
         label: "帳號管理",
-        permission: "users:read",
+        roles: ["system_admin"],
       },
       {
         id: "config",
         href: "/config",
         icon: "🛠️",
         label: "系統設定",
-        permission: "system_settings:read",
+        roles: ["system_admin"],
       },
     ],
   },
@@ -154,14 +162,39 @@ export default function Sidebar() {
   const [open, setOpen] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, hasPermission } = useAuth();
+  const { user, logout } = useAuth();
+
+  const masterQuery = useQuery({
+    queryKey: ["master-data"],
+    queryFn: masterDataApi.fetch,
+  });
+
+  const currentLab = masterQuery.data?.labs.find(
+    (lab) => lab.id === user?.labId,
+  );
+  const roleLabelMap: Record<string, string> = {
+    system_admin: "系統管理者",
+    lab_supervisor: "實驗室主管",
+    lab_engineer: "實驗室人員",
+    plant_user: "廠區使用者",
+  };
+
+  const roleLabel = user?.role ? roleLabelMap[user.role] ?? user.role : "—";
+
+  const userPositionLabel = currentLab
+    ? `${currentLab.code} / ${roleLabel}`
+    : roleLabel;
+
 
   const visibleSections = nav
     .map((g) => ({
       ...g,
-      items: g.items.filter(
-        (i) => !i.permission || hasPermission(i.permission),
-      ),
+      items: g.items.filter((item) => {
+        if (!item.roles) return true;
+        if (!user?.role) return false;
+
+        return item.roles.includes(user.role as RoleName);
+      }),
     }))
     .filter((g) => g.items.length > 0);
 
@@ -369,7 +402,7 @@ export default function Sidebar() {
                 fontFamily: "monospace",
               }}
             >
-              {user?.role ?? "—"}
+              {userPositionLabel}
             </div>
           </div>
         )}

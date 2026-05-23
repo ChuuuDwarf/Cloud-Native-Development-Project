@@ -30,6 +30,7 @@ from app.db.models import (  # noqa: E402
     Role,
     StorageLocation,
     User,
+    QuotaSettingModel,
 )
 
 # ---------------------------------------------------------------------------
@@ -195,11 +196,26 @@ STORAGE_LOCATIONS: list[tuple[str, str, str]] = [
 # email, name, role-name, department-code, lab-code, password
 USERS: list[tuple[str, str, str, str | None, str | None, str]] = [
     ("admin@example.com", "Sys Admin", "system_admin", None, None, "Admin1234"),
-    ("supervisor@example.com", "Lab Supervisor", "lab_supervisor", None, "LAB-A", "Super1234"),
-    ("engineer@example.com", "Lab Engineer", "lab_engineer", None, "LAB-A", "Engin1234"),
-    ("requester@example.com", "Plant Requester", "plant_user", "DEPT-RD", None, "Reque1234"),
+    ("supervisor@example.com", "譚曉蓉", "lab_supervisor", None, "LAB-A", "Super1234"),
+    ("supervisor2@example.com", "王小明", "lab_supervisor", None, "LAB-B", "Super1234"),
+    ("supervisor3@example.com", "陳美秀", "lab_supervisor", None, "LAB-C", "Super1234"),
+    ("engineer@example.com", "李大明", "lab_engineer", None, "LAB-A", "Engin1234"),
+    ("engineer2@example.com", "林妏媞", "lab_engineer", None, "LAB-B", "Engin1234"),
+    ("engineer3@example.com", "周秉倫", "lab_engineer", None, "LAB-C", "Engin1234"),
+    ("requester@example.com", "楚顏璧", "plant_user", "DEPT-RD", None, "Reque1234"),
+    ("requester2@example.com", "林小美", "plant_user", "DEPT-MFG", None, "Reque1234"),
 ]
 
+DEFAULT_USER_QUOTAS: list[tuple[str, int]] = [
+    ("requester@example.com", 10),
+    ("requester2@example.com", 10),
+]
+
+DEFAULT_DEPARTMENT_QUOTAS: list[tuple[str, int]] = [
+    ("DEPT-RD", 50),
+    ("DEPT-MFG", 30),
+    ("DEPT-QA", 20),
+]
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -304,6 +320,62 @@ async def upsert_storage(session, code: str, name: str, description: str) -> Sto
     return sl
 
 
+
+async def upsert_quota_setting(
+    session,
+    scope_type: str,
+    scope_id: str,
+    monthly_limit: int,
+    urgent_limit: int | None = None,
+    critical_limit: int | None = None,
+) -> QuotaSettingModel:
+    """Upsert quota by natural key: (scope_type, scope_id).
+
+    If old duplicate rows already exist from previous tests, keep the newest
+    row and delete the older rows so the quota page does not show duplicates.
+    """
+    existing_rows = (
+        (
+            await session.execute(
+                select(QuotaSettingModel)
+                .where(
+                    QuotaSettingModel.scope_type == scope_type,
+                    QuotaSettingModel.scope_id == scope_id,
+                )
+                .order_by(QuotaSettingModel.id.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    if existing_rows:
+        quota = existing_rows[0]
+        quota.monthly_limit = monthly_limit
+        quota.urgent_limit = urgent_limit
+        quota.critical_limit = critical_limit
+        quota.is_active = True
+
+        # Remove duplicate quota settings for the same scope.
+        for duplicate in existing_rows[1:]:
+            await session.delete(duplicate)
+
+        await session.flush()
+        return quota
+
+    quota = QuotaSettingModel(
+        scope_type=scope_type,
+        scope_id=scope_id,
+        monthly_limit=monthly_limit,
+        urgent_limit=urgent_limit,
+        critical_limit=critical_limit,
+        is_active=True,
+    )
+    session.add(quota)
+    await session.flush()
+    return quota
+
+
 async def upsert_user(
     session,
     email: str,
@@ -386,8 +458,9 @@ async def main() -> None:
             await upsert_storage(session, code, name, desc)
 
         # Users
+        user_map: dict[str, User] = {}
         for email, name, role_key, dept_code, lab_code, password in USERS:
-            await upsert_user(
+            user_map[email] = await upsert_user(
                 session,
                 email=email,
                 name=name,
@@ -397,14 +470,64 @@ async def main() -> None:
                 plaintext_password=password,
             )
 
+        # Quota settings
+        # Use real DB UUIDs, not legacy fake ids such as user001 / D001.
+        for email, monthly_limit in DEFAULT_USER_QUOTAS:
+            user = user_map.get(email)
+            if user is None:
+                user = (
+                    await session.execute(select(User).where(User.email == email))
+                ).scalar_one_or_none()
+
+            if user is None:
+                sys.stdout.write(f"Skip user quota: user not found: {email}\n")
+                continue
+
+            await upsert_quota_setting(
+                session,
+                scope_type="user",
+                scope_id=str(user.id),
+                monthly_limit=monthly_limit,
+            )
+
+        for department_code, monthly_limit in DEFAULT_DEPARTMENT_QUOTAS:
+            department = dept_map.get(department_code)
+            if department is None:
+                department = (
+                    await session.execute(
+                        select(Department).where(Department.code == department_code)
+                    )
+                ).scalar_one_or_none()
+
+            if department is None:
+                sys.stdout.write(f"Skip department quota: department not found: {department_code}\n")
+                continue
+
+            await upsert_quota_setting(
+                session,
+                scope_type="department",
+                scope_id=str(department.id),
+                monthly_limit=monthly_limit,
+            )
+
         await session.commit()
 
     sys.stdout.write(
         "Seed complete.\n"
         "  admin@example.com      / Admin1234   (system_admin)\n"
         "  supervisor@example.com / Super1234   (lab_supervisor)\n"
+        "  supervisor2@example.com / Super1234   (lab_supervisor)\n"
+        "  supervisor3@example.com / Super1234   (lab_supervisor)\n"
         "  engineer@example.com   / Engin1234   (lab_engineer)\n"
+        "  engineer2@example.com  / Engin1234   (lab_engineer)\n"
+        "  engineer3@example.com  / Engin1234   (lab_engineer)\n"
         "  requester@example.com  / Reque1234   (plant_user)\n"
+        "  requester2@example.com / Reque1234   (plant_user)\n"
+        "Quota defaults:\n"
+        "  requester@example.com  monthly_limit=10\n"
+        "  DEPT-RD                monthly_limit=50\n"
+        "  DEPT-MFG               monthly_limit=30\n"
+        "  DEPT-QA                monthly_limit=20\n"
     )
 
 

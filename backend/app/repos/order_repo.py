@@ -5,7 +5,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import String, cast, select
+from sqlalchemy import String, cast, exists, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.common.dependencies import CurrentUser
@@ -76,6 +76,7 @@ class OrderRepository:
         self,
         status_filter: OrderStatus | None = None,
         applicant_id: str | None = None,
+        current_user: CurrentUser | None = None,
     ) -> list[Order]:
         stmt = (
             select(OrderModel)
@@ -83,10 +84,42 @@ class OrderRepository:
             .where(OrderModel.is_deleted.is_(False))
             .order_by(OrderModel.created_at.desc())
         )
+
         if status_filter is not None:
             stmt = stmt.where(OrderModel.status == status_filter.value)
+
         if applicant_id:
             stmt = stmt.where(OrderModel.applicant_id == applicant_id)
+
+        # 審核頁：主管只看得到自己 Lab 底下還能審的委託單
+        if (
+            current_user is not None
+            and status_filter == OrderStatus.PENDING_APPROVAL
+            and not applicant_id
+        ):
+            actor = require_role(current_user, {"lab_manager"})
+            lab_ids = set(actor.get("labIds", []))
+
+            if not lab_ids:
+                return []
+
+            approvable_item_exists = (
+                select(OrderItemModel.id)
+                .where(
+                    OrderItemModel.order_id == OrderModel.id,
+                    OrderItemModel.lab_id.in_(lab_ids),
+                    OrderItemModel.status.in_(
+                        [
+                            OrderStatus.PENDING_APPROVAL.value,
+                            OrderStatus.DRAFT.value,
+                        ]
+                    ),
+                )
+                .exists()
+            )
+
+            stmt = stmt.where(approvable_item_exists)
+
         orders = self.db.execute(stmt).unique().scalars().all()
         return [order_to_schema(order) for order in orders]
 
@@ -463,9 +496,12 @@ class OrderRepository:
             )
             .order_by(QuotaSettingModel.updated_at.desc(), QuotaSettingModel.id.desc())
         ).scalars().first()
+
         if quota is None:
             return None
+
         now = utc_now()
+
         usages = self.db.execute(
             select(QuotaUsageModel).where(
                 QuotaUsageModel.scope_type == scope_type,
@@ -474,36 +510,78 @@ class OrderRepository:
                 QuotaUsageModel.month == now.month,
             )
         ).scalars().all()
+
         used = sum(item.used_count for item in usages)
         urgent_used = sum(item.urgent_used_count for item in usages)
         critical_used = sum(item.critical_used_count for item in usages)
+
+        reserved = self._reserved_quota_count(scope_type, scope_id)
+
         urgent_requested = item_count if priority == PriorityLevel.URGENT.value else 0
         critical_requested = item_count if priority == PriorityLevel.CRITICAL.value else 0
-        monthly_allowed = used + item_count <= quota.monthly_limit
+
+        monthly_consumed = used + reserved
+        monthly_after_request = monthly_consumed + item_count
+
+        monthly_allowed = monthly_after_request <= quota.monthly_limit
         urgent_allowed = quota.urgent_limit is None or urgent_used + urgent_requested <= quota.urgent_limit
         critical_allowed = quota.critical_limit is None or critical_used + critical_requested <= quota.critical_limit
+
+        allowed = monthly_allowed and urgent_allowed and critical_allowed
+
         return {
             "scopeType": scope_type,
             "scopeId": scope_id,
             "used": used,
+            "reserved": reserved,
+            "effectiveUsed": monthly_consumed,
             "limit": quota.monthly_limit,
             "urgentUsed": urgent_used,
             "urgentLimit": quota.urgent_limit,
             "criticalUsed": critical_used,
             "criticalLimit": quota.critical_limit,
             "requested": item_count,
-            "allowed": monthly_allowed and urgent_allowed and critical_allowed,
-            "needOverride": not (monthly_allowed and urgent_allowed and critical_allowed),
+            "remaining": max(quota.monthly_limit - monthly_consumed, 0),
+            "allowed": allowed,
+            "needOverride": not allowed,
         }
+
+    def _reserved_quota_count(self, scope_type: str, scope_id: str) -> int:
+        if not scope_id or scope_id == "__not_applicable__":
+            return 0
+
+        conditions = [
+            OrderModel.is_deleted.is_(False),
+            OrderModel.status == OrderStatus.PENDING_APPROVAL.value,
+        ]
+
+        if scope_type == "user":
+            conditions.append(OrderModel.applicant_id == scope_id)
+        elif scope_type == "department":
+            conditions.append(OrderModel.department_id == scope_id)
+        else:
+            return 0
+
+        pending_orders = (
+            self.db.execute(
+                select(OrderModel).where(*conditions)
+            )
+            .scalars()
+            .all()
+        )
+
+        return sum(order.total_items for order in pending_orders)
 
     def _quota_remaining(self, scope_type: str, scope_id: str, priority: str) -> int | None:
         check = self._quota_check(scope_type, scope_id, 0, priority)
         if check is None:
             return None
 
-        remaining_values = [check["limit"] - check["used"]]
+        remaining_values = [check["limit"] - check["effectiveUsed"]]
+
         if priority == PriorityLevel.URGENT.value and check["urgentLimit"] is not None:
             remaining_values.append(check["urgentLimit"] - check["urgentUsed"])
+
         if priority == PriorityLevel.CRITICAL.value and check["criticalLimit"] is not None:
             remaining_values.append(check["criticalLimit"] - check["criticalUsed"])
 

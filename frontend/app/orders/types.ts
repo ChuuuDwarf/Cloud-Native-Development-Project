@@ -121,6 +121,8 @@ export type QuotaSetting = {
   isActive: boolean;
   usedCount?: number;
   remaining?: number;
+  reservedCount?: number;
+  effectiveUsedCount?: number;
 };
 
 export type ModalState =

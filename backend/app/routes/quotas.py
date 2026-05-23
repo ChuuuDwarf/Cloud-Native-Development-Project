@@ -31,6 +31,9 @@ def quota_to_dict(quota: QuotaSettingModel, service: OrderService) -> dict[str, 
         None,
     )
     used = matching["used"] if matching else 0
+    reserved = matching["reserved"] if matching else 0
+    effective_used = matching["effectiveUsed"] if matching else used
+
     return {
         "id": quota.id,
         "scopeType": quota.scope_type,
@@ -40,7 +43,9 @@ def quota_to_dict(quota: QuotaSettingModel, service: OrderService) -> dict[str, 
         "criticalLimit": quota.critical_limit,
         "isActive": quota.is_active,
         "usedCount": used,
-        "remaining": max(quota.monthly_limit - used, 0),
+        "reservedCount": reserved,
+        "effectiveUsedCount": effective_used,
+        "remaining": max(quota.monthly_limit - effective_used, 0),
     }
 
 

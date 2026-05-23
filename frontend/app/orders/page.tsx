@@ -27,7 +27,12 @@ export default function OrdersPage() {
             quotaSettings={page.quotaSettings}
             masterData={page.masterData}
             usersById={page.usersById}
-            currentUser={{ id: page.currentUserId, name: page.currentUserName }}
+            currentUser={{
+              id: page.currentUserId,
+              name: page.currentUserName,
+              role: page.currentUserRole,
+              departmentId: page.currentDepartmentId,
+            }}
             onRefresh={() => void page.loadQuotas()}
           />
           <OrderList

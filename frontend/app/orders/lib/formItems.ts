@@ -24,13 +24,49 @@ export function getDefaultExperimentForLab(masterData: Pick<MasterData, "experim
   return masterData.experiments.find((experiment) => experiment.labId === labId)?.id || "";
 }
 
-export function generateSampleId(index: number) {
-  return `S${String(index).padStart(3, "0")}`;
+function getTodayText() {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}${month}${day}`;
+}
+
+export function generateSampleId(index: number, dateText = getTodayText()) {
+  return `SMP-${dateText}-${String(index).padStart(3, "0")}`;
+}
+
+function getSampleSequence(sampleId: string, dateText = getTodayText()) {
+  const match = sampleId.trim().match(new RegExp(`^SMP-${dateText}-(\\d+)$`, "i"));
+  return match ? Number(match[1]) : 0;
 }
 
 export function getNextSampleId(formItems: FormItem[]) {
-  const sampleIds = new Set(formItems.map((item) => item.sampleId).filter(Boolean));
-  return generateSampleId(sampleIds.size + 1);
+  const dateText = getTodayText();
+
+  const maxSequence = formItems.reduce((max, item) => {
+    return Math.max(max, getSampleSequence(item.sampleId, dateText));
+  }, 0);
+
+  return generateSampleId(maxSequence + 1, dateText);
+}
+
+export function getNextSampleIdFromOrders(
+  orders: { items?: { sampleId?: string }[] }[],
+) {
+  const dateText = getTodayText();
+
+  const maxSequence = orders.reduce((max, order) => {
+    const itemMax = (order.items || []).reduce((innerMax, item) => {
+      return Math.max(innerMax, getSampleSequence(item.sampleId || "", dateText));
+    }, 0);
+
+    return Math.max(max, itemMax);
+  }, 0);
+
+  return generateSampleId(maxSequence + 1, dateText);
 }
 
 export function createDefaultItem(masterData: Pick<MasterData, "labs" | "experiments">, sampleId = generateSampleId(1)): FormItem {

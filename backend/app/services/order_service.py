@@ -36,8 +36,13 @@ class OrderService:
         self,
         status_filter: OrderStatus | None = None,
         applicant_id: str | None = None,
+        current_user: CurrentUser | None = None,
     ) -> list[Order]:
-        return self.repo.list_orders(status_filter=status_filter, applicant_id=applicant_id)
+        return self.repo.list_orders(
+            status_filter=status_filter,
+            applicant_id=applicant_id,
+            current_user=current_user,
+        )
 
     def get_order(self, order_id: int) -> Order:
         return self.repo.get_order(order_id)

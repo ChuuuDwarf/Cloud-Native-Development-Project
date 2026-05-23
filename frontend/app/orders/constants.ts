@@ -47,7 +47,7 @@ export const allowedActions: Record<OrderStatus, OrderAction[]> = {
   returned: ["submit", "cancel"],
   pending_approval: ["cancel"],
   approved: ["confirm_delivery"],
-  sample_delivered: ["confirm_received"],
+  sample_delivered: [],
   sample_received: ["ready_for_pickup"],
   ready_for_pickup: ["close"],
   closed: [],

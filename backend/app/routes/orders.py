@@ -22,9 +22,14 @@ def list_orders(
     limit: int = Query(default=10, ge=1, le=100),
     status_filter: OrderStatus | None = Query(default=None, alias="status"),
     applicant_id: str | None = Query(default=None, alias="applicantId"),
+    current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> dict[str, Any]:
-    orders = service.list_orders(status_filter=status_filter, applicant_id=applicant_id)
+    orders = service.list_orders(
+        status_filter=status_filter,
+        applicant_id=applicant_id,
+        current_user=current_user,
+    )
     total = len(orders)
     start = (page - 1) * limit
     end = start + limit
@@ -61,12 +66,16 @@ def create_order(
 @router.get("/applicant/{applicant_id}")
 def list_orders_by_applicant(
     applicant_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
     return ApiResponse(
         data=[
             order.model_dump(by_alias=True)
-            for order in service.list_orders(applicant_id=applicant_id)
+            for order in service.list_orders(
+                applicant_id=applicant_id,
+                current_user=current_user,
+            )
         ]
     )
 
