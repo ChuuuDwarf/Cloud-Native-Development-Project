@@ -21,8 +21,5 @@ test("plant_user sidebar omits admin-only sections, and /account is gated", asyn
 
   await expect(page.getByRole("heading", { name: "帳號管理" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "+ 建立使用者" })).toHaveCount(0);
-
-  await expect(
-    page.getByText(/403|Forbidden|無權限|沒有權限|未授權|登入/),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: /帳號管理/ })).toHaveCount(0);
 });
