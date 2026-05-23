@@ -4,27 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const nav = [
-  {
-    section: "OVERVIEW",
-    items: [{ id: "dashboard", href: "/", icon: "⬛", label: "主管儀表板" }],
-  },
+  { section: "OVERVIEW", items: [{ id: "dashboard", href: "/", icon: "⬛", label: "主管儀表板" }] },
   {
     section: "委託流程",
     items: [
-      {
-        id: "orders",
-        href: "/orders",
-        icon: "📋",
-        label: "委託單管理",
-        badge: 12,
-      },
-      {
-        id: "approve",
-        href: "/approve",
-        icon: "✅",
-        label: "簽核管理",
-        badge: 7,
-      },
+      { id: "orders", href: "/orders", icon: "📋", label: "委託單管理", badge: 12 },
+      { id: "approve", href: "/approve", icon: "✅", label: "簽核管理", badge: 7 },
       { id: "sample", href: "/sample", icon: "🧪", label: "收樣管理" },
       { id: "wip", href: "/wip", icon: "🔬", label: "分貨 / WIP" },
     ],
@@ -42,13 +27,7 @@ const nav = [
     section: "結案與倉儲",
     items: [
       { id: "storage", href: "/storage", icon: "📦", label: "倉儲取件" },
-      {
-        id: "exception",
-        href: "/exception",
-        icon: "⚠️",
-        label: "異常管理",
-        badge: 3,
-      },
+      { id: "exception", href: "/exception", icon: "⚠️", label: "異常管理", badge: 3 },
       { id: "alert", href: "/alert", icon: "🔔", label: "告警升級", badge: 5 },
     ],
   },
@@ -119,10 +98,7 @@ export default function Sidebar() {
       {/* Nav */}
       <div style={{ flex: 1, width: "100%", overflowY: "auto" }}>
         {nav.map((group) => (
-          <div
-            key={group.section}
-            style={{ width: "100%", padding: "4px 8px 0" }}
-          >
+          <div key={group.section} style={{ width: "100%", padding: "4px 8px 0" }}>
             {open && (
               <div
                 style={{
@@ -139,11 +115,7 @@ export default function Sidebar() {
             {group.items.map((item) => {
               const active = pathname === item.href;
               return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  style={{ textDecoration: "none" }}
-                >
+                <Link key={item.id} href={item.href} style={{ textDecoration: "none" }}>
                   <div
                     style={{
                       display: "flex",
@@ -152,14 +124,10 @@ export default function Sidebar() {
                       padding: 8,
                       borderRadius: 8,
                       cursor: "pointer",
-                      background: active
-                        ? "rgba(56,139,253,0.15)"
-                        : "transparent",
+                      background: active ? "rgba(56,139,253,0.15)" : "transparent",
                       position: "relative",
                       minHeight: 36,
-                      borderLeft: active
-                        ? "3px solid var(--blue)"
-                        : "3px solid transparent",
+                      borderLeft: active ? "3px solid var(--blue)" : "3px solid transparent",
                     }}
                   >
                     <span
@@ -252,13 +220,7 @@ export default function Sidebar() {
         {open && (
           <div>
             <div style={{ fontSize: 12, fontWeight: 600 }}>張志明</div>
-            <div
-              style={{
-                fontSize: 10,
-                color: "var(--text3)",
-                fontFamily: "monospace",
-              }}
-            >
+            <div style={{ fontSize: 10, color: "var(--text3)", fontFamily: "monospace" }}>
               系統管理者
             </div>
           </div>

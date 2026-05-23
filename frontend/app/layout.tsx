@@ -15,14 +15,7 @@ export default function RootLayout({
     <html lang="zh-TW">
       <body style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         <Sidebar />
-        <main
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: 24,
-            background: "var(--bg)",
-          }}
-        >
+        <main style={{ flex: 1, overflowY: "auto", padding: 24, background: "var(--bg)" }}>
           {children}
         </main>
       </body>

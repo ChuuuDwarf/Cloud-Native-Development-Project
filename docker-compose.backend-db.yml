@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16.14
+    container_name: lims-postgres-backend-test
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: lims
+      POSTGRES_USER: lims_user
+      POSTGRES_PASSWORD: lims_password
+    volumes:
+      - postgres_backend_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lims_user -d lims"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: dockerfile.db
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://lims_user:lims_password@postgres:5432/lims
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+volumes:
+  postgres_backend_test_data:
