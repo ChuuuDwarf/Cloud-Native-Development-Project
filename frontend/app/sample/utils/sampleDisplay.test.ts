@@ -310,4 +310,26 @@ describe('sampleDisplay 功能測試', () => {
     expect(formatStatusChange(null, 'received')).toBe('無 → 已收樣')
     expect(formatStatusChange('received', null)).toBe('已收樣 → 無')
   })
+
+  it('樣品已被廠區取回時，顯示狀態不應被舊交接紀錄覆蓋', () => {
+    const pickedUpSample = makeSample({
+      status: 'picked_up',
+      current_location: '已由使用者取回',
+      picked_up_by: '王建國',
+      picked_up_at: '2026-05-23T10:00:00',
+    })
+
+    const receivedTransfer = {
+      ...transferBase,
+      status: 'received',
+      from_lab: 'Lab A',
+      to_lab: 'Lab B',
+    } as Transfer
+
+    expect(getDisplaySampleStatus(pickedUpSample, labBUser, receivedTransfer)).toBe('picked_up')
+    expect(getDisplaySampleLocation(pickedUpSample, labBUser, receivedTransfer)).toBe('已由使用者取回')
+
+    expect(getDisplaySampleStatus(pickedUpSample, labAUser, receivedTransfer)).toBe('picked_up')
+    expect(getDisplaySampleLocation(pickedUpSample, labAUser, receivedTransfer)).toBe('已由使用者取回')
+  })
 })

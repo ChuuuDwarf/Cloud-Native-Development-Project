@@ -12,6 +12,76 @@ router = APIRouter(
 from app.services.wip_service import *  # noqa: F403
 
 
+def build_wip_flow_visibility_filter(current_user: dict):
+    """給 transfer flow 使用的 WIP 查詢範圍。
+
+    一般 WIP 管理頁只看自己 Lab 的 WIP。
+    但 transfer flow 需要判斷同一個 sample 底下所有 Lab 的 WIP 是否完成，
+    否則 LabB 會看不到 LabA 已完成的 WIP，誤判 LabA 還沒完成，導致又送回 LabA。
+    """
+
+    role = current_user.get("role")
+    where_clauses = []
+    params = {}
+
+    if role == "system_admin":
+        return where_clauses, params
+
+    if role == "factory_user":
+        where_clauses.append("s.applicant_name = :applicant_name")
+        params["applicant_name"] = current_user.get("name")
+        return where_clauses, params
+
+    if role in ("lab_staff", "lab_supervisor"):
+        current_lab = get_user_lab(current_user)
+
+        if not current_lab:
+            where_clauses.append("1 = 0")
+            return where_clauses, params
+
+        params["current_lab"] = current_lab
+        params["current_lab_prefix"] = f"{current_lab}%"
+
+        where_clauses.append(
+            """
+            (
+                s.current_location LIKE :current_lab_prefix
+                OR EXISTS (
+                    SELECT 1
+                    FROM wips related_wips
+                    WHERE related_wips.sample_id = w.sample_id
+                      AND related_wips.lab_name = :current_lab
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM transfers sample_transfers
+                    WHERE sample_transfers.target_type = 'sample'
+                      AND sample_transfers.target_id = s.id
+                      AND (
+                          sample_transfers.from_lab = :current_lab
+                          OR sample_transfers.to_lab = :current_lab
+                      )
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM transfers wip_transfers
+                    WHERE wip_transfers.target_type = 'wip'
+                      AND wip_transfers.target_id = w.id
+                      AND (
+                          wip_transfers.from_lab = :current_lab
+                          OR wip_transfers.to_lab = :current_lab
+                      )
+                )
+            )
+            """
+        )
+
+        return where_clauses, params
+
+    where_clauses.append("1 = 0")
+    return where_clauses, params
+
+
 @router.get("")
 def get_wips(
     request: Request,
@@ -20,13 +90,9 @@ def get_wips(
     db: Session = Depends(get_db),
 ):
     current_user = get_active_user(request)
-    role = current_user.get("role")
 
-    # 只有 system_admin 可以跨 Lab 看全部 WIP。
-    # Lab A 人員 / 主管只能看 w.lab_name = Lab A 的 WIP。
-    if include_all_for_flow and role == "system_admin":
-        where_clauses = []
-        params = {}
+    if include_all_for_flow:
+        where_clauses, params = build_wip_flow_visibility_filter(current_user)
     else:
         where_clauses, params = build_wip_visibility_filter(current_user)
 
@@ -84,7 +150,10 @@ def get_wip(
     sample = get_sample_by_id(wip["sample_id"], db)
 
     if not can_view_wip(current_user, wip, sample):
-        raise HTTPException(status_code=403, detail="You do not have permission to view this WIP")
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to view this WIP",
+        )
 
     return wip
 
@@ -100,7 +169,10 @@ def get_wip_history(
     sample = get_sample_by_id(wip["sample_id"], db)
 
     if not can_view_wip(current_user, wip, sample):
-        raise HTTPException(status_code=403, detail="You do not have permission to view this WIP")
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to view this WIP",
+        )
 
     result = db.execute(
         text(
@@ -136,7 +208,10 @@ def update_wip(
     wip = get_wip_or_404(wip_id, db)
 
     if not can_manage_wip(current_user, wip):
-        raise HTTPException(status_code=403, detail="You do not have permission to update this WIP")
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to update this WIP",
+        )
 
     result = db.execute(
         text(
@@ -163,9 +238,10 @@ def update_wip(
         },
     )
 
+    updated_wip = dict(result.fetchone()._mapping)
     db.commit()
 
-    return dict(result.fetchone()._mapping)
+    return updated_wip
 
 
 @router.post("/{wip_id}/actions")
@@ -179,7 +255,10 @@ def wip_action(
     current_user = get_active_user(request)
 
     if not can_manage_wip(current_user, wip):
-        raise HTTPException(status_code=403, detail="You do not have permission to operate this WIP")
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to operate this WIP",
+        )
 
     current_lab = get_user_lab(current_user)
     action = payload.get("action")

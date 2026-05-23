@@ -131,26 +131,11 @@ export default function SampleTransferPage() {
         (wip) => wip.status !== 'completed',
       )
 
-      // 重點：
-      // 只要目前 Lab 還有任何 WIP 沒完成，就不能顯示可轉移。
-      // 避免完成一個 WIP 後，又新增另一個 WIP，transfer 頁面仍然顯示可轉移。
       if (currentLabIncompleteWips.length > 0) return
 
       const currentLabCompletedWips = currentLabWips.filter(
         (wip) => wip.status === 'completed',
       )
-
-      const remainingExperiments =
-        requestedExperiments.length > 0
-          ? requestedExperiments.filter((experiment) => {
-              const isOtherLab =
-                normalizeLab(experiment.lab_name) !== normalizeLab(currentLab)
-
-              const completed = isExperimentCompleted(sampleWips, experiment)
-
-              return isOtherLab && !completed
-            })
-          : []
 
       const remainingWips = sampleWips.filter(
         (wip) =>
@@ -159,6 +144,31 @@ export default function SampleTransferPage() {
       )
 
       if (requestedExperiments.length > 0) {
+        const currentLabLastIndex = requestedExperiments.reduce(
+          (lastIndex, experiment, index) => {
+            if (normalizeLab(experiment.lab_name) === normalizeLab(currentLab)) {
+              return index
+            }
+
+            return lastIndex
+          },
+          -1,
+        ) 
+
+        // 有明確實驗順序時，只能往目前 Lab 後面的站點送。
+        // 例如 LabA -> LabB，LabB 完成後不能再把 LabA 當成下一站。
+        const downstreamExperiments =
+          currentLabLastIndex >= 0
+            ? requestedExperiments.slice(currentLabLastIndex + 1)
+            : requestedExperiments.filter(
+                (experiment) =>
+                  normalizeLab(experiment.lab_name) !== normalizeLab(currentLab),
+              )
+
+        const remainingExperiments = downstreamExperiments.filter(
+          (experiment) => !isExperimentCompleted(sampleWips, experiment),
+        )
+
         if (remainingExperiments.length === 0) return
 
         const nextExperiment = remainingExperiments[0]
@@ -258,8 +268,6 @@ export default function SampleTransferPage() {
         (wip) => wip.status !== 'completed',
       )
 
-      // 不管是不是委託單原始實驗，只要這個 sample 底下還有 WIP 沒完成，
-      // 就不能通知取件。
       if (unfinishedAnyWips.length > 0) return
 
       if (requestedExperiments.length > 0) {
@@ -268,6 +276,26 @@ export default function SampleTransferPage() {
         )
 
         if (unfinishedExperiments.length > 0) return
+
+        const currentLabLastIndex = requestedExperiments.reduce(
+          (lastIndex, experiment, index) => {
+            if (normalizeLab(experiment.lab_name) === normalizeLab(currentLab)) {
+              return index
+            }
+
+            return lastIndex
+          },
+          -1,
+        )
+
+        // 只有目前 Lab 是流程最後一站時，才顯示通知廠區取件。
+        // LabA -> LabB 的情境中，LabB 完成後會符合；LabA 完成時不會符合。
+        if (
+          currentLabLastIndex >= 0 &&
+          currentLabLastIndex !== requestedExperiments.length - 1
+        ) {
+          return
+        }
 
         result.push({
           kind: 'return',

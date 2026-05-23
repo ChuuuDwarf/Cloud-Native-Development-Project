@@ -9,6 +9,10 @@ export function isActiveSampleStatus(status: string) {
   return ['pending_receive', 'received', 'split', 'transferring', 'in_storage'].includes(status)
 }
 
+export function isTerminalSampleStatus(status: string) {
+  return ['picked_up', 'cancelled', 'lost', 'damaged'].includes(status)
+}
+
 export function isSampleInCurrentLab(sample: Sample | null, user: CurrentUser) {
   if (!sample) return false
 
@@ -33,6 +37,10 @@ export function shouldMaskSampleForLab(sample: Sample, user: CurrentUser) {
     return false
   }
 
+  if (isTerminalSampleStatus(sample.status)) {
+    return false
+  }
+
   return !isSampleInCurrentLab(sample, user)
 }
 
@@ -41,6 +49,11 @@ export function getDisplaySampleStatus(
   user: CurrentUser,
   outgoingTransfer?: Transfer,
 ) {
+  if (sample.status === 'picked_up') return 'picked_up'
+  if (sample.status === 'cancelled') return 'cancelled'
+  if (sample.status === 'lost') return 'lost'
+  if (sample.status === 'damaged') return 'damaged'
+
   if (!shouldMaskSampleForLab(sample, user)) {
     return sample.status
   }
@@ -61,10 +74,6 @@ export function getDisplaySampleStatus(
     return 'cancelled'
   }
 
-  if (sample.status === 'cancelled') return 'cancelled'
-  if (sample.status === 'lost') return 'lost'
-  if (sample.status === 'damaged') return 'damaged'
-
   return 'transferred_out'
 }
 
@@ -73,6 +82,14 @@ export function getDisplaySampleLocation(
   user: CurrentUser,
   outgoingTransfer?: Transfer,
 ) {
+  if (sample.status === 'picked_up') {
+    return sample.current_location ?? '已由使用者取回'
+  }
+
+  if (sample.status === 'cancelled') return '流程已取消'
+  if (sample.status === 'lost') return '樣品異常：遺失'
+  if (sample.status === 'damaged') return '樣品異常：破損'
+
   if (!shouldMaskSampleForLab(sample, user)) {
     return sample.current_location ?? '-'
   }
@@ -96,10 +113,6 @@ export function getDisplaySampleLocation(
   if (outgoingTransfer?.status === 'cancelled') {
     return '交接已取消'
   }
-
-  if (sample.status === 'cancelled') return '流程已取消'
-  if (sample.status === 'lost') return '樣品異常：遺失'
-  if (sample.status === 'damaged') return '樣品異常：破損'
 
   return '已離開本實驗室'
 }
