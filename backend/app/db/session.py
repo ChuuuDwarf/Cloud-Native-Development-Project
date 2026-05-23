@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Synchronous SQLAlchemy session used by the order-management repository.
 
 The project also has an async session in app.core.database for newer modules.
 This sync session is kept isolated here so legacy order APIs no longer depend on
 root-level database.py.
 """
+
+from __future__ import annotations
 
 from collections.abc import Generator
 

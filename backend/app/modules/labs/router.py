@@ -19,11 +19,7 @@ async def list_labs(
     _: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict:
     labs = (
-        (
-            await session.execute(
-                select(Lab).where(Lab.is_active.is_(True)).order_by(Lab.code)
-            )
-        )
+        (await session.execute(select(Lab).where(Lab.is_active.is_(True)).order_by(Lab.code)))
         .scalars()
         .all()
     )

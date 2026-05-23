@@ -244,12 +244,7 @@ export function useApprovePage() {
   );
 
   const openReasonModal = useCallback(
-    (
-      order: Order,
-      action: OrderAction,
-      orderItem?: OrderItem,
-      forceQuotaOverride = false
-    ) => {
+    (order: Order, action: OrderAction, orderItem?: OrderItem, forceQuotaOverride = false) => {
       const shouldUseQuotaOverride = forceQuotaOverride || quotaOverride;
 
       if (action === "approve" && !shouldUseQuotaOverride) {

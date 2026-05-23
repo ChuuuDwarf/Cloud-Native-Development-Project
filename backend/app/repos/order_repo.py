@@ -148,9 +148,7 @@ class OrderRepository:
             raise bad_request("Only draft or returned orders can be edited")
 
         next_department_id = (
-            payload.department_id
-            if payload.department_id is not None
-            else order.department_id
+            payload.department_id if payload.department_id is not None else order.department_id
         )
 
         next_items: Sequence[OrderItemMasterData]
@@ -317,9 +315,7 @@ class OrderRepository:
 
             if payload.action == OrderAction.APPROVE:
                 exceeded_items = [
-                    item
-                    for item in target_items
-                    if item.quota_exceeded and not item.quota_override
+                    item for item in target_items if item.quota_exceeded and not item.quota_override
                 ]
                 if exceeded_items and not payload.quota_override:
                     raise bad_request(
@@ -545,14 +541,10 @@ class OrderRepository:
                     month=now.month,
                     used_count=order.total_items,
                     urgent_used_count=(
-                        order.total_items
-                        if order.priority == PriorityLevel.URGENT.value
-                        else 0
+                        order.total_items if order.priority == PriorityLevel.URGENT.value else 0
                     ),
                     critical_used_count=(
-                        order.total_items
-                        if order.priority == PriorityLevel.CRITICAL.value
-                        else 0
+                        order.total_items if order.priority == PriorityLevel.CRITICAL.value else 0
                     ),
                     order_id=order.id,
                     created_at=now,
@@ -567,29 +559,37 @@ class OrderRepository:
         item_count: int,
         priority: str,
     ) -> dict[str, Any] | None:
-        quota = self.db.execute(
-            select(QuotaSettingModel)
-            .where(
-                QuotaSettingModel.scope_type == scope_type,
-                QuotaSettingModel.scope_id == scope_id,
-                QuotaSettingModel.is_active.is_(True),
+        quota = (
+            self.db.execute(
+                select(QuotaSettingModel)
+                .where(
+                    QuotaSettingModel.scope_type == scope_type,
+                    QuotaSettingModel.scope_id == scope_id,
+                    QuotaSettingModel.is_active.is_(True),
+                )
+                .order_by(QuotaSettingModel.updated_at.desc(), QuotaSettingModel.id.desc())
             )
-            .order_by(QuotaSettingModel.updated_at.desc(), QuotaSettingModel.id.desc())
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
 
         if quota is None:
             return None
 
         now = utc_now()
 
-        usages = self.db.execute(
-            select(QuotaUsageModel).where(
-                QuotaUsageModel.scope_type == scope_type,
-                QuotaUsageModel.scope_id == scope_id,
-                QuotaUsageModel.year == now.year,
-                QuotaUsageModel.month == now.month,
+        usages = (
+            self.db.execute(
+                select(QuotaUsageModel).where(
+                    QuotaUsageModel.scope_type == scope_type,
+                    QuotaUsageModel.scope_id == scope_id,
+                    QuotaUsageModel.year == now.year,
+                    QuotaUsageModel.month == now.month,
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         used = sum(item.used_count for item in usages)
         urgent_used = sum(item.urgent_used_count for item in usages)
@@ -605,8 +605,7 @@ class OrderRepository:
 
         monthly_allowed = monthly_after_request <= quota.monthly_limit
         urgent_allowed = (
-            quota.urgent_limit is None
-            or urgent_used + urgent_requested <= quota.urgent_limit
+            quota.urgent_limit is None or urgent_used + urgent_requested <= quota.urgent_limit
         )
         critical_allowed = (
             quota.critical_limit is None
@@ -648,13 +647,7 @@ class OrderRepository:
         else:
             return 0
 
-        pending_orders = (
-            self.db.execute(
-                select(OrderModel).where(*conditions)
-            )
-            .scalars()
-            .all()
-        )
+        pending_orders = self.db.execute(select(OrderModel).where(*conditions)).scalars().all()
 
         return sum(order.total_items for order in pending_orders)
 

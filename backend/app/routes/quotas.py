@@ -50,7 +50,8 @@ def quota_to_dict(quota: QuotaSettingModel, service: OrderService) -> dict[str, 
 
 @router.get("")
 def list_quotas(service: OrderService = Depends(get_order_service)) -> ApiResponse:
-    return ApiResponse(data=[quota_to_dict(quota, service) for quota in service.list_quota_settings()])
+    quotas = [quota_to_dict(quota, service) for quota in service.list_quota_settings()]
+    return ApiResponse(data=quotas)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -85,4 +86,10 @@ def check_quota(
     current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
-    return ApiResponse(data=service.check_quota(applicant_id or user_id(current_user), department_id, item_count, priority.value))
+    quota_result = service.check_quota(
+        applicant_id or user_id(current_user),
+        department_id,
+        item_count,
+        priority.value,
+    )
+    return ApiResponse(data=quota_result)

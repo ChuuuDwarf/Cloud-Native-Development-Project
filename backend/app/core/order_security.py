@@ -54,7 +54,9 @@ def require_role(user: CurrentUser, roles: set[str]) -> dict[str, Any]:
     accepted_permissions = _expand_permissions(roles)
 
     has_role = user.role in accepted_roles
-    has_permission = "*" in user.permissions or bool(accepted_permissions.intersection(user.permissions))
+    has_permission = "*" in user.permissions or bool(
+        accepted_permissions.intersection(user.permissions)
+    )
 
     if not (has_role or has_permission):
         raise HTTPException(

@@ -52,7 +52,12 @@ class OrderService:
     def delete_order(self, order_id: int, current_user: CurrentUser) -> None:
         self.repo.delete_order(order_id, current_user)
 
-    def apply_action(self, order_id: int, payload: OrderActionRequest, current_user: CurrentUser) -> Order:
+    def apply_action(
+        self,
+        order_id: int,
+        payload: OrderActionRequest,
+        current_user: CurrentUser,
+    ) -> Order:
         return self.repo.apply_action(order_id, payload, current_user)
 
     def get_history(self, order_id: int) -> list[OrderHistory]:

@@ -9,19 +9,15 @@ Usage::
         return PageResponse(items=..., page=1, page_size=20, total=...)
 """
 
-from typing import Generic, TypeVar
-
 from pydantic import BaseModel, ConfigDict, Field
 
-T = TypeVar("T")
 
-
-class ApiResponse(BaseModel, Generic[T]):
+class ApiResponse[T](BaseModel):
     data: T
     message: str = "success"
 
 
-class PageResponse(BaseModel, Generic[T]):
+class PageResponse[T](BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     items: list[T]

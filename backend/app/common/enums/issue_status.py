@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class IssueStatus(str, Enum):
+class IssueStatus(StrEnum):
     OPEN = "open"
     ASSIGNED = "assigned"
     ESCALATED = "escalated"

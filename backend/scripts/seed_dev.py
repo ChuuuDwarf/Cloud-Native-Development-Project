@@ -320,7 +320,6 @@ async def upsert_storage(session, code: str, name: str, description: str) -> Sto
     return sl
 
 
-
 async def upsert_quota_setting(
     session,
     scope_type: str,
@@ -500,7 +499,8 @@ async def main() -> None:
                 ).scalar_one_or_none()
 
             if department is None:
-                sys.stdout.write(f"Skip department quota: department not found: {department_code}\n")
+                message = f"Skip department quota: department not found: {department_code}\n"
+                sys.stdout.write(message)
                 continue
 
             await upsert_quota_setting(

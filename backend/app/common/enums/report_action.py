@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class ReportAction(str, Enum):
+class ReportAction(StrEnum):
     SUBMIT_REVIEW = "submit_review"
     APPROVE = "approve"
     REJECT = "reject"

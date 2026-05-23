@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class AuditTargetType(str, Enum):
+class AuditTargetType(StrEnum):
     ORDER = "order"
     SAMPLE = "sample"
     WIP = "wip"
