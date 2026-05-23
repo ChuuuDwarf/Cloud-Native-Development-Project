@@ -56,3 +56,5 @@ tests/e2e/playwright/.cache/
 .DS_Store
 cookie.txt
 *.cookie
+.zed
+.claude
