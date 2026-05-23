@@ -42,6 +42,8 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
       - "8000:8000"
+    depends_on:
+      - db
     environment:
       ENV: ${ENV:-development}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
@@ -60,12 +62,6 @@ services:
     volumes:
       - ./backend:/app
       - uploads:/app/uploads
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
   celery-worker:
     build: ./backend
     command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info"]
