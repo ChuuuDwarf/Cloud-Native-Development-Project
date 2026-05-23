@@ -21,7 +21,20 @@ from app.db.models.storage_locations import StorageLocation
 from app.db.models.system_settings import SystemSetting, SystemSettingHistory
 from app.db.models.users import User
 
+from app.db.models.order_management import (
+    OrderHistoryModel,
+    OrderItemModel,
+    OrderModel,
+    QuotaSettingModel,
+    QuotaUsageModel,
+)
+
 __all__ = [
+    "OrderModel",
+    "OrderItemModel",
+    "OrderHistoryModel",
+    "QuotaSettingModel",
+    "QuotaUsageModel",
     "AuditLog",
     "Department",
     "File",

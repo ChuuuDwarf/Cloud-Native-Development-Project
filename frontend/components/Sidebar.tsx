@@ -246,11 +246,7 @@ export default function Sidebar() {
             {group.items.map((item) => {
               const active = pathname === item.href;
               return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  style={{ textDecoration: "none" }}
-                >
+                <Link key={item.id} href={item.href} style={{ textDecoration: "none" }}>
                   <div
                     style={{
                       display: "flex",
@@ -259,14 +255,10 @@ export default function Sidebar() {
                       padding: 8,
                       borderRadius: 8,
                       cursor: "pointer",
-                      background: active
-                        ? "rgba(56,139,253,0.15)"
-                        : "transparent",
+                      background: active ? "rgba(56,139,253,0.15)" : "transparent",
                       position: "relative",
                       minHeight: 36,
-                      borderLeft: active
-                        ? "3px solid var(--blue)"
-                        : "3px solid transparent",
+                      borderLeft: active ? "3px solid var(--blue)" : "3px solid transparent",
                     }}
                   >
                     <span

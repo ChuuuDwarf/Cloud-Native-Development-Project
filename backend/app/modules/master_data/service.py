@@ -74,8 +74,22 @@ class MasterDataService:
             (
                 await self._session.execute(
                     select(LabCapability.experiment_item)
+                    .join(Lab)
+                    .where(Lab.is_active.is_(True))
                     .distinct()
                     .order_by(LabCapability.experiment_item)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        experiments = (
+            (
+                await self._session.execute(
+                    select(LabCapability)
+                    .join(Lab)
+                    .where(Lab.is_active.is_(True))
+                    .order_by(Lab.code, LabCapability.experiment_item)
                 )
             )
             .scalars()
@@ -100,6 +114,14 @@ class MasterDataService:
                 for lab in labs
             ],
             "departments": [{"id": str(d.id), "code": d.code, "name": d.name} for d in departments],
+            "experiments": [
+                {
+                    "id": str(capability.id),
+                    "name": capability.experiment_item,
+                    "labId": str(capability.lab_id),
+                }
+                for capability in experiments
+            ],
             "storageLocations": [
                 {"id": str(s.id), "code": s.code, "name": s.name, "description": s.description}
                 for s in storage
