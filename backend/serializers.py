@@ -1,3 +1,5 @@
+from typing import Any
+
 from schemas import Dispatch, Machine, Recipe, User
 
 
@@ -9,7 +11,7 @@ def list_response(data: list[object], message: str = "success") -> dict[str, obj
     return {"data": data, "total": len(data), "message": message}
 
 
-def machine_from_row(row: dict[str, object]) -> Machine:
+def machine_from_row(row: dict[str, Any]) -> Machine:
     return Machine(
         machineId=str(row["machine_id"]),
         name=str(row["name"]),
@@ -22,7 +24,7 @@ def machine_from_row(row: dict[str, object]) -> Machine:
     )
 
 
-def user_from_row(row: dict[str, object]) -> User:
+def user_from_row(row: dict[str, Any]) -> User:
     return User(
         userId=str(row["user_id"]),
         name=str(row["name"]),
@@ -32,7 +34,7 @@ def user_from_row(row: dict[str, object]) -> User:
     )
 
 
-def recipe_from_row(row: dict[str, object]) -> Recipe:
+def recipe_from_row(row: dict[str, Any]) -> Recipe:
     return Recipe(
         recipeId=str(row["recipe_id"]),
         name=str(row["name"]),
@@ -46,7 +48,7 @@ def recipe_from_row(row: dict[str, object]) -> Recipe:
     )
 
 
-def dispatch_from_row(row: dict[str, object]) -> Dispatch:
+def dispatch_from_row(row: dict[str, Any]) -> Dispatch:
     return Dispatch(
         dispatchId=str(row["dispatch_id"]),
         wipId=str(row["wip_id"]),

@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from typing import Any, Sequence
 
 import psycopg
 from psycopg.rows import dict_row
@@ -9,13 +10,11 @@ from psycopg.types.json import Jsonb
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://lims:lims@127.0.0.1:5432/lims")
 
 
-def get_connection() -> psycopg.Connection:
+def get_connection() -> Any:
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
-def execute_many(
-    conn: psycopg.Connection, query: str, values: list[tuple[object, ...]]
-) -> None:
+def execute_many(conn: Any, query: str, values: Sequence[tuple[object, ...]]) -> None:
     with conn.cursor() as cursor:
         cursor.executemany(query, values)
 
@@ -99,7 +98,7 @@ def init_db() -> None:
         seed_db(conn)
 
 
-def seed_db(conn: psycopg.Connection) -> None:
+def seed_db(conn: Any) -> None:
     lab_users = [
         ("u-lab", "林育誠", "實驗室人員", "實驗室", "LAB A"),
         ("u-supervisor", "陳雅婷", "實驗室小主管", "實驗室", "LAB A"),

@@ -1,11 +1,12 @@
-import psycopg
+from typing import Any
+
 from fastapi import HTTPException
 
 from schemas import User, UserRole
 from serializers import user_from_row
 
 
-def get_user(conn: psycopg.Connection, user_id: str | None) -> User:
+def get_user(conn: Any, user_id: str | None) -> User:
     if not user_id:
         raise HTTPException(status_code=401, detail="X-User-Id header is required")
     row = conn.execute("SELECT * FROM users WHERE user_id = %s", (user_id,)).fetchone()

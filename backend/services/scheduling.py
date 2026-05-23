@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
-
-import psycopg
+from typing import Any
 
 from dependencies import lab_filter_sql
 from schemas import ScheduleStrategy, User
@@ -19,40 +18,41 @@ def priority_rank(priority: str) -> int:
 
 
 def sorted_dispatches(
-    dispatch_rows: list[dict[str, object]], strategy: ScheduleStrategy
-) -> list[dict[str, object]]:
+    dispatch_rows: list[dict[str, Any]], strategy: ScheduleStrategy
+) -> list[dict[str, Any]]:
     if strategy == "Priority First":
         return sorted(
             dispatch_rows,
-            key=lambda row: (priority_rank(str(row["priority"])), row["due_at"]),
+            key=lambda row: (priority_rank(str(row["priority"])), str(row["due_at"])),
         )
     if strategy == "Earliest Due Date":
         return sorted(
             dispatch_rows,
-            key=lambda row: (row["due_at"], priority_rank(str(row["priority"]))),
+            key=lambda row: (str(row["due_at"]), priority_rank(str(row["priority"]))),
         )
     if strategy == "Least Setup Change":
         return sorted(
-            dispatch_rows, key=lambda row: (row["experiment_item"], row["dispatch_id"])
+            dispatch_rows,
+            key=lambda row: (str(row["experiment_item"]), str(row["dispatch_id"])),
         )
     if strategy == "Hybrid":
         return sorted(
             dispatch_rows,
             key=lambda row: (
                 priority_rank(str(row["priority"])),
-                row["due_at"],
-                row["experiment_item"],
+                str(row["due_at"]),
+                str(row["experiment_item"]),
             ),
         )
-    return sorted(dispatch_rows, key=lambda row: row["dispatch_id"])
+    return sorted(dispatch_rows, key=lambda row: str(row["dispatch_id"]))
 
 
 def apply_schedule_suggestion(
-    conn: psycopg.Connection,
+    conn: Any,
     strategy: ScheduleStrategy,
     user: User,
     replan_reason: str | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     dispatch_filter, dispatch_params = lab_filter_sql(user)
     dispatch_rows = conn.execute(
         f"""
