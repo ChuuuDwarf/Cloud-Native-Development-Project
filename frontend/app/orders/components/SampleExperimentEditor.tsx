@@ -1,4 +1,11 @@
-import { checkboxRowStyle, experimentChecklistStyle, experimentHeaderStyle, experimentLabGroupStyle, itemCardStyle, subItemStyle } from "../styles";
+import {
+  checkboxRowStyle,
+  experimentChecklistStyle,
+  experimentHeaderStyle,
+  experimentLabGroupStyle,
+  itemCardStyle,
+  subItemStyle,
+} from "../styles";
 import type { Experiment, FormItem, MasterData, SampleFormGroup } from "../types";
 import { displayExperimentName, displayLabName } from "@/lib/displayNames";
 import { Field } from "./common";
@@ -27,27 +34,45 @@ export function SampleExperimentEditor({
         <div key={`${group.startIndex}-${group.sampleId}`} style={itemCardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
             <strong style={{ fontSize: 13 }}>樣品 {groupIndex + 1}</strong>
-            <span style={{ color: "var(--text3)", fontSize: 12 }}>已選 {group.items.length} 項實驗</span>
+            <span style={{ color: "var(--text3)", fontSize: 12 }}>
+              已選 {group.items.length} 項實驗
+            </span>
           </div>
 
           <Field label="樣品編號">
-            <input value={group.sampleId} onChange={(event) => onSampleChange(group, event.target.value)} style={inputStyle} />
+            <input
+              value={group.sampleId}
+              onChange={(event) => onSampleChange(group, event.target.value)}
+              style={inputStyle}
+            />
           </Field>
 
           <div style={experimentChecklistStyle}>
             {masterData.labs.map((lab) => {
-              const labExperiments = masterData.experiments.filter((experiment) => experiment.labId === lab.id);
+              const labExperiments = masterData.experiments.filter(
+                (experiment) => experiment.labId === lab.id
+              );
               if (labExperiments.length === 0) return null;
 
               return (
                 <div key={lab.id} style={experimentLabGroupStyle}>
-                  <div style={{ fontWeight: 800, fontSize: 12, color: "var(--text2)" }}>{displayLabName(masterData, lab.id)}</div>
+                  <div style={{ fontWeight: 800, fontSize: 12, color: "var(--text2)" }}>
+                    {displayLabName(masterData, lab.id)}
+                  </div>
                   <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
                     {labExperiments.map((experiment) => {
-                      const checked = group.items.some(({ item }) => item.experimentId === experiment.id);
+                      const checked = group.items.some(
+                        ({ item }) => item.experimentId === experiment.id
+                      );
                       return (
                         <label key={experiment.id} style={checkboxRowStyle}>
-                          <input type="checkbox" checked={checked} onChange={(event) => onToggleExperiment(group, experiment, event.target.checked)} />
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              onToggleExperiment(group, experiment, event.target.checked)
+                            }
+                          />
                           <span>{experiment.name}</span>
                         </label>
                       );
@@ -61,7 +86,9 @@ export function SampleExperimentEditor({
           <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
             {group.items.map(({ item, index }, experimentIndex) => {
               const lab = masterData.labs.find((candidate) => candidate.id === item.labId);
-              const experiment = masterData.experiments.find((candidate) => candidate.id === item.experimentId);
+              const experiment = masterData.experiments.find(
+                (candidate) => candidate.id === item.experimentId
+              );
               const canMoveUp = experimentIndex > 0;
               const canMoveDown = experimentIndex < group.items.length - 1;
 
@@ -70,12 +97,37 @@ export function SampleExperimentEditor({
                   <div style={experimentHeaderStyle}>
                     <div style={{ display: "grid", gap: 3 }}>
                       <strong>實驗 {experimentIndex + 1}</strong>
-                      <span style={{ color: "var(--text2)", fontSize: 12 }}>{displayLabName(masterData, lab?.id || item.labId)} / {displayExperimentName(masterData, experiment?.id || item.experimentId)}</span>
+                      <span style={{ color: "var(--text2)", fontSize: 12 }}>
+                        {displayLabName(masterData, lab?.id || item.labId)} /{" "}
+                        {displayExperimentName(masterData, experiment?.id || item.experimentId)}
+                      </span>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button type="button" onClick={() => onMoveExperiment(index, -1)} style={buttonStyle("gray")} disabled={!canMoveUp}>上移</button>
-                      <button type="button" onClick={() => onMoveExperiment(index, 1)} style={buttonStyle("gray")} disabled={!canMoveDown}>下移</button>
-                      {items.length > 1 && <button type="button" onClick={() => onRemoveItem(index)} style={buttonStyle("red")}>移除</button>}
+                      <button
+                        type="button"
+                        onClick={() => onMoveExperiment(index, -1)}
+                        style={buttonStyle("gray")}
+                        disabled={!canMoveUp}
+                      >
+                        上移
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onMoveExperiment(index, 1)}
+                        style={buttonStyle("gray")}
+                        disabled={!canMoveDown}
+                      >
+                        下移
+                      </button>
+                      {items.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => onRemoveItem(index)}
+                          style={buttonStyle("red")}
+                        >
+                          移除
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

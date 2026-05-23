@@ -16,19 +16,33 @@ export function displayUserName(
   return usersById[userId] || "未知使用者";
 }
 
-export function displayDepartmentName(masterData: LookupMasterData, departmentId: string | null | undefined) {
+export function displayDepartmentName(
+  masterData: LookupMasterData,
+  departmentId: string | null | undefined
+) {
   if (!departmentId) return "-";
-  return masterData.departments?.find((department) => department.id === departmentId || department.code === departmentId)?.name || "未知部門";
+  return (
+    masterData.departments?.find(
+      (department) => department.id === departmentId || department.code === departmentId
+    )?.name || "未知部門"
+  );
 }
 
 export function displayLabName(masterData: LookupMasterData, labId: string | null | undefined) {
   if (!labId) return "-";
-  return masterData.labs?.find((lab) => lab.id === labId || lab.code === labId)?.name || "未知實驗室";
+  return (
+    masterData.labs?.find((lab) => lab.id === labId || lab.code === labId)?.name || "未知實驗室"
+  );
 }
 
-export function displayExperimentName(masterData: LookupMasterData, experimentId: string | null | undefined) {
+export function displayExperimentName(
+  masterData: LookupMasterData,
+  experimentId: string | null | undefined
+) {
   if (!experimentId) return "-";
-  return masterData.experiments?.find((experiment) => experiment.id === experimentId)?.name || "未知實驗";
+  return (
+    masterData.experiments?.find((experiment) => experiment.id === experimentId)?.name || "未知實驗"
+  );
 }
 
 export function displayScopeName(

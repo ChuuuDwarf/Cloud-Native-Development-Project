@@ -37,14 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const me = await authApi.me();
       setUser(me);
     } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response
-        ?.status;
+      const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 401) {
         setUser(null);
       } else {
-        setError(
-          (err as { message?: string })?.message ?? "Failed to fetch profile",
-        );
+        setError((err as { message?: string })?.message ?? "Failed to fetch profile");
       }
     } finally {
       setIsLoading(false);
@@ -72,14 +69,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await authApi.login(payload);
         await refresh();
       } catch (err: unknown) {
-        const body = (
-          err as { response?: { data?: { error?: { message?: string } } } }
-        )?.response?.data?.error;
+        const body = (err as { response?: { data?: { error?: { message?: string } } } })?.response
+          ?.data?.error;
         setError(body?.message ?? "Login failed");
         throw err;
       }
     },
-    [refresh],
+    [refresh]
   );
 
   const logout = useCallback(async () => {
@@ -95,12 +91,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user) return false;
       return user.permissions.includes("*") || user.permissions.includes(code);
     },
-    [user],
+    [user]
   );
 
   const value = useMemo<AuthContextValue>(
     () => ({ user, isLoading, error, login, logout, hasPermission, refresh }),
-    [user, isLoading, error, login, logout, hasPermission, refresh],
+    [user, isLoading, error, login, logout, hasPermission, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -20,7 +20,10 @@ export function groupItemsBySample(formItems: FormItem[]): SampleFormGroup[] {
   }, []);
 }
 
-export function getDefaultExperimentForLab(masterData: Pick<MasterData, "experiments">, labId: string) {
+export function getDefaultExperimentForLab(
+  masterData: Pick<MasterData, "experiments">,
+  labId: string
+) {
   return masterData.experiments.find((experiment) => experiment.labId === labId)?.id || "";
 }
 
@@ -53,9 +56,7 @@ export function getNextSampleId(formItems: FormItem[]) {
   return generateSampleId(maxSequence + 1, dateText);
 }
 
-export function getNextSampleIdFromOrders(
-  orders: { items?: { sampleId?: string }[] }[],
-) {
+export function getNextSampleIdFromOrders(orders: { items?: { sampleId?: string }[] }[]) {
   const dateText = getTodayText();
 
   const maxSequence = orders.reduce((max, order) => {
@@ -69,7 +70,10 @@ export function getNextSampleIdFromOrders(
   return generateSampleId(maxSequence + 1, dateText);
 }
 
-export function createDefaultItem(masterData: Pick<MasterData, "labs" | "experiments">, sampleId = generateSampleId(1)): FormItem {
+export function createDefaultItem(
+  masterData: Pick<MasterData, "labs" | "experiments">,
+  sampleId = generateSampleId(1)
+): FormItem {
   const firstLab = masterData.labs[0]?.id || "";
   return {
     sampleId,
@@ -86,9 +90,7 @@ export function toggleExperimentInGroup(
 ) {
   const existingIndex = current.findIndex(
     (item, index) =>
-      index >= group.startIndex &&
-      index <= group.endIndex &&
-      item.experimentId === experiment.id
+      index >= group.startIndex && index <= group.endIndex && item.experimentId === experiment.id
   );
 
   if (checked) {

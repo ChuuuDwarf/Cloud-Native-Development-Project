@@ -27,7 +27,8 @@ export function HistoryTimeline({
           </div>
 
           <div style={{ color: "var(--text2)", fontSize: 12, marginTop: 6 }}>
-            操作者：{displayUserName(item.actorId, usersById, currentUser)} ｜ 時間：{formatDate(item.actionTime)}
+            操作者：{displayUserName(item.actorId, usersById, currentUser)} ｜ 時間：
+            {formatDate(item.actionTime)}
           </div>
 
           <div style={{ marginTop: 8 }}>

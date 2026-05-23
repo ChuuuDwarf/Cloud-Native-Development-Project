@@ -76,9 +76,7 @@ export function QuotaSummary({
       </div>
 
       {sortedQuotaSettings.length === 0 ? (
-        <div style={{ color: "var(--text3)", fontSize: 12, marginTop: 12 }}>
-          目前沒有配額資料
-        </div>
+        <div style={{ color: "var(--text3)", fontSize: 12, marginTop: 12 }}>目前沒有配額資料</div>
       ) : (
         <div style={quotaDetailListStyle}>
           {sortedQuotaSettings.map((quota) => (
@@ -95,7 +93,7 @@ export function QuotaSummary({
                   usersById,
                   quota.scopeType,
                   quota.scopeId,
-                  currentUser,
+                  currentUser
                 )}
               </div>
 
@@ -106,7 +104,9 @@ export function QuotaSummary({
                   marginTop: 4,
                 }}
               >
-                每月用量：{quota.effectiveUsedCount ?? ((quota.usedCount ?? 0) + (quota.reservedCount ?? 0))}/{quota.monthlyLimit}
+                每月用量：
+                {quota.effectiveUsedCount ?? (quota.usedCount ?? 0) + (quota.reservedCount ?? 0)}/
+                {quota.monthlyLimit}
                 {quota.reservedCount ? `，待簽核保留 ${quota.reservedCount}` : ""}
                 ，剩餘 {quota.remaining ?? "-"}
               </div>

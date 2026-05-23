@@ -21,18 +21,12 @@ export const userApi = {
   },
 
   async create(payload: CreateUserPayload): Promise<UserResponse> {
-    const res = await httpClient.post<ApiResponse<UserResponse>>(
-      "/users",
-      payload,
-    );
+    const res = await httpClient.post<ApiResponse<UserResponse>>("/users", payload);
     return res.data.data;
   },
 
   async update(id: string, payload: UpdateUserPayload): Promise<UserResponse> {
-    const res = await httpClient.patch<ApiResponse<UserResponse>>(
-      `/users/${id}`,
-      payload,
-    );
+    const res = await httpClient.patch<ApiResponse<UserResponse>>(`/users/${id}`, payload);
     return res.data.data;
   },
 };

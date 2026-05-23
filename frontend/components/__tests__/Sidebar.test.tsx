@@ -55,7 +55,7 @@ describe("Sidebar", () => {
         permissions: ["*"],
         labId: null,
         departmentId: null,
-      }),
+      })
     );
 
     render(<Sidebar />);
@@ -93,7 +93,7 @@ describe("Sidebar", () => {
         ],
         labId: "lab-1",
         departmentId: null,
-      }),
+      })
     );
 
     render(<Sidebar />);
@@ -127,7 +127,7 @@ describe("Sidebar", () => {
         ],
         labId: "lab-1",
         departmentId: null,
-      }),
+      })
     );
 
     render(<Sidebar />);
@@ -158,7 +158,7 @@ describe("Sidebar", () => {
         ],
         labId: null,
         departmentId: "dept-1",
-      }),
+      })
     );
 
     render(<Sidebar />);
@@ -187,7 +187,7 @@ describe("Sidebar", () => {
         permissions: ["*"],
         labId: null,
         departmentId: null,
-      }),
+      })
     );
 
     render(<Sidebar />);
@@ -208,8 +208,8 @@ describe("Sidebar", () => {
           labId: null,
           departmentId: null,
         },
-        logout,
-      ),
+        logout
+      )
     );
 
     render(<Sidebar />);

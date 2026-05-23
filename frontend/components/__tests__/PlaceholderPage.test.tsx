@@ -11,9 +11,7 @@ describe("PlaceholderPage", () => {
   });
 
   it("renders the API hint when apiPath is supplied", () => {
-    render(
-      <PlaceholderPage title="T" subtitle="S" apiPath="GET /api/orders" />,
-    );
+    render(<PlaceholderPage title="T" subtitle="S" apiPath="GET /api/orders" />);
     expect(screen.getByText(/GET \/api\/orders/)).toBeInTheDocument();
   });
 

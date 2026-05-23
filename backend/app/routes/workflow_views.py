@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.order_enums import OrderStatus
 from app.core.time import utc_now
+from app.schemas.order import ApiResponse, OrderItem
 from app.services.dependencies import get_order_service
 from app.services.order_service import OrderService
-from app.schemas.order import ApiResponse, OrderItem
 
 router = APIRouter(prefix="/api", tags=["Workflow Views"])
 
@@ -98,7 +98,7 @@ def list_reports(
         return get_order_reports(order_id, service)
     data: list[dict[str, Any]] = []
     for order in service.list_orders():
-        data.extend(get_order_reports(order.id, service).data)
+        data.extend(get_order_reports(order.id, service).data or [])
     return ApiResponse(data=data)
 
 
@@ -133,5 +133,5 @@ def list_issues(
         return get_order_issues(order_id, service)
     data: list[dict[str, Any]] = []
     for order in service.list_orders():
-        data.extend(get_order_issues(order.id, service).data)
+        data.extend(get_order_issues(order.id, service).data or [])
     return ApiResponse(data=data)

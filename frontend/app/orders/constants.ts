@@ -1,4 +1,10 @@
-import type { MasterData, OrderAction, OrderStatus, OrderStatusFilter, PriorityLevel } from "./types";
+import type {
+  MasterData,
+  OrderAction,
+  OrderStatus,
+  OrderStatusFilter,
+  PriorityLevel,
+} from "./types";
 
 export const templateStoragePrefix = "order-management-templates";
 

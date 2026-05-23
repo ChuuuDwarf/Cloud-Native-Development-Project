@@ -1,13 +1,13 @@
 import importlib
+import re
+from contextlib import suppress
 from unittest.mock import MagicMock
-import os
+
 import pytest
 from fastapi.testclient import TestClient
+from main import app
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
-
-from main import app
-
 
 client = TestClient(app)
 
@@ -19,12 +19,12 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def clean_order_related_tables():
     """
-    每個測試前後清理 order_management 相關資料，避免：
+    每個測試前後清理 order_management 相關資料,避免:
     - PostgreSQL 測試資料累積
     - quota_usages 累積造成 approve 偶發失敗
     - list/filter 測試被前一次測試資料影響
 
-    注意：
+    注意:
     - 不清 users / departments / labs / experiments / quota_settings
     - 因為那些通常是 seed/master data
     """
@@ -45,11 +45,10 @@ def clean_order_related_tables():
     def cleanup():
         with engine.begin() as connection:
             for table in tables:
-                try:
-                    connection.execute(text(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE"))
-                except Exception:
-                    # 有些環境可能還沒有某些表，避免測試 collection 直接炸掉
-                    pass
+                with suppress(Exception):
+                    connection.execute(
+                        text(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE")
+                    )
 
     cleanup()
     yield
@@ -65,7 +64,7 @@ def assert_success(response, expected_status=200):
     assert response.status_code == expected_status, response.text
     payload = response.json()
 
-    # /health 沒有 success 欄位；其他 API 若有 success 才檢查
+    # /health 沒有 success 欄位;其他 API 若有 success 才檢查
     if isinstance(payload, dict) and "success" in payload:
         assert payload.get("success") is True, payload
 
@@ -111,11 +110,11 @@ def create_order(
 
     response = client.post("/api/orders", json=body)
 
-    # 建立資源成功時，目前 FastAPI 回 201 Created
+    # 建立資源成功時,目前 FastAPI 回 201 Created
     payload = assert_success(response, 201)
     order_id = payload["data"]["id"]
 
-    # create 回傳摘要，後續測試需要完整資料，所以再查 detail
+    # create 回傳摘要,後續測試需要完整資料,所以再查 detail
     detail_payload = assert_success(client.get(f"/api/orders/{order_id}"), 200)
     return detail_payload["data"]
 
@@ -140,7 +139,7 @@ def get_engine():
     engine = getattr(main, "engine", None)
 
     if engine is None:
-        pytest.skip("main.py 沒有匯出 engine，略過 DB engine 測試")
+        pytest.skip("main.py 沒有匯出 engine,略過 DB engine 測試")
 
     return engine
 
@@ -150,7 +149,7 @@ def get_session_local():
     session_local = getattr(main, "SessionLocal", None)
 
     if session_local is None:
-        pytest.skip("main.py 沒有匯出 SessionLocal，略過 DB session 測試")
+        pytest.skip("main.py 沒有匯出 SessionLocal,略過 DB session 測試")
 
     return session_local
 
@@ -556,7 +555,7 @@ def test_full_order_lifecycle_to_closed():
             order_id,
             "approve",
             actor_id="manager001",
-            reason="測試環境配額已滿，使用特批核准",
+            reason="測試環境配額已滿,使用特批核准",
             quota_override=True,
         ),
         200,
@@ -620,7 +619,10 @@ def test_reject_requires_reason_and_rejected_is_final():
     assert_error(response)
 
     history_payload = assert_success(client.get(f"/api/orders/{order_id}/history"), 200)
-    assert any(item["action"] == "reject" and item.get("reason") == "不符合送測條件" for item in history_payload["data"])
+    assert any(
+        item["action"] == "reject" and item.get("reason") == "不符合送測條件"
+        for item in history_payload["data"]
+    )
 
 
 def test_cancel_flow():
@@ -737,7 +739,7 @@ def test_approve_with_quota_override_when_quota_exceeded():
                 order_id,
                 "approve",
                 actor_id="manager001",
-                reason="超額測試，主管特批",
+                reason="超額測試,主管特批",
                 quota_override=True,
             ),
             200,
@@ -758,7 +760,7 @@ def test_update_not_allowed_after_approved():
             order_id,
             "approve",
             actor_id="manager001",
-            reason="測試環境配額已滿，使用特批核准",
+            reason="測試環境配額已滿,使用特批核准",
             quota_override=True,
         ),
         200,
@@ -807,7 +809,10 @@ def test_history_records_return_reason():
     response = client.get(f"/api/orders/{order_id}/history")
     payload = assert_success(response, 200)
 
-    assert any(item.get("action") == "return" and item.get("reason") == reason for item in payload["data"])
+    assert any(
+        item.get("action") == "return" and item.get("reason") == reason
+        for item in payload["data"]
+    )
 
 
 # ============================================================
@@ -902,13 +907,12 @@ def test_transaction_rollback_when_exception_happens():
             )
         )
 
-    with pytest.raises(RuntimeError):
-        with engine.begin() as connection:
-            connection.execute(
-                text(f"INSERT INTO {table_name} (value) VALUES (:value)"),
-                {"value": "should_rollback"},
-            )
-            raise RuntimeError("Force transaction rollback")
+    with pytest.raises(RuntimeError), engine.begin() as connection:
+        connection.execute(
+            text(f"INSERT INTO {table_name} (value) VALUES (:value)"),
+            {"value": "should_rollback"},
+        )
+        raise RuntimeError("Force transaction rollback")
 
     with engine.connect() as connection:
         result = connection.execute(
@@ -928,9 +932,8 @@ def test_database_connection_failure_raises_operational_error():
         connect_args={"connect_timeout": 1},
     )
 
-    with pytest.raises(OperationalError):
-        with bad_engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
+    with pytest.raises(OperationalError), bad_engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
 
 
 def test_create_database_tables_calls_metadata_create_all(monkeypatch):
@@ -941,7 +944,7 @@ def test_create_database_tables_calls_metadata_create_all(monkeypatch):
     engine = getattr(main, "engine", None)
 
     if create_database_tables is None or base is None or engine is None:
-        pytest.skip("main.py 沒有 create_database_tables / Base / engine，略過啟動建表測試")
+        pytest.skip("main.py 沒有 create_database_tables / Base / engine,略過啟動建表測試")
 
     create_all_mock = MagicMock()
 
@@ -957,7 +960,7 @@ def test_get_db_dependency_closes_session(monkeypatch):
     get_db = getattr(main, "get_db", None)
 
     if get_db is None:
-        pytest.skip("main.py 沒有 get_db dependency，略過 close session 測試")
+        pytest.skip("main.py 沒有 get_db dependency,略過 close session 測試")
 
     fake_session = MagicMock()
 
@@ -967,7 +970,7 @@ def test_get_db_dependency_closes_session(monkeypatch):
     if hasattr(main, "SessionLocal"):
         monkeypatch.setattr(main, "SessionLocal", fake_session_local)
     else:
-        pytest.skip("main.py 沒有 SessionLocal，略過 close session 測試")
+        pytest.skip("main.py 沒有 SessionLocal,略過 close session 測試")
 
     db_generator = get_db()
 
@@ -989,8 +992,8 @@ def test_get_db_dependency_closes_session(monkeypatch):
 def approve_with_optional_quota_override(order_id):
     """
     有些測試環境 quota 可能已滿。
-    這個 helper 先嘗試一般 approve；
-    如果因 quota 失敗，再用 quotaOverride + reason 特批核准。
+    這個 helper 先嘗試一般 approve;
+    如果因 quota 失敗,再用 quotaOverride + reason 特批核准。
     """
     response = action(order_id, "approve", actor_id="manager001")
 
@@ -1002,7 +1005,7 @@ def approve_with_optional_quota_override(order_id):
             order_id,
             "approve",
             actor_id="manager001",
-            reason="測試環境配額不足，使用 quotaOverride 特批核准",
+            reason="測試環境配額不足,使用 quotaOverride 特批核准",
             quota_override=True,
         ),
         200,
@@ -1077,8 +1080,13 @@ def test_quota_check_api_returns_required_fields():
         assert "allowed" in check
         assert "limit" in check
 
-        # 不同版本可能叫 used / currentUsed / usedCount，所以放寬
-        assert "used" in check or "currentUsed" in check or "usedCount" in check or "normalUsed" in check
+        # 不同版本可能叫 used / currentUsed / usedCount,所以放寬
+        assert (
+            "used" in check
+            or "currentUsed" in check
+            or "usedCount" in check
+            or "normalUsed" in check
+        )
 
 
 # ============================================================
@@ -1213,7 +1221,7 @@ def test_cancel_after_approved_should_fail():
 
 # ============================================================
 # Role Permission Tests
-# 如果目前後端尚未實作角色權限，這幾個會 fail。
+# 如果目前後端尚未實作角色權限,這幾個會 fail。
 # fail 代表規格尚未真正被後端保護。
 # ============================================================
 
@@ -1650,7 +1658,7 @@ def test_history_records_full_lifecycle_actions():
                 order_id,
                 "approve",
                 actor_id="manager001",
-                reason="測試環境配額不足，使用特批核准",
+                reason="測試環境配額不足,使用特批核准",
                 quota_override=True,
             ),
             200,
@@ -1693,7 +1701,11 @@ def test_history_records_submit_return_resubmit_sequence():
     history = history_payload["data"]
 
     submit_count = sum(1 for item in history if item["action"] == "submit")
-    return_records = [item for item in history if item["action"] == "return" and item.get("reason") == reason]
+    return_records = [
+        item
+        for item in history
+        if item["action"] == "return" and item.get("reason") == reason
+    ]
 
     assert submit_count >= 2
     assert len(return_records) == 1
@@ -1768,7 +1780,7 @@ def test_approved_should_not_allow_submit_return_reject_or_delete():
                 order_id,
                 "approve",
                 actor_id="manager001",
-                reason="測試環境配額不足，使用特批核准",
+                reason="測試環境配額不足,使用特批核准",
                 quota_override=True,
             ),
             200,
@@ -1825,7 +1837,7 @@ def test_terminal_statuses_should_not_allow_any_action():
                 closed_order_id,
                 "approve",
                 actor_id="manager001",
-                reason="測試環境配額不足，使用特批核准",
+                reason="測試環境配額不足,使用特批核准",
                 quota_override=True,
             ),
             200,
@@ -1903,7 +1915,7 @@ def test_soft_deleted_order_cannot_be_updated_or_actioned():
 
 # ============================================================
 # 6. Quota Response Shape
-# 修正版：used / limit 在 checks[] 裡，不一定在最外層
+# 修正版:used / limit 在 checks[] 裡,不一定在最外層
 # ============================================================
 
 
@@ -1962,7 +1974,7 @@ def action_for_item(
     return client.post(f"/api/orders/{order_id}/actions", json=body)
 
 
-def approve_order_flexibly(order_id, actor_id="manager001", reason="測試環境配額不足，使用特批核准"):
+def approve_order_flexibly(order_id, actor_id="manager001", reason="測試環境配額不足,使用特批核准"):
     response = action(order_id, "approve", actor_id=actor_id)
 
     if response.status_code == 200:
@@ -1984,7 +1996,7 @@ def approve_item_flexibly(
     order_id,
     order_item_id,
     actor_id="manager001",
-    reason="測試環境配額不足，使用特批核准",
+    reason="測試環境配額不足,使用特批核准",
 ):
     response = action_for_item(
         order_id,
@@ -2017,7 +2029,11 @@ def get_quota_used_count(scope_type, scope_id):
     payload = assert_success(client.get("/api/quotas"), 200)
     quotas = payload["data"]
 
-    quota = next(item for item in quotas if item["scopeType"] == scope_type and item["scopeId"] == scope_id)
+    quota = next(
+        item
+        for item in quotas
+        if item["scopeType"] == scope_type and item["scopeId"] == scope_id
+    )
 
     return quota["usedCount"]
 
@@ -2383,8 +2399,6 @@ def test_quota_usage_is_not_duplicated_by_second_approve_attempt():
 # Returned Update Reset, OrderNo, API Shape
 # ============================================================
 
-import re
-
 
 def consume_one_monthly_quota_item(sample_id: str):
     seed_order = create_order_with_items(
@@ -2426,7 +2440,7 @@ def test_urgent_order_monthly_quota_exceeded_requires_override_and_override_succ
             order_id,
             "approve",
             actor_id="manager001",
-            reason="急件配額超額，主管特批",
+            reason="急件配額超額,主管特批",
             quota_override=True,
         ),
         200,
@@ -2464,7 +2478,7 @@ def test_critical_order_monthly_quota_exceeded_requires_override_and_override_su
             order_id,
             "approve",
             actor_id="manager001",
-            reason="特急件配額超額，主管特批",
+            reason="特急件配額超額,主管特批",
             quota_override=True,
         ),
         200,
@@ -2491,8 +2505,16 @@ def test_urgent_order_increases_monthly_quota_usage_after_approval():
         200,
     )["data"]
 
-    before_user_check = next(item for item in before["checks"] if item["scopeType"] == "user" and item["scopeId"] == "user001")
-    before_department_check = next(item for item in before["checks"] if item["scopeType"] == "department" and item["scopeId"] == "D001")
+    before_user_check = next(
+        item
+        for item in before["checks"]
+        if item["scopeType"] == "user" and item["scopeId"] == "user001"
+    )
+    before_department_check = next(
+        item
+        for item in before["checks"]
+        if item["scopeType"] == "department" and item["scopeId"] == "D001"
+    )
 
     order = create_order_with_items(
         [
@@ -2529,8 +2551,16 @@ def test_urgent_order_increases_monthly_quota_usage_after_approval():
         200,
     )["data"]
 
-    after_user_check = next(item for item in after["checks"] if item["scopeType"] == "user" and item["scopeId"] == "user001")
-    after_department_check = next(item for item in after["checks"] if item["scopeType"] == "department" and item["scopeId"] == "D001")
+    after_user_check = next(
+        item
+        for item in after["checks"]
+        if item["scopeType"] == "user" and item["scopeId"] == "user001"
+    )
+    after_department_check = next(
+        item
+        for item in after["checks"]
+        if item["scopeType"] == "department" and item["scopeId"] == "D001"
+    )
 
     assert after_user_check["used"] == before_user_check["used"] + 2
     assert after_department_check["used"] == before_department_check["used"] + 2
@@ -2550,8 +2580,16 @@ def test_critical_order_increases_monthly_quota_usage_after_approval():
         200,
     )["data"]
 
-    before_user_check = next(item for item in before["checks"] if item["scopeType"] == "user" and item["scopeId"] == "user001")
-    before_department_check = next(item for item in before["checks"] if item["scopeType"] == "department" and item["scopeId"] == "D001")
+    before_user_check = next(
+        item
+        for item in before["checks"]
+        if item["scopeType"] == "user" and item["scopeId"] == "user001"
+    )
+    before_department_check = next(
+        item
+        for item in before["checks"]
+        if item["scopeType"] == "department" and item["scopeId"] == "D001"
+    )
 
     order = create_order_with_items(
         [
@@ -2583,8 +2621,16 @@ def test_critical_order_increases_monthly_quota_usage_after_approval():
         200,
     )["data"]
 
-    after_user_check = next(item for item in after["checks"] if item["scopeType"] == "user" and item["scopeId"] == "user001")
-    after_department_check = next(item for item in after["checks"] if item["scopeType"] == "department" and item["scopeId"] == "D001")
+    after_user_check = next(
+        item
+        for item in after["checks"]
+        if item["scopeType"] == "user" and item["scopeId"] == "user001"
+    )
+    after_department_check = next(
+        item
+        for item in after["checks"]
+        if item["scopeType"] == "department" and item["scopeId"] == "D001"
+    )
 
     assert after_user_check["used"] == before_user_check["used"] + 1
     assert after_department_check["used"] == before_department_check["used"] + 1

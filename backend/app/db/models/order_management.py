@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -9,7 +9,7 @@ from app.db.base import Base
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class OrderModel(Base):
@@ -25,8 +25,12 @@ class OrderModel(Base):
     total_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_reason: Mapped[str | None] = mapped_column(Text)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
     items: Mapped[list[OrderItemModel]] = relationship(
         back_populates="order",
@@ -58,8 +62,12 @@ class OrderItemModel(Base):
     quota_override_reason: Mapped[str | None] = mapped_column(Text)
     quota_approved_by: Mapped[str | None] = mapped_column(String(50))
     quota_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
     order: Mapped[OrderModel] = relationship(back_populates="items")
 
@@ -75,7 +83,9 @@ class OrderHistoryModel(Base):
     to_status: Mapped[str] = mapped_column(String(50), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text)
     quota_override: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    action_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    action_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
     order: Mapped[OrderModel] = relationship(back_populates="histories")
 
@@ -90,8 +100,12 @@ class QuotaSettingModel(Base):
     urgent_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     critical_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
 
 
 class QuotaUsageModel(Base):
@@ -106,5 +120,9 @@ class QuotaUsageModel(Base):
     urgent_used_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     critical_used_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )

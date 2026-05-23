@@ -40,7 +40,11 @@ export const quotaSummaryStyle: CSSProperties = {
 };
 
 export const summaryTitleStyle: CSSProperties = { margin: 0, fontSize: 16, fontWeight: 800 };
-export const summaryTextStyle: CSSProperties = { color: "var(--text3)", fontSize: 12, margin: "6px 0 0" };
+export const summaryTextStyle: CSSProperties = {
+  color: "var(--text3)",
+  fontSize: 12,
+  margin: "6px 0 0",
+};
 
 export const quotaSummaryItemStyle: CSSProperties = {
   background: "rgba(13, 17, 23, .46)",
@@ -50,7 +54,12 @@ export const quotaSummaryItemStyle: CSSProperties = {
 };
 
 export const quotaDetailListStyle: CSSProperties = { display: "grid", gap: 10, marginTop: 14 };
-export const filterTabsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 };
+export const filterTabsStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 8,
+  marginBottom: 14,
+};
 
 export function filterTabStyle(active: boolean): CSSProperties {
   return {
@@ -116,10 +125,26 @@ export const itemCardStyle: CSSProperties = {
 };
 
 export const experimentChecklistStyle: CSSProperties = { display: "grid", gap: 10, marginTop: 12 };
-export const experimentLabGroupStyle: CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: 10 };
-export const checkboxRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, color: "var(--text2)", fontSize: 12 };
+export const experimentLabGroupStyle: CSSProperties = {
+  border: "1px solid var(--border)",
+  borderRadius: 8,
+  padding: 10,
+};
+export const checkboxRowStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  color: "var(--text2)",
+  fontSize: 12,
+};
 export const subItemStyle: CSSProperties = { borderTop: "1px solid var(--border)", paddingTop: 10 };
-export const experimentHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" };
+export const experimentHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 8,
+  alignItems: "center",
+  flexWrap: "wrap",
+};
 
 export const editNoticeStyle: CSSProperties = {
   padding: 10,

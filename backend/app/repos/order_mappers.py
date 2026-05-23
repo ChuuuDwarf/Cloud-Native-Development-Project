@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.db.models.order_management import OrderHistoryModel, OrderItemModel, OrderModel
 from app.core.order_enums import OrderStatus, PriorityLevel
+from app.db.models.order_management import OrderHistoryModel, OrderItemModel, OrderModel
 from app.schemas.order import Order, OrderHistory, OrderItem
 
 

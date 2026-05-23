@@ -49,7 +49,7 @@ describe("AuthContext", () => {
     render(
       <AuthProvider>
         <Probe />
-      </AuthProvider>,
+      </AuthProvider>
     );
     await waitFor(() => {
       expect(screen.getByTestId("user")).toHaveTextContent("anon");
@@ -62,7 +62,7 @@ describe("AuthContext", () => {
     render(
       <AuthProvider>
         <Probe />
-      </AuthProvider>,
+      </AuthProvider>
     );
     await waitFor(() => {
       expect(screen.getByTestId("user")).toHaveTextContent("a@b.c");
@@ -76,7 +76,7 @@ describe("AuthContext", () => {
     render(
       <AuthProvider>
         <Probe />
-      </AuthProvider>,
+      </AuthProvider>
     );
     await waitFor(() => {
       expect(screen.getByText(/error:kaboom/)).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe("AuthContext", () => {
     render(
       <AuthProvider>
         <LoginProbe />
-      </AuthProvider>,
+      </AuthProvider>
     );
 
     await act(async () => {
@@ -145,7 +145,7 @@ describe("AuthContext", () => {
     render(
       <AuthProvider>
         <LogoutProbe />
-      </AuthProvider>,
+      </AuthProvider>
     );
     await waitFor(() => {
       expect(screen.getByTestId("user")).toHaveTextContent("a@b.c");

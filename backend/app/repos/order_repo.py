@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 from uuid import uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import String, cast, exists, select
+from sqlalchemy import String, cast, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.common.dependencies import CurrentUser
@@ -34,6 +35,12 @@ from app.schemas.order import (
     QuotaPatchPayload,
     QuotaPayload,
 )
+
+
+class OrderItemMasterData(Protocol):
+    sample_id: str
+    lab_id: str
+    experiment_id: str
 
 
 class OrderRepository:
@@ -91,7 +98,7 @@ class OrderRepository:
         if applicant_id:
             stmt = stmt.where(OrderModel.applicant_id == applicant_id)
 
-        # 審核頁：主管只看得到自己 Lab 底下還能審的委託單
+        # 審核頁:主管只看得到自己 Lab 底下還能審的委託單
         if (
             current_user is not None
             and status_filter == OrderStatus.PENDING_APPROVAL
@@ -140,8 +147,13 @@ class OrderRepository:
         if OrderStatus(order.status) not in EDITABLE_STATUSES:
             raise bad_request("Only draft or returned orders can be edited")
 
-        next_department_id = payload.department_id if payload.department_id is not None else order.department_id
+        next_department_id = (
+            payload.department_id
+            if payload.department_id is not None
+            else order.department_id
+        )
 
+        next_items: Sequence[OrderItemMasterData]
         if payload.items is not None:
             next_items = payload.items
         else:
@@ -171,7 +183,10 @@ class OrderRepository:
                     if item_patch.order_item_id is None:
                         continue
                     # find matching item
-                    target = next((it for it in order.items if it.id == item_patch.order_item_id), None)
+                    target = next(
+                        (it for it in order.items if it.id == item_patch.order_item_id),
+                        None,
+                    )
                     if target is None:
                         raise not_found("Order item not found")
                     # only allow editing returned items
@@ -179,7 +194,16 @@ class OrderRepository:
                         raise bad_request("Only returned order items can be edited individually")
 
                     # validate mapping for new lab/experiment
-                    self._validate_order_master_data(order.department_id, [OrderItemCreate(sampleId=item_patch.sample_id, labId=item_patch.lab_id, experimentId=item_patch.experiment_id)])
+                    self._validate_order_master_data(
+                        order.department_id,
+                        [
+                            OrderItemCreate(
+                                sampleId=item_patch.sample_id,
+                                labId=item_patch.lab_id,
+                                experimentId=item_patch.experiment_id,
+                            )
+                        ],
+                    )
 
                     target.sample_id = item_patch.sample_id
                     target.lab_id = item_patch.lab_id
@@ -236,7 +260,12 @@ class OrderRepository:
         )
         self.db.commit()
 
-    def apply_action(self, order_id: int, payload: OrderActionRequest, current_user: CurrentUser) -> Order:
+    def apply_action(
+        self,
+        order_id: int,
+        payload: OrderActionRequest,
+        current_user: CurrentUser,
+    ) -> Order:
         now = utc_now()
         order = self._get_order_model(order_id)
         current_status = OrderStatus(order.status)
@@ -269,7 +298,10 @@ class OrderRepository:
                 and (payload.order_item_id is None or item.id == payload.order_item_id)
                 and (
                     item.status == OrderStatus.PENDING_APPROVAL.value
-                    or (order.status == OrderStatus.PENDING_APPROVAL.value and item.status == OrderStatus.DRAFT.value)
+                    or (
+                        order.status == OrderStatus.PENDING_APPROVAL.value
+                        and item.status == OrderStatus.DRAFT.value
+                    )
                 )
             ]
 
@@ -284,9 +316,16 @@ class OrderRepository:
                     item.status = OrderStatus.PENDING_APPROVAL.value
 
             if payload.action == OrderAction.APPROVE:
-                exceeded_items = [item for item in target_items if item.quota_exceeded and not item.quota_override]
+                exceeded_items = [
+                    item
+                    for item in target_items
+                    if item.quota_exceeded and not item.quota_override
+                ]
                 if exceeded_items and not payload.quota_override:
-                    raise bad_request("One or more order items exceed quota. Approve those items with quotaOverride and reason.")
+                    raise bad_request(
+                        "One or more order items exceed quota. "
+                        "Approve those items with quotaOverride and reason."
+                    )
 
                 for item in target_items:
                     item.status = OrderStatus.APPROVED.value
@@ -315,7 +354,8 @@ class OrderRepository:
 
             elif payload.action == OrderAction.REJECT:
                 # If a manager rejects an item, the business rule is to reject the whole order.
-                # Keep the existing authorization check (target_items must be non-empty for this manager)
+                # Keep the existing authorization check
+                # (target_items must be non-empty for this manager).
                 for item in order.items:
                     item.status = OrderStatus.REJECTED.value
                     item.reject_reason = payload.reason
@@ -351,7 +391,7 @@ class OrderRepository:
 
             quota_check = self.check_quota_for_order(order)
             if quota_check["needOverride"]:
-                order.last_reason = "配額超額，需主管特批"
+                order.last_reason = "配額超額,需主管特批"
             else:
                 order.last_reason = None
             order.status = OrderStatus.PENDING_APPROVAL.value
@@ -425,29 +465,46 @@ class OrderRepository:
         return quota
 
     def check_quota_for_order(self, order: OrderModel) -> dict[str, Any]:
-        checks = [
-            self._quota_check("user", order.applicant_id, order.total_items, order.priority),
-            self._quota_check("department", order.department_id, order.total_items, order.priority),
+        checks: list[dict[str, Any]] = [
+            item
+            for item in (
+                self._quota_check("user", order.applicant_id, order.total_items, order.priority),
+                self._quota_check(
+                    "department", order.department_id, order.total_items, order.priority
+                ),
+            )
+            if item is not None
         ]
-        checks = [item for item in checks if item is not None]
         allowed = all(item["allowed"] for item in checks) if checks else True
         return {"allowed": allowed, "needOverride": not allowed, "checks": checks}
 
-    def check_quota(self, applicant_id: str, department_id: str, item_count: int, priority: str = "normal") -> dict[str, Any]:
-        checks = [
-            self._quota_check("user", applicant_id, item_count, priority),
-            self._quota_check("department", department_id, item_count, priority),
+    def check_quota(
+        self,
+        applicant_id: str,
+        department_id: str,
+        item_count: int,
+        priority: str = "normal",
+    ) -> dict[str, Any]:
+        checks: list[dict[str, Any]] = [
+            item
+            for item in (
+                self._quota_check("user", applicant_id, item_count, priority),
+                self._quota_check("department", department_id, item_count, priority),
+            )
+            if item is not None
         ]
-        checks = [item for item in checks if item is not None]
         allowed = all(item["allowed"] for item in checks) if checks else True
         return {"allowed": allowed, "needOverride": not allowed, "checks": checks}
 
     def effective_remaining_quota(self, order: OrderModel) -> int:
-        remaining_values = [
-            self._quota_remaining("user", order.applicant_id, order.priority),
-            self._quota_remaining("department", order.department_id, order.priority),
+        remaining_values: list[int] = [
+            value
+            for value in (
+                self._quota_remaining("user", order.applicant_id, order.priority),
+                self._quota_remaining("department", order.department_id, order.priority),
+            )
+            if value is not None
         ]
-        remaining_values = [value for value in remaining_values if value is not None]
         if not remaining_values:
             return order.total_items
         return max(min(remaining_values), 0)
@@ -462,15 +519,24 @@ class OrderRepository:
             return OrderStatus.RETURNED.value
         if item_statuses == {OrderStatus.APPROVED.value}:
             return OrderStatus.APPROVED.value
-        if OrderStatus.PENDING_APPROVAL.value in item_statuses or OrderStatus.DRAFT.value in item_statuses:
+        if (
+            OrderStatus.PENDING_APPROVAL.value in item_statuses
+            or OrderStatus.DRAFT.value in item_statuses
+        ):
             return OrderStatus.PENDING_APPROVAL.value
         return order.status
 
     def record_quota_usage(self, order: OrderModel) -> None:
-        if self.db.execute(select(QuotaUsageModel).where(QuotaUsageModel.order_id == order.id)).scalar_one_or_none():
+        existing_usage = self.db.execute(
+            select(QuotaUsageModel).where(QuotaUsageModel.order_id == order.id)
+        ).scalar_one_or_none()
+        if existing_usage:
             return
         now = utc_now()
-        for scope_type, scope_id in (("user", order.applicant_id), ("department", order.department_id)):
+        for scope_type, scope_id in (
+            ("user", order.applicant_id),
+            ("department", order.department_id),
+        ):
             self.db.add(
                 QuotaUsageModel(
                     scope_type=scope_type,
@@ -478,15 +544,29 @@ class OrderRepository:
                     year=now.year,
                     month=now.month,
                     used_count=order.total_items,
-                    urgent_used_count=order.total_items if order.priority == PriorityLevel.URGENT.value else 0,
-                    critical_used_count=order.total_items if order.priority == PriorityLevel.CRITICAL.value else 0,
+                    urgent_used_count=(
+                        order.total_items
+                        if order.priority == PriorityLevel.URGENT.value
+                        else 0
+                    ),
+                    critical_used_count=(
+                        order.total_items
+                        if order.priority == PriorityLevel.CRITICAL.value
+                        else 0
+                    ),
                     order_id=order.id,
                     created_at=now,
                     updated_at=now,
                 )
             )
 
-    def _quota_check(self, scope_type: str, scope_id: str, item_count: int, priority: str) -> dict[str, Any] | None:
+    def _quota_check(
+        self,
+        scope_type: str,
+        scope_id: str,
+        item_count: int,
+        priority: str,
+    ) -> dict[str, Any] | None:
         quota = self.db.execute(
             select(QuotaSettingModel)
             .where(
@@ -524,8 +604,14 @@ class OrderRepository:
         monthly_after_request = monthly_consumed + item_count
 
         monthly_allowed = monthly_after_request <= quota.monthly_limit
-        urgent_allowed = quota.urgent_limit is None or urgent_used + urgent_requested <= quota.urgent_limit
-        critical_allowed = quota.critical_limit is None or critical_used + critical_requested <= quota.critical_limit
+        urgent_allowed = (
+            quota.urgent_limit is None
+            or urgent_used + urgent_requested <= quota.urgent_limit
+        )
+        critical_allowed = (
+            quota.critical_limit is None
+            or critical_used + critical_requested <= quota.critical_limit
+        )
 
         allowed = monthly_allowed and urgent_allowed and critical_allowed
 
@@ -608,7 +694,11 @@ class OrderRepository:
             updated_at=now,
         )
 
-    def _validate_order_master_data(self, department_id: str, items: list[OrderItemCreate]) -> None:
+    def _validate_order_master_data(
+        self,
+        department_id: str,
+        items: Sequence[OrderItemMasterData],
+    ) -> None:
         department_exists = self.db.execute(
             select(Department.id).where(
                 Department.is_active.is_(True),
@@ -659,7 +749,15 @@ class OrderRepository:
                     )
             return
 
-        validate_static_order_master_data(department_id, items)
+        static_items = [
+            OrderItemCreate(
+                sampleId=item.sample_id,
+                labId=item.lab_id,
+                experimentId=item.experiment_id,
+            )
+            for item in items
+        ]
+        validate_static_order_master_data(department_id, static_items)
 
     def _append_history(
         self,

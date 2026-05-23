@@ -1,12 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { userApi } from "@/services/user-api";
-import {
-  actionLabel,
-  emptyFormItem,
-  emptyMasterData,
-  orderStatusFilters,
-} from "../constants";
+import { actionLabel, emptyFormItem, emptyMasterData, orderStatusFilters } from "../constants";
 import { requestJson } from "../lib/api";
 import {
   createDefaultItem,
@@ -33,6 +28,23 @@ import type {
   SampleFormGroup,
 } from "../types";
 
+type OrderItemWithApproval = FormItem & {
+  approvedBy?: string | null;
+};
+
+type OrderWithEditableFields = Order & {
+  priority?: PriorityLevel;
+  items?: OrderItemWithApproval[];
+};
+
+function getOrderItems(order: Order): OrderItemWithApproval[] {
+  return (order as OrderWithEditableFields).items ?? [];
+}
+
+function getOrderPriority(order: Order): PriorityLevel {
+  return (order as OrderWithEditableFields).priority ?? "normal";
+}
+
 export function useOrdersPage() {
   const { user } = useAuth();
 
@@ -56,26 +68,24 @@ export function useOrdersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [quotaCheck, setQuotaCheck] = useState<QuotaCheck | null>(null);
   const [quotaSettings, setQuotaSettings] = useState<QuotaSetting[]>([]);
-  const [activeStatusFilter, setActiveStatusFilter] =
-    useState<OrderStatusFilter>("all");
+  const [activeStatusFilter, setActiveStatusFilter] = useState<OrderStatusFilter>("all");
   const [templates, setTemplates] = useState<OrderTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateName, setTemplateName] = useState("");
-  const [usersById, setUsersById] = useState<Record<string, string | undefined>>(
-    {},
+  const [usersById, setUsersById] = useState<Record<string, string | undefined>>({});
+
+  const resolveDepartmentId = useCallback(
+    (source: MasterData) => {
+      const userDepartmentExists = source.departments.some(
+        (department) => department.id === currentDepartmentId
+      );
+
+      return userDepartmentExists ? currentDepartmentId : source.departments[0]?.id || "";
+    },
+    [currentDepartmentId]
   );
 
-  function resolveDepartmentId(source: MasterData) {
-    const userDepartmentExists = source.departments.some(
-      (department) => department.id === currentDepartmentId,
-    );
-
-    return userDepartmentExists
-      ? currentDepartmentId
-      : source.departments[0]?.id || "";
-  }
-
-  async function loadMasterData() {
+  const loadMasterData = useCallback(async () => {
     try {
       const response = await requestJson<MasterData>("/api/master-data");
       setMasterData(response.data);
@@ -86,14 +96,13 @@ export function useOrdersPage() {
       setDepartmentId(firstDepartment);
       setItems([firstItem]);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "載入主資料失敗";
+      const message = error instanceof Error ? error.message : "載入主資料失敗";
       setMasterData(emptyMasterData);
       setLog(message);
     }
-  }
+  }, [resolveDepartmentId]);
 
-  async function loadOrders() {
+  const loadOrders = useCallback(async () => {
     if (!currentUserId) return;
 
     try {
@@ -114,48 +123,50 @@ export function useOrdersPage() {
       setOrders(nextOrders);
       setLog(`已載入 ${nextOrders.length} 筆委託單`);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "載入委託單失敗";
+      const message = error instanceof Error ? error.message : "載入委託單失敗";
       setOrders([]);
       setLog(message);
       setModal({ type: "message", title: "載入失敗", message });
     } finally {
       setLoading(false);
     }
-  }
+  }, [currentUserId, currentUserRole]);
 
-  async function loadQuotas() {
+  const loadQuotas = useCallback(async () => {
     try {
       const response = await requestJson<QuotaSetting[]>("/api/quotas");
       setQuotaSettings(response.data);
     } catch (error) {
       setLog(error instanceof Error ? error.message : "載入配額資料失敗");
     }
-  }
+  }, []);
 
-  async function loadUserNames(userIds: string[]) {
-    const missingIds = Array.from(new Set(userIds.filter(Boolean))).filter(
-      (id) => id !== currentUserId && !(id in usersById),
-    );
+  const loadUserNames = useCallback(
+    async (userIds: string[]) => {
+      const missingIds = Array.from(new Set(userIds.filter(Boolean))).filter(
+        (id) => id !== currentUserId && !(id in usersById)
+      );
 
-    if (missingIds.length === 0) return;
+      if (missingIds.length === 0) return;
 
-    const entries = await Promise.all(
-      missingIds.map(async (id) => {
-        try {
-          const user = await userApi.getById(id);
-          return [id, user.name] as const;
-        } catch {
-          return [id, undefined] as const;
-        }
-      }),
-    );
+      const entries = await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const user = await userApi.getById(id);
+            return [id, user.name] as const;
+          } catch {
+            return [id, undefined] as const;
+          }
+        })
+      );
 
-    setUsersById((current) => ({
-      ...current,
-      ...Object.fromEntries(entries),
-    }));
-  }
+      setUsersById((current) => ({
+        ...current,
+        ...Object.fromEntries(entries),
+      }));
+    },
+    [currentUserId, usersById]
+  );
 
   function loadTemplatesForUser(userId: string) {
     setTemplates(readTemplates(userId));
@@ -205,8 +216,8 @@ export function useOrdersPage() {
   async function checkQuotaForForm() {
     const response = await requestJson<QuotaCheck>(
       `/api/quotas/check?departmentId=${encodeURIComponent(
-        departmentId,
-      )}&itemCount=${items.length}&priority=${priority}`,
+        departmentId
+      )}&itemCount=${items.length}&priority=${priority}`
     );
 
     setQuotaCheck(response.data);
@@ -219,10 +230,7 @@ export function useOrdersPage() {
     if (items.length === 0) return "至少需要一筆實驗明細";
 
     const invalidIndex = items.findIndex(
-      (item) =>
-        !item.sampleId.trim() ||
-        !item.labId.trim() ||
-        !item.experimentId.trim(),
+      (item) => !item.sampleId.trim() || !item.labId.trim() || !item.experimentId.trim()
     );
 
     if (invalidIndex >= 0) {
@@ -272,19 +280,21 @@ export function useOrdersPage() {
       return;
     }
 
+    const orderItems = getOrderItems(order);
+
     setEditingOrderId(order.id);
     setEditingOrderNo(order.orderNo);
     setApplicantId(order.applicantId);
     setDepartmentId(order.departmentId);
-    setPriority(order.priority || "normal");
+    setPriority(getOrderPriority(order));
     setItems(
-      order.items?.length
-        ? order.items.map(({ sampleId, labId, experimentId }) => ({
+      orderItems.length
+        ? orderItems.map(({ sampleId, labId, experimentId }) => ({
             sampleId,
             labId,
             experimentId,
           }))
-        : [createDefaultItem(masterData)],
+        : [createDefaultItem(masterData)]
     );
     setFormModalOpen(true);
   }
@@ -316,9 +326,7 @@ export function useOrdersPage() {
       try {
         check = await checkQuotaForForm();
       } catch (quotaError) {
-        setLog(
-          quotaError instanceof Error ? quotaError.message : "配額檢查失敗",
-        );
+        setLog(quotaError instanceof Error ? quotaError.message : "配額檢查失敗");
       }
 
       if (submitAfterCreate) {
@@ -327,7 +335,7 @@ export function useOrdersPage() {
           {
             method: "POST",
             body: JSON.stringify({ action: "submit" }),
-          },
+          }
         );
       }
 
@@ -347,8 +355,7 @@ export function useOrdersPage() {
       await loadOrders();
       await loadQuotas();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "建立委託單失敗";
+      const message = error instanceof Error ? error.message : "建立委託單失敗";
       setLog(message);
       setModal({ type: "message", title: "建立失敗", message });
     } finally {
@@ -394,8 +401,7 @@ export function useOrdersPage() {
       setFormModalOpen(false);
       await loadOrders();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "更新委託單失敗";
+      const message = error instanceof Error ? error.message : "更新委託單失敗";
       setLog(message);
       setModal({ type: "message", title: "更新失敗", message });
     }
@@ -420,9 +426,7 @@ export function useOrdersPage() {
 
   async function getHistory(orderId: number) {
     try {
-      const response = await requestJson<OrderHistory[]>(
-        `/api/orders/${orderId}/history`,
-      );
+      const response = await requestJson<OrderHistory[]>(`/api/orders/${orderId}/history`);
 
       setModal({
         type: "history",
@@ -445,7 +449,7 @@ export function useOrdersPage() {
         {
           method: "POST",
           body: JSON.stringify({ action }),
-        },
+        }
       );
 
       setLog(JSON.stringify(response, null, 2));
@@ -477,10 +481,9 @@ export function useOrdersPage() {
     if (!window.confirm(`確認刪除草稿委託單 ${order.orderNo}？`)) return;
 
     try {
-      const response = await requestJson<{ id: number }>(
-        `/api/orders/${order.id}`,
-        { method: "DELETE" },
-      );
+      const response = await requestJson<{ id: number }>(`/api/orders/${order.id}`, {
+        method: "DELETE",
+      });
 
       setLog(JSON.stringify(response, null, 2));
       setModal({
@@ -499,27 +502,20 @@ export function useOrdersPage() {
   }
 
   function addSample() {
-    setItems((current) => [
-      ...current,
-      createDefaultItem(masterData, getNextSampleId(current)),
-    ]);
+    setItems((current) => [...current, createDefaultItem(masterData, getNextSampleId(current))]);
   }
 
   function removeItem(index: number) {
     setItems((current) =>
-      current.length <= 1
-        ? current
-        : current.filter((_, itemIndex) => itemIndex !== index),
+      current.length <= 1 ? current : current.filter((_, itemIndex) => itemIndex !== index)
     );
   }
 
   function updateSampleGroup(group: SampleFormGroup, sampleId: string) {
     setItems((current) =>
       current.map((item, index) =>
-        index >= group.startIndex && index <= group.endIndex
-          ? { ...item, sampleId }
-          : item,
-      ),
+        index >= group.startIndex && index <= group.endIndex ? { ...item, sampleId } : item
+      )
     );
   }
 
@@ -542,26 +538,24 @@ export function useOrdersPage() {
   function toggleExperimentForSample(
     group: SampleFormGroup,
     experiment: Experiment,
-    checked: boolean,
+    checked: boolean
   ) {
-    setItems((current) =>
-      toggleExperimentInGroup(current, group, experiment, checked),
-    );
+    setItems((current) => toggleExperimentInGroup(current, group, experiment, checked));
   }
 
   useEffect(() => {
     if (!currentUserId) return;
 
-    setApplicantId(currentUserId);
+    queueMicrotask(() => {
+      setApplicantId(currentUserId);
 
-    if (
-      currentDepartmentId &&
-      masterData.departments.some(
-        (department) => department.id === currentDepartmentId,
-      )
-    ) {
-      setDepartmentId(currentDepartmentId);
-    }
+      if (
+        currentDepartmentId &&
+        masterData.departments.some((department) => department.id === currentDepartmentId)
+      ) {
+        setDepartmentId(currentDepartmentId);
+      }
+    });
   }, [currentUserId, currentDepartmentId, masterData.departments]);
 
   useEffect(() => {
@@ -572,7 +566,7 @@ export function useOrdersPage() {
       void loadOrders();
       void loadQuotas();
     });
-  }, [currentUserId, currentUserRole, currentDepartmentId]);
+  }, [currentUserId, loadMasterData, loadOrders, loadQuotas]);
 
   useEffect(() => {
     if (!applicantId) return;
@@ -583,19 +577,17 @@ export function useOrdersPage() {
   useEffect(() => {
     const userIds = visibleOrders.flatMap((order) => [
       order.applicantId,
-      ...(order.items || []).flatMap((item) => [item.approvedBy || ""]),
+      ...getOrderItems(order).flatMap((item) => [item.approvedBy || ""]),
     ]);
 
     userIds.push(
-      ...quotaSettings
-        .filter((quota) => quota.scopeType === "user")
-        .map((quota) => quota.scopeId),
+      ...quotaSettings.filter((quota) => quota.scopeType === "user").map((quota) => quota.scopeId)
     );
 
     if (modal.type === "detail") {
       userIds.push(
         modal.order.applicantId,
-        ...(modal.order.items || []).flatMap((item) => [item.approvedBy || ""]),
+        ...getOrderItems(modal.order).flatMap((item) => [item.approvedBy || ""])
       );
     }
 
@@ -604,7 +596,7 @@ export function useOrdersPage() {
     }
 
     queueMicrotask(() => void loadUserNames(userIds));
-  }, [visibleOrders, quotaSettings, modal, currentUserId, usersById]);
+  }, [visibleOrders, quotaSettings, modal, loadUserNames]);
 
   const statusCounts = useMemo(
     () =>
@@ -613,14 +605,13 @@ export function useOrdersPage() {
           counts[filter.value] =
             filter.value === "all"
               ? visibleOrders.length
-              : visibleOrders.filter((order) => order.status === filter.value)
-                  .length;
+              : visibleOrders.filter((order) => order.status === filter.value).length;
 
           return counts;
         },
-        {} as Record<OrderStatusFilter, number>,
+        {} as Record<OrderStatusFilter, number>
       ),
-    [visibleOrders],
+    [visibleOrders]
   );
 
   const filteredOrders =

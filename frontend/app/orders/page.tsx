@@ -57,10 +57,12 @@ export default function OrdersPage() {
       </div>
 
       {page.formModalOpen && (
-        <Modal title={page.editingOrderId ? "修改委託單 " + (page.editingOrderNo || "") : "新增委託單"} onClose={page.closeFormModal}>
+        <Modal
+          title={page.editingOrderId ? "修改委託單 " + (page.editingOrderNo || "") : "新增委託單"}
+          onClose={page.closeFormModal}
+        >
           <OrderForm
             currentUserName={page.currentUserName}
-            applicantId={page.applicantId}
             currentUser={{ id: page.currentUserId, name: page.currentUserName }}
             usersById={page.usersById}
             departmentId={page.departmentId}
@@ -95,7 +97,9 @@ export default function OrdersPage() {
 
       {page.modal.type !== "none" && (
         <Modal title={page.modal.title} onClose={() => page.setModal({ type: "none" })}>
-          {page.modal.type === "message" && <p style={{ color: "var(--text2)", lineHeight: 1.8 }}>{page.modal.message}</p>}
+          {page.modal.type === "message" && (
+            <p style={{ color: "var(--text2)", lineHeight: 1.8 }}>{page.modal.message}</p>
+          )}
           {page.modal.type === "detail" && (
             <OrderDetail
               order={page.modal.order}

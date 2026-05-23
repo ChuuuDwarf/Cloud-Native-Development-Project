@@ -23,7 +23,9 @@ export function ReasonModal({
       <textarea
         value={state.value}
         onChange={(event) =>
-          setState((current) => (current.open ? { ...current, value: event.target.value } : current))
+          setState((current) =>
+            current.open ? { ...current, value: event.target.value } : current
+          )
         }
         placeholder="請輸入原因..."
         style={textareaStyle}

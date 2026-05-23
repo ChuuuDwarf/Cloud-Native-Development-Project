@@ -33,7 +33,11 @@ export function ApprovalSettingsPanel({
 
       <Field label="可簽核實驗室">
         <input
-          value={actorLabIds.length > 0 ? actorLabIds.map((labId) => displayLabName(masterData, labId)).join(", ") : "尚無可簽核實驗室"}
+          value={
+            actorLabIds.length > 0
+              ? actorLabIds.map((labId) => displayLabName(masterData, labId)).join(", ")
+              : "尚無可簽核實驗室"
+          }
           readOnly
           disabled
           style={inputStyle}
@@ -55,7 +59,11 @@ export function ApprovalSettingsPanel({
         <span>核准時使用 quotaOverride 特批超額送測</span>
       </label>
 
-      <button type="button" onClick={onReload} style={{ ...buttonStyle("blue"), width: "100%", marginTop: 12 }}>
+      <button
+        type="button"
+        onClick={onReload}
+        style={{ ...buttonStyle("blue"), width: "100%", marginTop: 12 }}
+      >
         重新整理待簽核清單
       </button>
     </Panel>

@@ -6,11 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { masterDataApi } from "@/services/master-data-api";
 
-type RoleName =
-  | "system_admin"
-  | "lab_supervisor"
-  | "lab_engineer"
-  | "plant_user";
+type RoleName = "system_admin" | "lab_supervisor" | "lab_engineer" | "plant_user";
 
 interface NavItem {
   id: string;
@@ -44,13 +40,13 @@ const nav: NavSection[] = [
     items: [
       {
         id: "orders",
-          href: "/orders",
-          icon: "📋",
-          label: "委託單管理",
-          roles: ["plant_user"],
-        },
-        {
-          id: "approve",
+        href: "/orders",
+        icon: "📋",
+        label: "委託單管理",
+        roles: ["plant_user"],
+      },
+      {
+        id: "approve",
         href: "/approve",
         icon: "✅",
         label: "簽核管理",
@@ -169,9 +165,7 @@ export default function Sidebar() {
     queryFn: masterDataApi.fetch,
   });
 
-  const currentLab = masterQuery.data?.labs.find(
-    (lab) => lab.id === user?.labId,
-  );
+  const currentLab = masterQuery.data?.labs.find((lab) => lab.id === user?.labId);
   const roleLabelMap: Record<string, string> = {
     system_admin: "系統管理者",
     lab_supervisor: "實驗室主管",
@@ -179,12 +173,9 @@ export default function Sidebar() {
     plant_user: "廠區使用者",
   };
 
-  const roleLabel = user?.role ? roleLabelMap[user.role] ?? user.role : "—";
+  const roleLabel = user?.role ? (roleLabelMap[user.role] ?? user.role) : "—";
 
-  const userPositionLabel = currentLab
-    ? `${currentLab.code} / ${roleLabel}`
-    : roleLabel;
-
+  const userPositionLabel = currentLab ? `${currentLab.code} / ${roleLabel}` : roleLabel;
 
   const visibleSections = nav
     .map((g) => ({
@@ -259,10 +250,7 @@ export default function Sidebar() {
       {/* Nav */}
       <div style={{ flex: 1, width: "100%", overflowY: "auto" }}>
         {visibleSections.map((group) => (
-          <div
-            key={group.section}
-            style={{ width: "100%", padding: "4px 8px 0" }}
-          >
+          <div key={group.section} style={{ width: "100%", padding: "4px 8px 0" }}>
             {open && (
               <div
                 style={{

@@ -1,6 +1,11 @@
 import type { Order, OrderStatus } from "../types";
 import type { MasterData } from "@/services/master-data-api";
-import { displayDepartmentName, displayExperimentName, displayLabName, displayUserName } from "@/lib/displayNames";
+import {
+  displayDepartmentName,
+  displayExperimentName,
+  displayLabName,
+  displayUserName,
+} from "@/lib/displayNames";
 import { formatDate } from "../lib/format";
 import { getEffectiveItemStatus } from "../lib/approvalRules";
 import { priorityLabel, statusLabel } from "../lib/labels";

@@ -1,19 +1,33 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { emptyMasterData } from "../constants";
 import { requestJson } from "../lib/api";
-import { createDefaultItem, getNextSampleId, groupItemsBySample, toggleExperimentInGroup } from "../lib/formItems";
+import {
+  createDefaultItem,
+  getNextSampleId,
+  groupItemsBySample,
+  toggleExperimentInGroup,
+} from "../lib/formItems";
 import { readTemplates, writeTemplates } from "../lib/templates";
-import type { Experiment, FormItem, OrderTemplate, SampleFormGroup, TemplateMasterData } from "../types";
+import type {
+  Experiment,
+  FormItem,
+  OrderTemplate,
+  SampleFormGroup,
+  TemplateMasterData,
+} from "../types";
 
 export function useOrderTemplatesPage() {
   const { user } = useAuth();
   const currentUserId = user?.id ?? "";
   const currentUserName = user?.name ?? currentUserId;
+  const applicantId = currentUserId;
 
-  const [applicantId, setApplicantId] = useState(currentUserId);
   const [templates, setTemplates] = useState<OrderTemplate[]>([]);
-  const [masterData, setMasterData] = useState<TemplateMasterData>({ labs: emptyMasterData.labs, experiments: emptyMasterData.experiments });
+  const [masterData, setMasterData] = useState<TemplateMasterData>({
+    labs: emptyMasterData.labs,
+    experiments: emptyMasterData.experiments,
+  });
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState("");
   const [items, setItems] = useState<FormItem[]>([{ ...createDefaultItem(emptyMasterData) }]);
@@ -21,21 +35,24 @@ export function useOrderTemplatesPage() {
   const [nameError, setNameError] = useState("");
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
-  function loadTemplates(userId: string) {
+  const loadTemplates = useCallback((userId: string) => {
     setTemplates(readTemplates(userId));
-  }
+  }, []);
 
-  function persistTemplates(nextTemplates: OrderTemplate[]) {
-    setTemplates(nextTemplates);
-    writeTemplates(applicantId, nextTemplates);
-  }
+  const persistTemplates = useCallback(
+    (nextTemplates: OrderTemplate[]) => {
+      setTemplates(nextTemplates);
+      writeTemplates(applicantId, nextTemplates);
+    },
+    [applicantId]
+  );
 
-  function resetEditor() {
+  const resetEditor = useCallback(() => {
     setSelectedTemplateId(null);
     setTemplateName("");
     setItems([{ ...createDefaultItem(masterData) }]);
     setMessage("已清空編輯區，可以建立新模板。");
-  }
+  }, [masterData]);
 
   function selectTemplate(template: OrderTemplate) {
     setSelectedTemplateId(template.id);
@@ -54,7 +71,9 @@ export function useOrderTemplatesPage() {
       return;
     }
 
-    if (items.some((item) => !item.sampleId.trim() || !item.labId.trim() || !item.experimentId.trim())) {
+    if (
+      items.some((item) => !item.sampleId.trim() || !item.labId.trim() || !item.experimentId.trim())
+    ) {
       setMessage("每個樣品與實驗都需要填寫樣品編號、實驗室與實驗項目。");
       return;
     }
@@ -88,8 +107,13 @@ export function useOrderTemplatesPage() {
   function deleteTemplate(templateId: string) {
     const template = templates.find((item) => item.id === templateId);
     const nextTemplates = templates.filter((item) => item.id !== templateId);
+
     persistTemplates(nextTemplates);
-    if (selectedTemplateId === templateId) resetEditor();
+
+    if (selectedTemplateId === templateId) {
+      resetEditor();
+    }
+
     setMessage(`已刪除模板：${template?.name || templateId}`);
   }
 
@@ -98,11 +122,17 @@ export function useOrderTemplatesPage() {
   }
 
   function removeItem(index: number) {
-    setItems((current) => (current.length <= 1 ? current : current.filter((_, itemIndex) => itemIndex !== index)));
+    setItems((current) =>
+      current.length <= 1 ? current : current.filter((_, itemIndex) => itemIndex !== index)
+    );
   }
 
   function updateSampleGroup(group: SampleFormGroup, sampleId: string) {
-    setItems((current) => current.map((item, index) => (index >= group.startIndex && index <= group.endIndex ? { ...item, sampleId } : item)));
+    setItems((current) =>
+      current.map((item, index) =>
+        index >= group.startIndex && index <= group.endIndex ? { ...item, sampleId } : item
+      )
+    );
   }
 
   function moveExperiment(index: number, direction: -1 | 1) {
@@ -110,14 +140,22 @@ export function useOrderTemplatesPage() {
       const targetIndex = index + direction;
       const item = current[index];
       const target = current[targetIndex];
-      if (!item || !target || item.sampleId !== target.sampleId) return current;
+
+      if (!item || !target || item.sampleId !== target.sampleId) {
+        return current;
+      }
+
       const next = [...current];
       [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
       return next;
     });
   }
 
-  function toggleExperimentForSample(group: SampleFormGroup, experiment: Experiment, checked: boolean) {
+  function toggleExperimentForSample(
+    group: SampleFormGroup,
+    experiment: Experiment,
+    checked: boolean
+  ) {
     setItems((current) => toggleExperimentInGroup(current, group, experiment, checked));
   }
 
@@ -125,27 +163,34 @@ export function useOrderTemplatesPage() {
     async function loadMasterData() {
       try {
         const response = await requestJson<TemplateMasterData>("/api/master-data");
-        const nextMasterData = { labs: response.data.labs, experiments: response.data.experiments };
+        const nextMasterData = {
+          labs: response.data.labs,
+          experiments: response.data.experiments,
+        };
+
         setMasterData(nextMasterData);
         setItems([{ ...createDefaultItem(nextMasterData) }]);
       } catch {
-        setMasterData({ labs: emptyMasterData.labs, experiments: emptyMasterData.experiments });
+        setMasterData({
+          labs: emptyMasterData.labs,
+          experiments: emptyMasterData.experiments,
+        });
       }
     }
+
     void loadMasterData();
   }, []);
 
   useEffect(() => {
-    if (!currentUserId) return;
-    setApplicantId(currentUserId);
-  }, [currentUserId]);
+    if (!applicantId) {
+      return;
+    }
 
-  useEffect(() => {
     queueMicrotask(() => {
       loadTemplates(applicantId);
       resetEditor();
     });
-  }, [applicantId]);
+  }, [applicantId, loadTemplates, resetEditor]);
 
   return {
     applicantId,

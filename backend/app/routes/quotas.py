@@ -5,13 +5,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, status
 
 from app.common.dependencies import CurrentUser, get_current_user
-
-from app.db.models.order_management import QuotaSettingModel
-from app.core.order_enums import OrderStatus, PriorityLevel
+from app.core.order_enums import PriorityLevel
 from app.core.order_security import require_role, user_id
+from app.db.models.order_management import QuotaSettingModel
+from app.schemas.order import ApiResponse, QuotaPatchPayload, QuotaPayload
 from app.services.dependencies import get_order_service
 from app.services.order_service import OrderService
-from app.schemas.order import ApiResponse, QuotaPatchPayload, QuotaPayload
 
 router = APIRouter(prefix="/api/quotas", tags=["Quotas"])
 

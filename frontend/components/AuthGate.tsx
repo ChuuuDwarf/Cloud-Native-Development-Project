@@ -109,10 +109,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   const allowedRoles = getAllowedRolesForPath(pathname);
 
-  const isForbidden =
-    !!user &&
-    !!allowedRoles &&
-    !allowedRoles.includes(user.role);
+  const isForbidden = !!user && !!allowedRoles && !allowedRoles.includes(user.role);
 
   useEffect(() => {
     if (isLoading) return;

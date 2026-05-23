@@ -8,7 +8,7 @@ import { OrderDetail } from "./components/OrderDetail";
 import { Panel } from "./components/Panel";
 import { ReasonModal } from "./components/ReasonModal";
 import { useApprovePage } from "./hooks/useApprovePage";
-import { emptyStyle, logStyle } from "./styles";
+import { emptyStyle } from "./styles";
 
 export default function ApprovePage() {
   const {
@@ -19,7 +19,6 @@ export default function ApprovePage() {
     quotaOverride,
     setQuotaOverride,
     loading,
-    log,
     modal,
     setModal,
     reasonModal,
@@ -64,7 +63,9 @@ export default function ApprovePage() {
             {loading ? (
               <div style={emptyStyle}>載入中...</div>
             ) : orders.length === 0 ? (
-              <div style={emptyStyle}>目前沒有待簽核委託單。請先到「委託單管理」建立草稿並送出。</div>
+              <div style={emptyStyle}>
+                目前沒有待簽核委託單。請先到「委託單管理」建立草稿並送出。
+              </div>
             ) : (
               <div style={{ display: "grid", gap: 12 }}>
                 {orders.map((order) => (
@@ -88,7 +89,9 @@ export default function ApprovePage() {
 
       {modal.type !== "none" && (
         <Modal title={modal.title} onClose={() => setModal({ type: "none" })}>
-          {modal.type === "message" && <p style={{ color: "var(--text2)", lineHeight: 1.8 }}>{modal.message}</p>}
+          {modal.type === "message" && (
+            <p style={{ color: "var(--text2)", lineHeight: 1.8 }}>{modal.message}</p>
+          )}
           {modal.type === "detail" && (
             <OrderDetail
               order={modal.order}

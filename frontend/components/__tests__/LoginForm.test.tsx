@@ -26,12 +26,10 @@ describe("LoginForm", () => {
     render(
       <AuthProvider>
         <LoginForm />
-      </AuthProvider>,
+      </AuthProvider>
     );
 
-    expect(
-      screen.getByPlaceholderText("admin@example.com"),
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("admin@example.com")).toBeInTheDocument();
     expect(screen.getByLabelText(/密碼/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /登入/ })).toBeInTheDocument();
   });
@@ -60,7 +58,7 @@ describe("LoginForm", () => {
     render(
       <AuthProvider>
         <LoginForm onSuccess={onSuccess} />
-      </AuthProvider>,
+      </AuthProvider>
     );
 
     fireEvent.change(screen.getByPlaceholderText("admin@example.com"), {
@@ -90,7 +88,7 @@ describe("LoginForm", () => {
     render(
       <AuthProvider>
         <LoginForm />
-      </AuthProvider>,
+      </AuthProvider>
     );
 
     fireEvent.change(screen.getByPlaceholderText("admin@example.com"), {

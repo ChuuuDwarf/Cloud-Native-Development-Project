@@ -27,10 +27,10 @@ from app.db.models import (  # noqa: E402
     Lab,
     LabCapability,
     Permission,
+    QuotaSettingModel,
     Role,
     StorageLocation,
     User,
-    QuotaSettingModel,
 )
 
 # ---------------------------------------------------------------------------

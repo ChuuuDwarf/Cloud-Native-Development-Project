@@ -3,9 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.common.dependencies import CurrentUser
-
-from app.db.models.order_management import QuotaSettingModel
 from app.core.order_enums import OrderStatus
+from app.db.models.order_management import QuotaSettingModel
 from app.repos.order_repo import OrderRepository
 from app.schemas.order import (
     Order,

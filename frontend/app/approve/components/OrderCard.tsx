@@ -2,7 +2,12 @@
 
 import type { Order, OrderAction, OrderItem, OrderStatus } from "../types";
 import type { MasterData } from "@/services/master-data-api";
-import { displayDepartmentName, displayExperimentName, displayLabName, displayUserName } from "@/lib/displayNames";
+import {
+  displayDepartmentName,
+  displayExperimentName,
+  displayLabName,
+  displayUserName,
+} from "@/lib/displayNames";
 import {
   approvableItemsForActor,
   canActorApproveItem,
@@ -62,18 +67,29 @@ export function OrderCard({
           : approvalCardStyle
       }
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "flex-start",
+        }}
+      >
         <div>
-          <div style={{ fontFamily: "monospace", color: "var(--text)", fontWeight: 800, fontSize: 14 }}>
+          <div
+            style={{ fontFamily: "monospace", color: "var(--text)", fontWeight: 800, fontSize: 14 }}
+          >
             {order.orderNo}
           </div>
 
           <div style={{ color: "var(--text2)", fontSize: 12, marginTop: 6 }}>
-            申請人：{displayUserName(order.applicantId, usersById, currentUser)} ｜ 部門：{displayDepartmentName(masterData, order.departmentId)} ｜ 項目數：{order.totalItems}
+            申請人：{displayUserName(order.applicantId, usersById, currentUser)} ｜ 部門：
+            {displayDepartmentName(masterData, order.departmentId)} ｜ 項目數：{order.totalItems}
           </div>
 
           <div style={{ color: "var(--text2)", fontSize: 12, marginTop: 6 }}>
-            優先程度：{priorityLabel[order.priority || "normal"]} ｜ 申請日期：{formatDate(order.applyDate)}
+            優先程度：{priorityLabel[order.priority || "normal"]} ｜ 申請日期：
+            {formatDate(order.applyDate)}
           </div>
         </div>
 
@@ -129,11 +145,19 @@ export function OrderCard({
               核准所有
             </button>
 
-            <button type="button" onClick={() => onOpenReasonModal(order, "return")} style={buttonStyle("blue")}>
+            <button
+              type="button"
+              onClick={() => onOpenReasonModal(order, "return")}
+              style={buttonStyle("blue")}
+            >
               退回所有
             </button>
 
-            <button type="button" onClick={() => onOpenReasonModal(order, "reject")} style={buttonStyle("red")}>
+            <button
+              type="button"
+              onClick={() => onOpenReasonModal(order, "reject")}
+              style={buttonStyle("red")}
+            >
               拒絕所有
             </button>
           </>
@@ -182,7 +206,15 @@ function OrderItemApprovalCard({
         {item.rejectReason && `｜拒絕：${item.rejectReason}`}
       </div>
 
-      <div style={item.quotaOverride ? quotaOverrideOkStyle : needsQuotaOverride ? quotaExceededStyle : quotaNormalStyle}>
+      <div
+        style={
+          item.quotaOverride
+            ? quotaOverrideOkStyle
+            : needsQuotaOverride
+              ? quotaExceededStyle
+              : quotaNormalStyle
+        }
+      >
         {quotaStatusText(order, item)}
       </div>
 
@@ -192,25 +224,49 @@ function OrderItemApprovalCard({
         </div>
       )}
 
-      <div style={{ color: canApproveItem ? "var(--green)" : "var(--text3)", fontSize: 12, marginTop: 8 }}>
-        {canApproveItem ? "可簽核：此明細屬於目前主管實驗室" : "僅可查看：此明細不屬於目前主管，或已完成簽核"}
+      <div
+        style={{
+          color: canApproveItem ? "var(--green)" : "var(--text3)",
+          fontSize: 12,
+          marginTop: 8,
+        }}
+      >
+        {canApproveItem
+          ? "可簽核：此明細屬於目前主管實驗室"
+          : "僅可查看：此明細不屬於目前主管，或已完成簽核"}
       </div>
 
       {canApproveItem && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
           {needsQuotaOverride ? (
-            <button type="button" onClick={() => onOpenReasonModal(order, "approve", item, true)} style={buttonStyle("green")}>
+            <button
+              type="button"
+              onClick={() => onOpenReasonModal(order, "approve", item, true)}
+              style={buttonStyle("green")}
+            >
               特批核准
             </button>
           ) : (
-            <button type="button" onClick={() => onOpenReasonModal(order, "approve", item)} style={buttonStyle("green")}>
+            <button
+              type="button"
+              onClick={() => onOpenReasonModal(order, "approve", item)}
+              style={buttonStyle("green")}
+            >
               核准
             </button>
           )}
-          <button type="button" onClick={() => onOpenReasonModal(order, "return", item)} style={buttonStyle("blue")}>
+          <button
+            type="button"
+            onClick={() => onOpenReasonModal(order, "return", item)}
+            style={buttonStyle("blue")}
+          >
             退回
           </button>
-          <button type="button" onClick={() => onOpenReasonModal(order, "reject", item)} style={buttonStyle("red")}>
+          <button
+            type="button"
+            onClick={() => onOpenReasonModal(order, "reject", item)}
+            style={buttonStyle("red")}
+          >
             拒絕
           </button>
         </div>
