@@ -58,3 +58,5 @@ cookie.txt
 *.cookie
 .zed
 .claude
+
+backend/celerybeat-schedule
