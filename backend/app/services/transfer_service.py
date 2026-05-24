@@ -137,6 +137,83 @@ async def generate_transfer_no(db: AsyncSession):
     raise HTTPException(status_code=500, detail="Unable to generate transfer_no")
 
 
+async def create_pending_sample_transfer_if_missing(
+    db: AsyncSession,
+    sample: dict,
+    from_lab: str,
+    to_lab: str,
+    handed_by: str | None,
+    note: str | None = None,
+) -> dict | None:
+    existing_result = await db.execute(
+        text(
+            """
+            SELECT *
+            FROM transfers
+            WHERE target_type = 'sample'
+              AND target_id = :sample_id
+              AND from_lab = :from_lab
+              AND to_lab = :to_lab
+              AND status = 'pending'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ),
+        {
+            "sample_id": sample["id"],
+            "from_lab": from_lab,
+            "to_lab": to_lab,
+        },
+    )
+    existing = existing_result.fetchone()
+    if existing is not None:
+        return dict(existing._mapping)
+
+    result = await db.execute(
+        text(
+            """
+            INSERT INTO transfers (
+                transfer_no,
+                target_type,
+                target_id,
+                order_no,
+                sample_no,
+                from_lab,
+                to_lab,
+                handed_by,
+                status,
+                note
+            )
+            VALUES (
+                :transfer_no,
+                'sample',
+                :sample_id,
+                :order_no,
+                :sample_no,
+                :from_lab,
+                :to_lab,
+                :handed_by,
+                'pending',
+                :note
+            )
+            RETURNING *
+            """
+        ),
+        {
+            "transfer_no": await generate_transfer_no(db),
+            "sample_id": sample["id"],
+            "order_no": sample.get("order_no"),
+            "sample_no": sample.get("sample_no"),
+            "from_lab": from_lab,
+            "to_lab": to_lab,
+            "handed_by": handed_by,
+            "note": note,
+        },
+    )
+    created = result.fetchone()
+    return dict(created._mapping) if created is not None else None
+
+
 async def get_transfer_or_404(transfer_id: str, db: AsyncSession):
     validate_uuid(transfer_id, "transfer_id")
 

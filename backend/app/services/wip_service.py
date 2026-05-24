@@ -12,7 +12,6 @@ from fastapi import HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 fallback_user = {
     "id": "system",
     "name": "系統",
@@ -252,54 +251,137 @@ def parse_requested_experiments(experiment_item: str | None) -> list[dict[str, s
     return experiments
 
 
-async def update_sample_to_pending_transfer_if_ready(
+def normalize_flow_value(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def find_current_experiment_index(
+    experiments: list[dict[str, str]],
+    wip: dict,
+) -> int | None:
+    wip_lab = normalize_flow_value(wip.get("lab_name"))
+    wip_experiment = normalize_flow_value(wip.get("experiment_item"))
+
+    for index, experiment in enumerate(experiments):
+        if (
+            normalize_flow_value(experiment.get("lab_name")) == wip_lab
+            and normalize_flow_value(experiment.get("experiment_item")) == wip_experiment
+        ):
+            return index
+
+    return None
+
+
+async def complete_wip_sample_flow(
     db: AsyncSession,
-    sample_id: str,
+    wip: dict,
     current_lab: str | None,
-    next_location: str | None,
     operator_name: str,
 ) -> None:
     if not current_lab:
         return
 
-    sample = await get_sample_by_id(sample_id, db)
-
+    sample = await get_sample_by_id(wip.get("sample_id"), db)
     if sample is None:
         return
 
-    if sample.get("status") not in ("split", "pending_transfer"):
+    experiments = parse_requested_experiments(sample.get("experiment_item"))
+    current_index = find_current_experiment_index(experiments, wip)
+    current_lab_temp_location = experiment_temp_location(current_lab)
+
+    if current_index is None:
+        await db.execute(
+            text(
+                """
+                UPDATE samples
+                SET
+                    status = 'split',
+                    current_location = :current_location,
+                    updated_at = NOW()
+                WHERE id = :sample_id
+                """
+            ),
+            {
+                "sample_id": sample["id"],
+                "current_location": current_lab_temp_location,
+            },
+        )
         return
 
-    wips_result = await db.execute(
-        text(
-            """
-            SELECT
-                lab_name,
-                experiment_item,
-                status
-            FROM wips
-            WHERE sample_id = :sample_id
-            """
-        ),
-        {"sample_id": sample_id},
+    next_experiment = (
+        experiments[current_index + 1]
+        if current_index + 1 < len(experiments)
+        else None
     )
-    wips = [dict(row._mapping) for row in wips_result.fetchall()]
 
-    current_lab_wips = [wip for wip in wips if wip.get("lab_name") == current_lab]
-
-    if not current_lab_wips:
+    if next_experiment is None:
+        await db.execute(
+            text(
+                """
+                UPDATE samples
+                SET
+                    status = 'split',
+                    current_location = :current_location,
+                    updated_at = NOW()
+                WHERE id = :sample_id
+                """
+            ),
+            {
+                "sample_id": sample["id"],
+                "current_location": current_lab_temp_location,
+            },
+        )
+        await db.execute(
+            text(
+                """
+                INSERT INTO sample_histories (
+                    sample_id,
+                    action,
+                    from_status,
+                    to_status,
+                    description,
+                    operator_name,
+                    lab_name
+                )
+                VALUES (
+                    :sample_id,
+                    'wip_completed_ready_to_notify_pickup',
+                    :from_status,
+                    'split',
+                    :description,
+                    :operator_name,
+                    :lab_name
+                )
+                """
+            ),
+            {
+                "sample_id": sample["id"],
+                "from_status": sample.get("status"),
+                "description": f"{current_lab} 完成 {wip.get('experiment_item')}，可通知使用者取件",
+                "operator_name": operator_name,
+                "lab_name": current_lab,
+            },
+        )
         return
 
-    if any(wip.get("status") != "completed" for wip in current_lab_wips):
-        return
-
-    # 只要目前已建立的 WIP 都完成，就讓樣品進入 pending_transfer。
-    # pending_transfer 代表「待交接，尚未送出」，所以後續仍允許再分貨；
-    # 例如同一個 Lab 還有 requested_experiments 尚未產生 WIP 時，使用者可以在此狀態補分貨。
-    if any(wip.get("status") != "completed" for wip in wips):
-        return
-
-    if sample.get("status") == "pending_transfer":
+    next_lab = next_experiment["lab_name"]
+    if normalize_flow_value(next_lab) == normalize_flow_value(current_lab):
+        await db.execute(
+            text(
+                """
+                UPDATE samples
+                SET
+                    status = 'split',
+                    current_location = :current_location,
+                    updated_at = NOW()
+                WHERE id = :sample_id
+                """
+            ),
+            {
+                "sample_id": sample["id"],
+                "current_location": current_lab_temp_location,
+            },
+        )
         return
 
     await db.execute(
@@ -308,16 +390,18 @@ async def update_sample_to_pending_transfer_if_ready(
             UPDATE samples
             SET
                 status = 'pending_transfer',
-                current_location = COALESCE(:next_location, current_location),
+                current_location = :current_location,
                 updated_at = NOW()
             WHERE id = :sample_id
             """
         ),
         {
-            "sample_id": sample_id,
-            "next_location": next_location,
+            "sample_id": sample["id"],
+            "current_location": current_lab_temp_location,
         },
     )
+
+    note = f"{current_lab} 完成 {wip.get('experiment_item')}，可交接至 {next_lab}"
 
     await db.execute(
         text(
@@ -333,7 +417,7 @@ async def update_sample_to_pending_transfer_if_ready(
             )
             VALUES (
                 :sample_id,
-                'wips_completed_waiting_transfer',
+                'wip_completed_pending_transfer',
                 :from_status,
                 'pending_transfer',
                 :description,
@@ -343,10 +427,41 @@ async def update_sample_to_pending_transfer_if_ready(
             """
         ),
         {
-            "sample_id": sample_id,
+            "sample_id": sample["id"],
             "from_status": sample.get("status"),
-            "description": f"{current_lab} 的 WIP 已完成，樣品待交接至下一個實驗室",
+            "description": note,
             "operator_name": operator_name,
             "lab_name": current_lab,
         },
     )
+
+
+async def update_sample_to_pending_transfer_if_ready(
+    db: AsyncSession,
+    sample_id: str,
+    current_lab: str | None,
+    next_location: str | None,
+    operator_name: str,
+) -> None:
+    wips_result = await db.execute(
+        text(
+            """
+            SELECT *
+            FROM wips
+            WHERE sample_id = :sample_id
+              AND lab_name = :current_lab
+              AND status = 'completed'
+            ORDER BY completed_at IS NULL ASC, completed_at DESC, updated_at DESC
+            LIMIT 1
+            """
+        ),
+        {"sample_id": sample_id, "current_lab": current_lab},
+    )
+    completed_wip = wips_result.fetchone()
+    if completed_wip is not None:
+        await complete_wip_sample_flow(
+            db=db,
+            wip=dict(completed_wip._mapping),
+            current_lab=current_lab,
+            operator_name=operator_name,
+        )

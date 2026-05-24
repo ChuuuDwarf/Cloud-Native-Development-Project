@@ -203,7 +203,7 @@ async def generate_missing_wips_for_sample(
     if sample["status"] not in ("received", "split", "pending_transfer"):
         raise HTTPException(
             status_code=400,
-            detail="只有已收樣 received、已分貨 split 或待交接 pending_transfer 的樣品可以補齊 WIP",
+            detail="只有已收樣 received、已分貨 split 或可交接 pending_transfer 的樣品可以補齊 WIP",
         )
 
     requested_experiments = parse_requested_experiments_from_sample(sample)

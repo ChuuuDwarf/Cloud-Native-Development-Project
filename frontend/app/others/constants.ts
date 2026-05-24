@@ -66,7 +66,7 @@ export const sampleStatusText: Record<string, string> = {
   pending_receive: '待收樣',
   received: '已收樣',
   split: '已分貨',
-  pending_transfer: '待交接',
+  pending_transfer: '可交接',
   in_storage: '已入庫',
   outbound: '待取件',
   picked_up: '已取件',

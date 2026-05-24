@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Candidate, Sample, Wip } from '../types'
 import {
   findMatchingWipForExperiment,
+  findCompletedTransferBoundaryIndex,
   formatDateTime,
   getCandidateKey,
   getRequestedExperiments,
@@ -116,6 +117,82 @@ describe('transferFlow 功能測試', () => {
     expect(isExperimentCompleted(wips, { lab_name: 'Lab A', experiment_item: 'SEM 觀察' })).toBe(true)
     expect(isExperimentCompleted(wips, { lab_name: 'Lab B', experiment_item: '光學量測' })).toBe(false)
     expect(isExperimentCompleted(wips, { lab_name: 'Lab C', experiment_item: 'XRD' })).toBe(false)
+  })
+
+  it('A -> A -> B 少第二個 A WIP 時，不會把第一個 A 視為可交接邊界', () => {
+    const requestedExperiments = parseExperimentsFromSummary('Lab A:EDX、Lab A:SEM、Lab B:CV')
+    const sampleWips: Wip[] = [
+      {
+        ...wips[0],
+        id: 'wip-a-edx',
+        lab_name: 'Lab A',
+        experiment_item: 'EDX',
+        status: 'completed',
+      },
+    ]
+
+    const boundary = findCompletedTransferBoundaryIndex(requestedExperiments, sampleWips, 'Lab A')
+
+    expect(boundary).toBe(0)
+    expect(requestedExperiments[boundary + 1]?.lab_name).toBe('Lab A')
+  })
+
+  it('A -> A -> B 第二個 A 也完成後，才會把第二個 A 視為可交接邊界', () => {
+    const requestedExperiments = parseExperimentsFromSummary('Lab A:EDX、Lab A:SEM、Lab B:CV')
+    const sampleWips: Wip[] = [
+      {
+        ...wips[0],
+        id: 'wip-a-edx',
+        lab_name: 'Lab A',
+        experiment_item: 'EDX',
+        status: 'completed',
+      },
+      {
+        ...wips[0],
+        id: 'wip-a-sem',
+        lab_name: 'Lab A',
+        experiment_item: 'SEM',
+        status: 'completed',
+      },
+    ]
+
+    const boundary = findCompletedTransferBoundaryIndex(requestedExperiments, sampleWips, 'Lab A')
+
+    expect(boundary).toBe(1)
+    expect(requestedExperiments[boundary + 1]?.lab_name).toBe('Lab B')
+  })
+
+  it('A -> B -> A 回到 A 但最後 A 尚未完成時，不會把後面的 A 當成待送出目標', () => {
+    const requestedExperiments = parseExperimentsFromSummary('Lab A:EDX、Lab B:CV、Lab A:SEM')
+    const sampleWips: Wip[] = [
+      {
+        ...wips[0],
+        id: 'wip-a-edx',
+        lab_name: 'Lab A',
+        experiment_item: 'EDX',
+        status: 'completed',
+      },
+      {
+        ...wips[1],
+        id: 'wip-b-cv',
+        lab_name: 'Lab B',
+        experiment_item: 'CV',
+        status: 'completed',
+      },
+      {
+        ...wips[0],
+        id: 'wip-a-sem',
+        lab_name: 'Lab A',
+        experiment_item: 'SEM',
+        status: 'created',
+      },
+    ]
+
+    const boundary = findCompletedTransferBoundaryIndex(requestedExperiments, sampleWips, 'Lab A')
+    const nextExperimentInSequence = requestedExperiments[boundary + 1]
+
+    expect(boundary).toBe(0)
+    expect(isExperimentCompleted(sampleWips, nextExperimentInSequence)).toBe(true)
   })
 
   it('交接候選與歸還候選產生穩定 key，避免列表重繪錯亂', () => {

@@ -24,8 +24,6 @@ ROLE_LABELS = {
     "system_admin": "系統管理者",
     "lab_supervisor": "實驗室主管",
     "lab_engineer": "實驗室人員",
-    "lab_engineer": "實驗室人員",
-    "plant_user": "廠區使用者",
     "plant_user": "廠區使用者",
 }
 
@@ -101,6 +99,36 @@ def get_next_lab_after_current(experiment_item: str | None, current_lab: str | N
         return None
 
     return required_labs[current_index + 1]
+
+
+def parse_requested_experiments_from_summary(experiment_item: str | None):
+    if not experiment_item:
+        return []
+
+    experiments = []
+
+    for part in experiment_item.split("、"):
+        part = part.strip()
+        if ":" not in part:
+            continue
+
+        lab_name, experiment_name = part.split(":", 1)
+        lab_name = lab_name.strip()
+        experiment_name = experiment_name.strip()
+
+        if lab_name and experiment_name:
+            experiments.append(
+                {
+                    "lab_name": lab_name,
+                    "experiment_item": experiment_name,
+                }
+            )
+
+    return experiments
+
+
+def normalize_flow_value(value: str | None):
+    return (value or "").strip().lower()
 
 
 @router.get("")
@@ -650,12 +678,42 @@ async def sample_action(
                 detail=f"此樣品仍有未完成的 WIP，不能通知取件：{'、'.join(items)}",
             )
 
-        next_lab = get_next_lab_after_current(
-            sample.get("experiment_item"),
-            current_lab,
+        completed_wips_result = await db.execute(
+            text(
+                """
+                SELECT
+                    lab_name,
+                    experiment_item
+                FROM wips
+                WHERE sample_id = :sample_id
+                  AND status = 'completed'
+                """
+            ),
+            {"sample_id": sample_id},
         )
+        completed_wips = [
+            {
+                "lab_name": row._mapping["lab_name"],
+                "experiment_item": row._mapping["experiment_item"],
+            }
+            for row in completed_wips_result.fetchall()
+        ]
 
-        if next_lab:
+        next_unfinished_experiment = None
+        for experiment in parse_requested_experiments_from_summary(sample.get("experiment_item")):
+            completed = any(
+                normalize_flow_value(wip["lab_name"]) == normalize_flow_value(experiment["lab_name"])
+                and normalize_flow_value(wip["experiment_item"])
+                == normalize_flow_value(experiment["experiment_item"])
+                for wip in completed_wips
+            )
+
+            if not completed:
+                next_unfinished_experiment = experiment
+                break
+
+        if next_unfinished_experiment:
+            next_lab = next_unfinished_experiment["lab_name"]
             raise HTTPException(
                 status_code=400,
                 detail=(

@@ -21,6 +21,7 @@ import {
   getRequestedExperiments,
   findMatchingWipForExperiment,
   isExperimentCompleted,
+  findCompletedTransferBoundaryIndex,
   getCandidateKey,
 } from './utils/transferFlow'
 import {
@@ -210,12 +211,6 @@ export default function SampleTransferPage() {
 
       if (currentLabWips.length === 0) return
 
-      const currentLabIncompleteWips = currentLabWips.filter(
-        (wip) => wip.status !== 'completed',
-      )
-
-      if (currentLabIncompleteWips.length > 0) return
-
       const currentLabCompletedWips = currentLabWips.filter(
         (wip) => wip.status === 'completed',
       )
@@ -227,24 +222,27 @@ export default function SampleTransferPage() {
       )
 
       if (requestedExperiments.length > 0) {
-        const currentLabLastIndex = requestedExperiments.reduce(
-          (lastIndex, experiment, index) => {
-            if (normalizeLab(experiment.lab_name) === normalizeLab(currentLab)) {
-              return index
-            }
-
-            return lastIndex
-          },
-          -1,
+        const currentLabCompletedBoundary = findCompletedTransferBoundaryIndex(
+          requestedExperiments,
+          sampleWips,
+          currentLab,
         )
 
-        const downstreamExperiments =
-          currentLabLastIndex >= 0
-            ? requestedExperiments.slice(currentLabLastIndex + 1)
-            : requestedExperiments.filter(
-                (experiment) =>
-                  normalizeLab(experiment.lab_name) !== normalizeLab(currentLab),
-              )
+        if (currentLabCompletedBoundary < 0) return
+
+        const nextExperimentInSequence =
+          requestedExperiments[currentLabCompletedBoundary + 1] ?? null
+
+        if (!nextExperimentInSequence) return
+        if (isExperimentCompleted(sampleWips, nextExperimentInSequence)) return
+
+        if (normalizeLab(nextExperimentInSequence.lab_name) === normalizeLab(currentLab)) {
+          return
+        }
+
+        const downstreamExperiments = requestedExperiments.slice(
+          currentLabCompletedBoundary + 1,
+        )
 
         const remainingExperiments = downstreamExperiments.filter(
           (experiment) => !isExperimentCompleted(sampleWips, experiment),
@@ -252,7 +250,7 @@ export default function SampleTransferPage() {
 
         if (remainingExperiments.length === 0) return
 
-        const nextExperiment = remainingExperiments[0]
+        const nextExperiment = nextExperimentInSequence
         const nextWip = findMatchingWipForExperiment(sampleWips, nextExperiment)
 
         const relatedTransfers = [
@@ -625,7 +623,7 @@ export default function SampleTransferPage() {
       <section style={summaryGridStyle}>
         <SummaryCard label="待建立交接" value={transferCandidates.length} />
         <SummaryCard
-          label="我方待送出"
+          label="我方已建申請"
           value={
             transfers.filter(
               (transfer) =>
@@ -651,7 +649,7 @@ export default function SampleTransferPage() {
         <div style={panelStyle}>
           <div style={panelHeaderStyle}>
             <div>
-              <div style={panelTitleStyle}>待送出至下一個 Lab</div>
+              <div style={panelTitleStyle}>可交接至下一個 Lab</div>
               <div style={hintStyle}>
                 條件：目前 Lab 有 completed WIP，且同一樣品仍有其他 Lab 測驗未完成。
               </div>

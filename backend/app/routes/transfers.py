@@ -514,7 +514,8 @@ async def transfer_action(
                     "description": (
                         f"送出交接單 {transfer_data.get('transfer_no')}："
                         f"{transfer_data.get('from_lab')} → {transfer_data.get('to_lab')}，"
-                        f"樣品移至 {next_location}"
+                        f"樣品移至 {next_location}，等待接收實驗室收樣；"
+                        "此步驟不是使用者取件"
                     ),
                     "operator_name": operator_name,
                     "lab_name": transfer_data.get("from_lab"),

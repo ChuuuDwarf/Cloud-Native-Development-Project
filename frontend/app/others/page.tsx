@@ -48,7 +48,7 @@ export default function OthersPage() {
       await apiPost(`/api/others/wips/${wipId}/complete`, {}) // TODO(integration): 改接 /api/wips/:id/actions complete
 
       await loadData()
-      setSuccessMessage('WIP 狀態已標記為 completed；若此樣品目前所有 WIP 皆完成，樣品狀態會改為 pending_transfer，且仍可繼續分貨')
+      setSuccessMessage('WIP 狀態已標記為 completed；系統會依實驗順序更新樣品狀態並建立必要交接單')
     } catch (err) {
       setError(getErrorMessage(err, '標記 WIP 完成失敗'))
     } finally {

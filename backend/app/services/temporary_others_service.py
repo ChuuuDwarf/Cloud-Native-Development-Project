@@ -20,7 +20,7 @@ master_data = {
         {"value": "pending_receive", "label": "待收樣"},
         {"value": "received", "label": "已收樣"},
         {"value": "split", "label": "已分貨"},
-        {"value": "pending_transfer", "label": "待交接"},
+        {"value": "pending_transfer", "label": "可交接"},
         {"value": "in_storage", "label": "已入庫"},
         {"value": "outbound", "label": "待取件"},
         {"value": "picked_up", "label": "已取件"},

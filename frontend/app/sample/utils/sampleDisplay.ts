@@ -60,6 +60,19 @@ export function shouldMaskSampleForLab(sample: Sample, user: CurrentUser) {
   return !isSampleInCurrentLab(sample, user)
 }
 
+function shouldUseOutgoingTransferView(
+  sample: Sample,
+  user: CurrentUser,
+  outgoingTransfer?: Transfer,
+) {
+  if (!outgoingTransfer || !isLabUser(user)) return false
+
+  const currentLab = getUserLab(user)
+  if (!currentLab || outgoingTransfer.from_lab !== currentLab) return false
+
+  return !isSampleInCurrentLab(sample, user)
+}
+
 export function isSampleVisibleForUser(sample: Sample, user: CurrentUser) {
   if (isSystemAdmin(user)) return true
 
@@ -132,6 +145,17 @@ export function getDisplaySampleStatus(
   user: CurrentUser,
   outgoingTransfer?: Transfer,
 ) {
+  if (shouldUseOutgoingTransferView(sample, user, outgoingTransfer)) {
+    const transfer = outgoingTransfer as Transfer
+
+    if (transfer.status === 'pending') return 'transfer_pending'
+    if (transfer.status === 'transferring') return 'transferred_waiting_receive'
+    if (transfer.status === 'received') return 'transferred_received'
+    if (transfer.status === 'cancelled') return 'cancelled'
+
+    return 'transferred_out'
+  }
+
   if (['picked_up', 'lost', 'damaged', 'cancelled'].includes(sample.status)) {
     return sample.status
   }
@@ -155,6 +179,27 @@ export function getDisplaySampleLocation(
   user: CurrentUser,
   outgoingTransfer?: Transfer,
 ) {
+  if (shouldUseOutgoingTransferView(sample, user, outgoingTransfer)) {
+    const transfer = outgoingTransfer as Transfer
+
+    if (transfer.status === 'pending') return '本實驗室交接待送區'
+    if (transfer.status === 'transferring') {
+      return transfer.to_lab
+        ? `已送出，等待接收實驗室（${transfer.to_lab}）收樣`
+        : '已送出，等待接收實驗室收樣'
+    }
+
+    if (transfer.status === 'received') {
+      return transfer.to_lab
+        ? `已由接收實驗室（${transfer.to_lab}）收樣`
+        : '已由接收實驗室收樣'
+    }
+
+    if (transfer.status === 'cancelled') return '交接已取消'
+
+    return '已離開本實驗室'
+  }
+
   if (sample.status === 'picked_up') return sample.current_location ?? '已由使用者取回'
   if (sample.status === 'cancelled') return '流程已取消'
   if (sample.status === 'lost') return '樣品異常：遺失'

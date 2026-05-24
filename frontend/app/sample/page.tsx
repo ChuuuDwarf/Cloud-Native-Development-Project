@@ -31,6 +31,7 @@ import {
 } from './styles'
 import {
   filterSamplesByView,
+  getDisplaySampleStatus,
   getUserLab,
   isActiveSampleStatus,
   isFactoryUser as checkIsFactoryUser,
@@ -89,7 +90,6 @@ export default function SamplePage() {
     system_admin: '系統管理者',
     lab_supervisor: '實驗室主管',
     lab_engineer: '實驗室人員',
-    plant_user: '廠區使用者',
     plant_user: '廠區使用者',
   }
 
@@ -226,8 +226,17 @@ export default function SamplePage() {
   const visibleSamples = useMemo(() => {
     if (!currentUser) return []
 
-    return filterSamplesByView(samples, currentUser, sampleFilter)
-  }, [samples, currentUser, sampleFilter])
+    const nextSamples = filterSamplesByView(samples, currentUser, sampleFilter)
+
+    if (isLabUser && sampleFilter === 'picked_up') {
+      return nextSamples.filter((sample) => {
+        const transfer = outgoingTransfersBySampleId.get(sample.id)
+        return getDisplaySampleStatus(sample, currentUser, transfer) === 'picked_up'
+      })
+    }
+
+    return nextSamples
+  }, [samples, currentUser, sampleFilter, isLabUser, outgoingTransfersBySampleId])
 
   const selectedSample = useMemo(() => {
     return visibleSamples.find((sample) => sample.id === selectedSampleId) ?? null
@@ -324,7 +333,7 @@ export default function SamplePage() {
   }).length
 
   const inLabCount = baseSamplesForCount.filter((sample) => {
-    if (!['received', 'split', 'pending_transfer', 'transferring', 'in_storage'].includes(sample.status)) {
+    if (!['received', 'split', 'pending_transfer', 'transferring', 'in_storage', 'outbound'].includes(sample.status)) {
       return false
     }
 
@@ -345,7 +354,16 @@ export default function SamplePage() {
     return true
   }).length
 
-  const pickedUpCount = baseSamplesForCount.filter((sample) => sample.status === 'picked_up').length
+  const pickedUpCount = baseSamplesForCount.filter((sample) => {
+    if (sample.status !== 'picked_up') return false
+
+    if (isLabUser && currentUser) {
+      const transfer = outgoingTransfersBySampleId.get(sample.id)
+      return getDisplaySampleStatus(sample, currentUser, transfer) === 'picked_up'
+    }
+
+    return true
+  }).length
   const activeCount = baseSamplesForCount.filter((sample) => isActiveSampleStatus(sample.status)).length
   const totalCount = baseSamplesForCount.length
 
@@ -529,7 +547,7 @@ export default function SamplePage() {
       if (sample.status === 'pending_receive') return '樣品已送出，等待實驗室確認收樣。'
       if (sample.status === 'received') return '實驗室已收樣，等待建立或執行實驗子單。'
       if (sample.status === 'split') return '樣品已進入實驗流程，可在此追蹤 WIP / 實驗子單進度。'
-      if (sample.status === 'pending_transfer') return '本階段實驗已完成，等待實驗室交接至下一站。'
+      if (sample.status === 'pending_transfer') return '本階段實驗已完成，可交接至下一站。'
       if (sample.status === 'outbound') return '實驗已完成，樣品等待取回。實際拿到樣品後，可以確認取件。'
       if (sample.status === 'picked_up') return '樣品已取回，流程完成。'
       return '目前僅提供樣品狀態與歷程查詢。'

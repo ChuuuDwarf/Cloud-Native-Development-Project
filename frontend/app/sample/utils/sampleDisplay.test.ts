@@ -317,7 +317,7 @@ describe('sampleDisplay 功能測試', () => {
     expect(formatStatusChange('received', null)).toBe('已收樣 → 無')
   })
 
-  it('樣品已被廠區取回時，顯示狀態不應被舊交接紀錄覆蓋', () => {
+  it('樣品已被廠區取回時，送出 Lab 仍停留在交接歷程視角', () => {
     const pickedUpSample = makeSample({
       status: 'picked_up',
       current_location: '已由使用者取回',
@@ -335,7 +335,9 @@ describe('sampleDisplay 功能測試', () => {
     expect(getDisplaySampleStatus(pickedUpSample, labBUser, receivedTransfer)).toBe('picked_up')
     expect(getDisplaySampleLocation(pickedUpSample, labBUser, receivedTransfer)).toBe('已由使用者取回')
 
-    expect(getDisplaySampleStatus(pickedUpSample, labAUser, receivedTransfer)).toBe('picked_up')
-    expect(getDisplaySampleLocation(pickedUpSample, labAUser, receivedTransfer)).toBe('已由使用者取回')
+    expect(getDisplaySampleStatus(pickedUpSample, labAUser, receivedTransfer)).toBe('transferred_received')
+    expect(getDisplaySampleLocation(pickedUpSample, labAUser, receivedTransfer)).toBe(
+      '已由接收實驗室（Lab B）收樣',
+    )
   })
 })

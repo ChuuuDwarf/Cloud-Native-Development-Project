@@ -64,6 +64,28 @@ export function isExperimentCompleted(
   )
 }
 
+export function findCompletedTransferBoundaryIndex(
+  requestedExperiments: RequestedExperiment[],
+  sampleWips: Wip[],
+  currentLab: string,
+) {
+  let currentLabCompletedBoundary = -1
+
+  for (let index = 0; index < requestedExperiments.length; index += 1) {
+    const experiment = requestedExperiments[index]
+
+    if (!isExperimentCompleted(sampleWips, experiment)) {
+      break
+    }
+
+    if (normalizeLab(experiment.lab_name) === normalizeLab(currentLab)) {
+      currentLabCompletedBoundary = index
+    }
+  }
+
+  return currentLabCompletedBoundary
+}
+
 export function formatDateTime(value: string | null | undefined) {
   if (!value) return '-'
 
