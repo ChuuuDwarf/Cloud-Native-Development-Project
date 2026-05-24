@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Mock Next.js navigation hooks used by Sidebar.
 const replaceMock = vi.fn();
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
   useRouter: () => ({ replace: replaceMock, push: vi.fn() }),
@@ -10,8 +12,30 @@ vi.mock("next/navigation", () => ({
 
 // Mock useAuth — different tests will swap the return value.
 const useAuthMock = vi.fn();
+
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => useAuthMock(),
+}));
+
+vi.mock("@/services/master-data-api", () => ({
+  masterDataApi: {
+    fetch: vi.fn().mockResolvedValue({
+      labs: [
+        {
+          id: "lab-a",
+          code: "LAB-A",
+          name: "材料分析實驗室",
+        },
+        {
+          id: "lab-b",
+          code: "LAB-B",
+          name: "電性測試實驗室",
+        },
+      ],
+      departments: [],
+      experiments: [],
+    }),
+  },
 }));
 
 import Sidebar from "@/components/Sidebar";
@@ -28,6 +52,7 @@ type FakeUser = {
 
 function makeAuth(user: FakeUser, logout = vi.fn()) {
   const perms = new Set(user.permissions);
+
   return {
     user,
     isLoading: false,
@@ -37,6 +62,22 @@ function makeAuth(user: FakeUser, logout = vi.fn()) {
     refresh: vi.fn(),
     hasPermission: (code: string) => perms.has("*") || perms.has(code),
   };
+}
+
+function renderSidebar() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Sidebar />
+    </QueryClientProvider>
+  );
 }
 
 describe("Sidebar", () => {
@@ -55,17 +96,17 @@ describe("Sidebar", () => {
         permissions: ["*"],
         labId: null,
         departmentId: null,
-      }),
+      })
     );
 
-    render(<Sidebar />);
+    renderSidebar();
 
     expect(screen.getByText("OVERVIEW")).toBeInTheDocument();
     expect(screen.getByText("委託流程")).toBeInTheDocument();
     expect(screen.getByText("執行與機台")).toBeInTheDocument();
     expect(screen.getByText("結案與倉儲")).toBeInTheDocument();
     expect(screen.getByText("系統")).toBeInTheDocument();
-    // Spot-check items
+
     expect(screen.getByText("帳號管理")).toBeInTheDocument();
     expect(screen.getByText("系統設定")).toBeInTheDocument();
     expect(screen.getByText("簽核管理")).toBeInTheDocument();
@@ -91,21 +132,21 @@ describe("Sidebar", () => {
           "storage_locations:read",
           "issues:read",
         ],
-        labId: "lab-1",
+        labId: "lab-a",
         departmentId: null,
-      }),
+      })
     );
 
-    render(<Sidebar />);
+    renderSidebar();
 
     expect(screen.getByText("OVERVIEW")).toBeInTheDocument();
     expect(screen.getByText("委託流程")).toBeInTheDocument();
     expect(screen.getByText("執行與機台")).toBeInTheDocument();
     expect(screen.getByText("結案與倉儲")).toBeInTheDocument();
-    // No 系統 section because no users:read / system_settings:read
+
     expect(screen.queryByText("系統")).not.toBeInTheDocument();
     expect(screen.queryByText("帳號管理")).not.toBeInTheDocument();
-    // Has the approve item
+
     expect(screen.getByText("簽核管理")).toBeInTheDocument();
   });
 
@@ -125,24 +166,23 @@ describe("Sidebar", () => {
           "storage_locations:read",
           "issues:read",
         ],
-        labId: "lab-1",
+        labId: "lab-a",
         departmentId: null,
-      }),
+      })
     );
 
-    render(<Sidebar />);
+    renderSidebar();
 
-    // Has execution items
     expect(screen.getByText("派工排程")).toBeInTheDocument();
     expect(screen.getByText("機台管理")).toBeInTheDocument();
     expect(screen.getByText("Recipe 管理")).toBeInTheDocument();
-    // Should NOT have approve or account
+
     expect(screen.queryByText("簽核管理")).not.toBeInTheDocument();
     expect(screen.queryByText("帳號管理")).not.toBeInTheDocument();
     expect(screen.queryByText("系統")).not.toBeInTheDocument();
   });
 
-  it("plant_user sees ONLY 委託單管理 under 委託流程", () => {
+  it("plant_user sees allowed 委託流程 items only", () => {
     useAuthMock.mockReturnValue(
       makeAuth({
         id: "u-plant",
@@ -158,26 +198,25 @@ describe("Sidebar", () => {
         ],
         labId: null,
         departmentId: "dept-1",
-      }),
+      })
     );
 
-    render(<Sidebar />);
+    renderSidebar();
 
-    // 委託流程 section visible with only 委託單管理 inside
     expect(screen.getByText("委託單管理")).toBeInTheDocument();
     expect(screen.getByText("委託流程")).toBeInTheDocument();
-    // No other items in workflow section
+
     expect(screen.queryByText("簽核管理")).not.toBeInTheDocument();
-    expect(screen.queryByText("收樣管理")).not.toBeInTheDocument();
+    expect(screen.getByText("收樣管理")).toBeInTheDocument();
     expect(screen.queryByText("分貨 / WIP")).not.toBeInTheDocument();
-    // No other sections (no samples:read so no 樣品交接 in 執行與機台)
+
     expect(screen.queryByText("執行與機台")).not.toBeInTheDocument();
     expect(screen.queryByText("結案與倉儲")).not.toBeInTheDocument();
     expect(screen.queryByText("系統")).not.toBeInTheDocument();
     expect(screen.queryByText("OVERVIEW")).not.toBeInTheDocument();
   });
 
-  it("footer shows user.name + user.role", () => {
+  it("footer shows user.name + resolved role label", () => {
     useAuthMock.mockReturnValue(
       makeAuth({
         id: "u-admin",
@@ -187,16 +226,45 @@ describe("Sidebar", () => {
         permissions: ["*"],
         labId: null,
         departmentId: null,
-      }),
+      })
     );
 
-    render(<Sidebar />);
+    renderSidebar();
+
     expect(screen.getByText("Admin")).toBeInTheDocument();
-    expect(screen.getByText("system_admin")).toBeInTheDocument();
+    expect(screen.getByText("系統管理者")).toBeInTheDocument();
+  });
+
+  it("footer shows lab code + role label when user has labId", async () => {
+    useAuthMock.mockReturnValue(
+      makeAuth({
+        id: "u-eng",
+        name: "Engineer",
+        email: "engineer@example.com",
+        role: "lab_engineer",
+        permissions: [
+          "samples:read",
+          "wips:read",
+          "machines:read",
+          "recipes:read",
+          "dispatches:read",
+          "storage_locations:read",
+          "issues:read",
+        ],
+        labId: "lab-a",
+        departmentId: null,
+      })
+    );
+
+    renderSidebar();
+
+    expect(screen.getByText("Engineer")).toBeInTheDocument();
+    expect(await screen.findByText("LAB-A / 實驗室人員")).toBeInTheDocument();
   });
 
   it("clicking 登出 calls logout()", async () => {
     const logout = vi.fn().mockResolvedValue(undefined);
+
     useAuthMock.mockReturnValue(
       makeAuth(
         {
@@ -208,11 +276,12 @@ describe("Sidebar", () => {
           labId: null,
           departmentId: null,
         },
-        logout,
-      ),
+        logout
+      )
     );
 
-    render(<Sidebar />);
+    renderSidebar();
+
     const btn = screen.getByRole("button", { name: "登出" });
     fireEvent.click(btn);
 

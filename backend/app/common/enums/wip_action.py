@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class WipAction(str, Enum):
+class WipAction(StrEnum):
     DISPATCH = "dispatch"
     SCHEDULE = "schedule"
     LOAD = "load"

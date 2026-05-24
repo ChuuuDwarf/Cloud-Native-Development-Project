@@ -34,11 +34,18 @@ export interface MasterDataStorageLocation {
   description: string;
 }
 
+export interface MasterDataExperiment {
+  id: string;
+  name: string;
+  labId: string;
+}
+
 export interface MasterData {
   roles: MasterDataRole[];
   permissions: MasterDataPermission[];
   labs: MasterDataLab[];
   departments: MasterDataDepartment[];
+  experiments: MasterDataExperiment[];
   storageLocations: MasterDataStorageLocation[];
   experimentItems: string[];
   orderStatuses: string[];

@@ -4,15 +4,7 @@ import KpiCard from "@/components/ui/KpiCard";
 
 describe("KpiCard", () => {
   it("renders label, value and optional sub + icon", () => {
-    render(
-      <KpiCard
-        label="OPEN ORDERS"
-        value={42}
-        sub="vs last week"
-        color="#388bfd"
-        icon="📋"
-      />,
-    );
+    render(<KpiCard label="OPEN ORDERS" value={42} sub="vs last week" color="#388bfd" icon="📋" />);
     expect(screen.getByText("OPEN ORDERS")).toBeInTheDocument();
     expect(screen.getByText("42")).toBeInTheDocument();
     expect(screen.getByText("vs last week")).toBeInTheDocument();

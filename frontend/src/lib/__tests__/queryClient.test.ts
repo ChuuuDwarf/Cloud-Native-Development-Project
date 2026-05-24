@@ -11,10 +11,7 @@ describe("queryClient", () => {
 
   it("query retry returns false for 4xx errors and limits other retries to 2", () => {
     const opts = queryClient.getDefaultOptions();
-    const retry = opts.queries?.retry as (
-      failureCount: number,
-      error: unknown,
-    ) => boolean;
+    const retry = opts.queries?.retry as (failureCount: number, error: unknown) => boolean;
     // 401 -> no retry
     expect(retry(0, { response: { status: 401 } })).toBe(false);
     expect(retry(0, { response: { status: 404 } })).toBe(false);

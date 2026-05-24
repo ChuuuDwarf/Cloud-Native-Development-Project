@@ -14,17 +14,8 @@ export default function Dashboard() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>
-            主管儀表板
-          </h1>
-          <p
-            style={{
-              fontSize: 12,
-              color: "var(--text3)",
-              marginTop: 4,
-              fontFamily: "monospace",
-            }}
-          >
+          <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>主管儀表板</h1>
+          <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 4, fontFamily: "monospace" }}>
             SUPERVISOR DASHBOARD · 即時更新
           </p>
         </div>
@@ -61,8 +52,7 @@ export default function Dashboard() {
       {/* 通知 Banner */}
       <div
         style={{
-          background:
-            "linear-gradient(90deg,rgba(247,129,102,0.1),rgba(247,129,102,0.03))",
+          background: "linear-gradient(90deg,rgba(247,129,102,0.1),rgba(247,129,102,0.03))",
           border: "1px solid rgba(247,129,102,0.25)",
           borderRadius: 10,
           padding: "10px 16px",
@@ -75,56 +65,24 @@ export default function Dashboard() {
       >
         ⚠️{" "}
         <span>
-          <strong style={{ color: "var(--orange)" }}>3 筆委託</strong>即將超過
-          SLA 時限｜<strong style={{ color: "var(--orange)" }}>SEM-001</strong>{" "}
-          機台溫度異常｜
+          <strong style={{ color: "var(--orange)" }}>3 筆委託</strong>即將超過 SLA 時限｜
+          <strong style={{ color: "var(--orange)" }}>SEM-001</strong> 機台溫度異常｜
           <strong style={{ color: "var(--orange)" }}>5 筆告警</strong>待處理
         </span>
       </div>
 
       {/* KPI 卡片 */}
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4,1fr)",
-          gap: 14,
-          marginBottom: 22,
-        }}
+        style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 22 }}
       >
-        <KpiCard
-          label="待簽核委託"
-          value={7}
-          sub="今日新增 3 筆"
-          color="var(--blue)"
-          icon="📋"
-        />
-        <KpiCard
-          label="實驗室在製量"
-          value={62}
-          sub="↑ 8 較昨日"
-          color="var(--cyan)"
-          icon="🔬"
-        />
-        <KpiCard
-          label="逾期 / 告警"
-          value={8}
-          sub="需立即處理"
-          color="var(--red)"
-          icon="🚨"
-        />
-        <KpiCard
-          label="今日完成"
-          value={24}
-          sub="自動結單率 78%"
-          color="var(--green)"
-          icon="✅"
-        />
+        <KpiCard label="待簽核委託" value={7} sub="今日新增 3 筆" color="var(--blue)" icon="📋" />
+        <KpiCard label="實驗室在製量" value={62} sub="↑ 8 較昨日" color="var(--cyan)" icon="🔬" />
+        <KpiCard label="逾期 / 告警" value={8} sub="需立即處理" color="var(--red)" icon="🚨" />
+        <KpiCard label="今日完成" value={24} sub="自動結單率 78%" color="var(--green)" icon="✅" />
       </div>
 
       {/* 主內容：左右兩欄 */}
-      <div
-        style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 16 }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 16 }}>
         {/* 左欄 */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {/* 待簽核表格 */}
@@ -162,14 +120,7 @@ export default function Dashboard() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--s2)" }}>
-                  {[
-                    "委託單號",
-                    "申請人",
-                    "實驗項目",
-                    "優先",
-                    "送出時間",
-                    "操作",
-                  ].map((h) => (
+                  {["委託單號", "申請人", "實驗項目", "優先", "送出時間", "操作"].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -223,10 +174,7 @@ export default function Dashboard() {
                     time: "昨天",
                   },
                 ].map((row, i) => (
-                  <tr
-                    key={i}
-                    style={{ borderBottom: "1px solid rgba(56,139,253,0.05)" }}
-                  >
+                  <tr key={i} style={{ borderBottom: "1px solid rgba(56,139,253,0.05)" }}>
                     <td
                       style={{
                         padding: "11px 16px",
@@ -237,20 +185,10 @@ export default function Dashboard() {
                     >
                       {row.id}
                     </td>
-                    <td style={{ padding: "11px 16px", fontSize: 12.5 }}>
-                      {row.name}
-                    </td>
-                    <td style={{ padding: "11px 16px", fontSize: 12.5 }}>
-                      {row.item}
-                    </td>
+                    <td style={{ padding: "11px 16px", fontSize: 12.5 }}>{row.name}</td>
+                    <td style={{ padding: "11px 16px", fontSize: 12.5 }}>{row.item}</td>
                     <td style={{ padding: "11px 16px" }}>
-                      <span
-                        style={{
-                          color: row.prioCls,
-                          fontSize: 11,
-                          fontFamily: "monospace",
-                        }}
-                      >
+                      <span style={{ color: row.prioCls, fontSize: 11, fontFamily: "monospace" }}>
                         ● {row.prio}
                       </span>
                     </td>
@@ -320,24 +258,22 @@ export default function Dashboard() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--s2)" }}>
-                  {["WIP 編號", "委託", "機台", "狀態", "進度", "預計完成"].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        style={{
-                          fontSize: 10,
-                          letterSpacing: 1.5,
-                          color: "var(--text3)",
-                          padding: "10px 16px",
-                          textAlign: "left",
-                          fontFamily: "monospace",
-                          borderBottom: "1px solid var(--border2)",
-                        }}
-                      >
-                        {h}
-                      </th>
-                    ),
-                  )}
+                  {["WIP 編號", "委託", "機台", "狀態", "進度", "預計完成"].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        fontSize: 10,
+                        letterSpacing: 1.5,
+                        color: "var(--text3)",
+                        padding: "10px 16px",
+                        textAlign: "left",
+                        fontFamily: "monospace",
+                        borderBottom: "1px solid var(--border2)",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -383,10 +319,7 @@ export default function Dashboard() {
                     eta: "完成",
                   },
                 ].map((row, i) => (
-                  <tr
-                    key={i}
-                    style={{ borderBottom: "1px solid rgba(56,139,253,0.05)" }}
-                  >
+                  <tr key={i} style={{ borderBottom: "1px solid rgba(56,139,253,0.05)" }}>
                     <td
                       style={{
                         padding: "11px 16px",
@@ -407,9 +340,7 @@ export default function Dashboard() {
                     >
                       {row.wo}
                     </td>
-                    <td style={{ padding: "11px 16px", fontSize: 12.5 }}>
-                      {row.machine}
-                    </td>
+                    <td style={{ padding: "11px 16px", fontSize: 12.5 }}>{row.machine}</td>
                     <td style={{ padding: "11px 16px" }}>
                       <Chip type={row.chipType} label={row.chipLabel} />
                     </td>
@@ -502,23 +433,10 @@ export default function Dashboard() {
                     padding: 16,
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: 28,
-                      fontWeight: 800,
-                      color: g.color,
-                      marginBottom: 4,
-                    }}
-                  >
+                  <div style={{ fontSize: 28, fontWeight: 800, color: g.color, marginBottom: 4 }}>
                     {g.val}
                   </div>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "var(--text3)",
-                      fontFamily: "monospace",
-                    }}
-                  >
+                  <div style={{ fontSize: 10, color: "var(--text3)", fontFamily: "monospace" }}>
                     {g.label}
                   </div>
                 </div>
@@ -578,16 +496,8 @@ export default function Dashboard() {
                 text: "3 筆委託即將超過 SLA 時限",
                 meta: "28分鐘前 · SLA 告警",
               },
-              {
-                dot: "var(--yellow)",
-                text: "試劑庫存低於安全水位",
-                meta: "1小時前 · 倉儲告警",
-              },
-              {
-                dot: "var(--blue)",
-                text: "WO-0893 已自動結案",
-                meta: "2小時前 · 系統通知",
-              },
+              { dot: "var(--yellow)", text: "試劑庫存低於安全水位", meta: "1小時前 · 倉儲告警" },
+              { dot: "var(--blue)", text: "WO-0893 已自動結案", meta: "2小時前 · 系統通知" },
             ].map((a, i) => (
               <div
                 key={i}
@@ -691,11 +601,7 @@ export default function Dashboard() {
                     }}
                   >
                     <span style={{ color: "var(--text2)" }}>{q.label}</span>
-                    <span
-                      style={{ fontFamily: "monospace", color: "var(--text3)" }}
-                    >
-                      {q.val}
-                    </span>
+                    <span style={{ fontFamily: "monospace", color: "var(--text3)" }}>{q.val}</span>
                   </div>
                   <div
                     style={{
@@ -767,9 +673,7 @@ export default function Dashboard() {
                   }}
                 >
                   <div style={{ fontSize: 24, marginBottom: 8 }}>{a.icon}</div>
-                  <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                    {a.label}
-                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text2)" }}>{a.label}</div>
                   <div
                     style={{
                       fontSize: 10,

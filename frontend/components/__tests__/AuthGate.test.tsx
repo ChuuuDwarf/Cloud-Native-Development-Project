@@ -43,7 +43,7 @@ describe("AuthGate", () => {
     render(
       <AuthGate>
         <div>protected child</div>
-      </AuthGate>,
+      </AuthGate>
     );
 
     expect(screen.getByText(/LOADING/)).toBeInTheDocument();
@@ -65,13 +65,11 @@ describe("AuthGate", () => {
     render(
       <AuthGate>
         <div>protected child</div>
-      </AuthGate>,
+      </AuthGate>
     );
 
     // LoginForm renders this placeholder
-    expect(
-      screen.getByPlaceholderText("admin@example.com"),
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("admin@example.com")).toBeInTheDocument();
     expect(screen.queryByText("protected child")).not.toBeInTheDocument();
     expect(screen.queryByTestId("sidebar-stub")).not.toBeInTheDocument();
   });
@@ -99,7 +97,7 @@ describe("AuthGate", () => {
     render(
       <AuthGate>
         <div>protected child</div>
-      </AuthGate>,
+      </AuthGate>
     );
 
     expect(screen.getByTestId("sidebar-stub")).toBeInTheDocument();
@@ -129,7 +127,7 @@ describe("AuthGate", () => {
     render(
       <AuthGate>
         <div>protected child</div>
-      </AuthGate>,
+      </AuthGate>
     );
 
     expect(screen.getByText(/REDIRECTING/)).toBeInTheDocument();

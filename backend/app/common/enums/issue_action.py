@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class IssueAction(str, Enum):
+class IssueAction(StrEnum):
     APPROVE = "approve"
     REJECT = "reject"
     CLOSE = "close"

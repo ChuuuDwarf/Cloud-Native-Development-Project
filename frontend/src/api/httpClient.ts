@@ -24,11 +24,11 @@ httpClient.interceptors.response.use(
       console.error(
         "API request failed:",
         error?.response?.status,
-        error?.response?.data || error.message,
+        error?.response?.data || error.message
       );
     }
     return Promise.reject(error);
-  },
+  }
 );
 
 export type ApiErrorResponse = {

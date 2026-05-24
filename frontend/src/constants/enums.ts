@@ -64,13 +64,7 @@ export const AuditTargetTypeValues: readonly AuditTargetType[] = [
   "file",
 ] as const;
 
-export type IssueAction =
-  | "approve"
-  | "reject"
-  | "close"
-  | "escalate"
-  | "assign"
-  | "reopen";
+export type IssueAction = "approve" | "reject" | "close" | "escalate" | "assign" | "reopen";
 export const IssueAction = {
   Approve: "approve",
   Reject: "reject",
@@ -114,12 +108,7 @@ export const IssueTypeValues: readonly IssueType[] = [
   "termination_request",
 ] as const;
 
-export type MachineStatus =
-  | "idle"
-  | "in_use"
-  | "maintenance"
-  | "faulty"
-  | "disabled";
+export type MachineStatus = "idle" | "in_use" | "maintenance" | "faulty" | "disabled";
 export const MachineStatus = {
   Idle: "idle",
   InUse: "in_use",
@@ -140,10 +129,7 @@ export const NotificationStatus = {
   Unread: "unread",
   Read: "read",
 } as const;
-export const NotificationStatusValues: readonly NotificationStatus[] = [
-  "unread",
-  "read",
-] as const;
+export const NotificationStatusValues: readonly NotificationStatus[] = ["unread", "read"] as const;
 
 export type OrderAction =
   | "submit"
@@ -287,22 +273,14 @@ export const Severity = {
   High: "high",
   Critical: "critical",
 } as const;
-export const SeverityValues: readonly Severity[] = [
-  "low",
-  "medium",
-  "high",
-  "critical",
-] as const;
+export const SeverityValues: readonly Severity[] = ["low", "medium", "high", "critical"] as const;
 
 export type UserStatus = "active" | "disabled";
 export const UserStatus = {
   Active: "active",
   Disabled: "disabled",
 } as const;
-export const UserStatusValues: readonly UserStatus[] = [
-  "active",
-  "disabled",
-] as const;
+export const UserStatusValues: readonly UserStatus[] = ["active", "disabled"] as const;
 
 export type WipAction =
   | "dispatch"

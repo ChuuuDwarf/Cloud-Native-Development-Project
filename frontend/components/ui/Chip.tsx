@@ -21,13 +21,7 @@ const styles: Record<ChipType, { bg: string; color: string }> = {
   idle: { bg: "rgba(139,148,158,0.1)", color: "#3d4a56" },
 };
 
-export default function Chip({
-  type,
-  label,
-}: {
-  type: ChipType;
-  label: string;
-}) {
+export default function Chip({ type, label }: { type: ChipType; label: string }) {
   const s = styles[type];
   return (
     <span
@@ -46,13 +40,7 @@ export default function Chip({
       }}
     >
       <span
-        style={{
-          width: 5,
-          height: 5,
-          borderRadius: "50%",
-          background: s.color,
-          flexShrink: 0,
-        }}
+        style={{ width: 5, height: 5, borderRadius: "50%", background: s.color, flexShrink: 0 }}
       />
       {label}
     </span>

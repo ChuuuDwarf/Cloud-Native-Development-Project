@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class OrderAction(str, Enum):
+class OrderAction(StrEnum):
     SUBMIT = "submit"
     CANCEL = "cancel"
     APPROVE = "approve"

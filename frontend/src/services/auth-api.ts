@@ -17,10 +17,7 @@ export interface LoginResponse {
 
 export const authApi = {
   async login(payload: LoginPayload): Promise<LoginResponse> {
-    const res = await httpClient.post<ApiResponse<LoginResponse>>(
-      "/auth/login",
-      payload,
-    );
+    const res = await httpClient.post<ApiResponse<LoginResponse>>("/auth/login", payload);
     return res.data.data;
   },
 

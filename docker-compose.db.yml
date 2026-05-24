@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16.14
+    container_name: lims-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: lims
+      POSTGRES_USER: lims_user
+      POSTGRES_PASSWORD: lims_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lims_user -d lims"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

@@ -33,15 +33,7 @@ export default function KpiCard({
         }}
       />
       {icon && (
-        <div
-          style={{
-            position: "absolute",
-            right: 14,
-            top: 14,
-            fontSize: 20,
-            opacity: 0.2,
-          }}
-        >
+        <div style={{ position: "absolute", right: 14, top: 14, fontSize: 20, opacity: 0.2 }}>
           {icon}
         </div>
       )}
@@ -56,14 +48,8 @@ export default function KpiCard({
       >
         {label}
       </div>
-      <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1, color }}>
-        {value}
-      </div>
-      {sub && (
-        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
-          {sub}
-        </div>
-      )}
+      <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1, color }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>{sub}</div>}
     </div>
   );
 }

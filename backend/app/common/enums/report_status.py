@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class ReportStatus(str, Enum):
+class ReportStatus(StrEnum):
     DRAFT = "draft"
     PENDING_REVIEW = "pending_review"
     CONFIRMED = "confirmed"

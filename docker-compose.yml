@@ -105,10 +105,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      dockerfile: Dockerfile
       args:
-        # NEXT_PUBLIC_* must arrive as a build-arg because Next.js bakes it
-        # into the client bundle during `next build`. The `environment:`
-        # block below is for `next dev` parity only.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
     ports:
       - "3000:3000"
@@ -116,6 +114,7 @@ services:
       - backend
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      PORT: "3000"
 
   pgadmin:
     image: dpage/pgadmin4:latest

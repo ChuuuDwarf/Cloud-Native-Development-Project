@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class IssueType(str, Enum):
+class IssueType(StrEnum):
     ABNORMAL = "abnormal"
     WARNING = "warning"
     TERMINATION_REQUEST = "termination_request"

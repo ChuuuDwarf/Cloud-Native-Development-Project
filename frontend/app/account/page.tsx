@@ -21,8 +21,7 @@ export default function AccountPage() {
 
   const usersQuery = useQuery({
     queryKey: ["users", { keyword }],
-    queryFn: () =>
-      userApi.list({ keyword: keyword || undefined, pageSize: 100 }),
+    queryFn: () => userApi.list({ keyword: keyword || undefined, pageSize: 100 }),
   });
 
   const masterQuery = useQuery({
@@ -103,20 +102,14 @@ export default function AccountPage() {
           <tbody>
             {usersQuery.isLoading && (
               <tr>
-                <Td
-                  colSpan={6}
-                  style={{ textAlign: "center", color: "var(--text3)" }}
-                >
+                <Td colSpan={6} style={{ textAlign: "center", color: "var(--text3)" }}>
                   Loading…
                 </Td>
               </tr>
             )}
             {usersQuery.isError && (
               <tr>
-                <Td
-                  colSpan={6}
-                  style={{ textAlign: "center", color: "var(--red)" }}
-                >
+                <Td colSpan={6} style={{ textAlign: "center", color: "var(--red)" }}>
                   讀取失敗
                 </Td>
               </tr>
@@ -126,17 +119,12 @@ export default function AccountPage() {
                 key={u.id}
                 user={u}
                 canUpdate={canUpdate}
-                onToggle={(next) =>
-                  toggleStatus.mutate({ id: u.id, status: next })
-                }
+                onToggle={(next) => toggleStatus.mutate({ id: u.id, status: next })}
               />
             ))}
             {usersQuery.data?.items.length === 0 && (
               <tr>
-                <Td
-                  colSpan={6}
-                  style={{ textAlign: "center", color: "var(--text3)" }}
-                >
+                <Td colSpan={6} style={{ textAlign: "center", color: "var(--text3)" }}>
                   沒有符合條件的使用者
                 </Td>
               </tr>
@@ -188,9 +176,7 @@ function UserRow({
       <Td>
         <StatusPill status={user.status} />
       </Td>
-      <Td
-        style={{ color: "var(--text3)", fontFamily: "monospace", fontSize: 11 }}
-      >
+      <Td style={{ color: "var(--text3)", fontFamily: "monospace", fontSize: 11 }}>
         {new Date(user.createdAt).toLocaleString("zh-TW")}
       </Td>
       <Td style={{ textAlign: "right" }}>
@@ -257,8 +243,8 @@ function CreateUserModal({
     onSuccess: () => onCreated(),
     onError: (err: unknown) => {
       const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })
-          ?.response?.data?.error?.message ?? "建立失敗";
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message ?? "建立失敗";
       setError(msg);
     },
   });
@@ -350,9 +336,7 @@ function CreateUserModal({
           <select
             style={inputStyle}
             value={form.departmentId ?? ""}
-            onChange={(e) =>
-              setForm({ ...form, departmentId: e.target.value || null })
-            }
+            onChange={(e) => setForm({ ...form, departmentId: e.target.value || null })}
           >
             <option value="">— 未指定 —</option>
             {departments.map((d) => (
@@ -366,9 +350,7 @@ function CreateUserModal({
           <select
             style={inputStyle}
             value={form.labId ?? ""}
-            onChange={(e) =>
-              setForm({ ...form, labId: e.target.value || null })
-            }
+            onChange={(e) => setForm({ ...form, labId: e.target.value || null })}
           >
             <option value="">— 未指定 —</option>
             {labs.map((l) => (
@@ -407,13 +389,7 @@ function CreateUserModal({
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span style={{ fontSize: 11, color: "var(--text2)" }}>{label}</span>
@@ -422,13 +398,7 @@ function Field({
   );
 }
 
-function Th({
-  children,
-  style,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
+function Th({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <th
       style={{
@@ -457,10 +427,7 @@ function Td({
   style?: React.CSSProperties;
 }) {
   return (
-    <td
-      colSpan={colSpan}
-      style={{ padding: "10px 12px", verticalAlign: "middle", ...style }}
-    >
+    <td colSpan={colSpan} style={{ padding: "10px 12px", verticalAlign: "middle", ...style }}>
       {children}
     </td>
   );

@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class WipStatus(str, Enum):
+class WipStatus(StrEnum):
     CREATED = "created"
     WAITING_DISPATCH = "waiting_dispatch"
     IN_SCHEDULE = "in_schedule"

@@ -113,9 +113,7 @@ export function LoginForm({ onSuccess }: Props) {
         style={{
           marginTop: 4,
           padding: "10px 16px",
-          background: submitting
-            ? "var(--s3)"
-            : "linear-gradient(135deg,#388bfd,#39d0d8)",
+          background: submitting ? "var(--s3)" : "linear-gradient(135deg,#388bfd,#39d0d8)",
           color: "#fff",
           fontWeight: 700,
           border: "none",
