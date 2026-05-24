@@ -394,19 +394,21 @@ export function SampleDetailModal({
                 </button>
               )}
 
-              {!isFactoryUser && selectedSampleInCurrentLab && sample.status === 'split' && (
-                <button
-                  onClick={() => onGoToWipPage(sample.id)}
-                  disabled={submitting}
-                  style={secondaryButtonStyle}
-                >
-                  查看 / 管理 WIP
-                </button>
-              )}
+              {!isFactoryUser &&
+                selectedSampleInCurrentLab &&
+                (sample.status === 'split' || sample.status === 'pending_transfer') && (
+                  <button
+                    onClick={() => onGoToWipPage(sample.id)}
+                    disabled={submitting}
+                    style={secondaryButtonStyle}
+                  >
+                    查看 / 管理 WIP / 分貨
+                  </button>
+                )}
 
               {!isFactoryUser &&
                 selectedSampleInCurrentLab &&
-                sample.status === 'split' &&
+                (sample.status === 'split' || sample.status === 'pending_transfer') &&
                 allWipsCompleted && (
                   <button
                     onClick={() => onRunSampleAction(sample.id, 'outbound')}
@@ -419,7 +421,7 @@ export function SampleDetailModal({
 
               {!isFactoryUser &&
                 selectedSampleInCurrentLab &&
-                sample.status === 'split' &&
+                (sample.status === 'split' || sample.status === 'pending_transfer') &&
                 shouldShowTransferAction && (
                   <button
                     onClick={onGoToTransferPage}

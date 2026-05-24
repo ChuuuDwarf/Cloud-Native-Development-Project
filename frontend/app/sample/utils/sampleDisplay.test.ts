@@ -17,7 +17,7 @@ import {
 const labAUser: CurrentUser = {
   id: 'u1',
   name: '張志明',
-  role: 'lab_staff',
+  role: 'lab_engineer',
   department: 'Lab A',
   lab_name: 'Lab A',
 }

@@ -23,8 +23,7 @@ describe('api helpers', () => {
     vi.unstubAllGlobals()
   })
 
-  it('apiGet 會送 GET request，並帶入 mock user header', async () => {
-    sessionStorage.setItem('mockUserId', 'user-laba-001')
+  it('apiGet 會送 GET request，並只使用正式 cookie auth，不再帶 mock user header', async () => {
 
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
@@ -36,9 +35,7 @@ describe('api helpers', () => {
       method: 'GET',
       cache: 'no-store',
       credentials: 'include',
-      headers: {
-        'x-user-id': 'user-laba-001',
-      },
+      headers: {},
       body: undefined,
     })
   })

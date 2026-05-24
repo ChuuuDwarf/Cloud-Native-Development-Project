@@ -41,13 +41,13 @@ def test_normalize_lab_code_keeps_wip_number_format_stable():
 
 
 def test_sample_visibility_filter_by_role():
-    lab_user = {"role": "lab_staff", "lab_name": "Lab A", "department": "Lab A"}
+    lab_user = {"role": "lab_engineer", "lab_name": "Lab A", "department": "Lab A"}
     clauses, params = build_sample_visibility_filter(lab_user)
     assert clauses == ["s.current_location LIKE :current_lab_prefix"]
     assert params["current_lab_prefix"] == "Lab A%"
 
-    factory_user = {"role": "factory_user", "name": "王小明"}
-    clauses, params = build_sample_visibility_filter(factory_user)
+    plant_user = {"role": "plant_user", "name": "王小明"}
+    clauses, params = build_sample_visibility_filter(plant_user)
     assert clauses == ["s.applicant_name = :applicant_name"]
     assert params == {"applicant_name": "王小明"}
 
@@ -73,10 +73,10 @@ def test_sample_permissions_match_factory_and_lab_rules():
         "status": "outbound",
         "current_location": "Lab A 待取件區",
     }
-    lab_a = {"role": "lab_staff", "lab_name": "Lab A", "department": "Lab A"}
-    lab_b = {"role": "lab_staff", "lab_name": "Lab B", "department": "Lab B"}
-    owner = {"role": "factory_user", "name": "王小明"}
-    other_factory = {"role": "factory_user", "name": "陳大華"}
+    lab_a = {"role": "lab_engineer", "lab_name": "Lab A", "department": "Lab A"}
+    lab_b = {"role": "lab_engineer", "lab_name": "Lab B", "department": "Lab B"}
+    owner = {"role": "plant_user", "name": "王小明"}
+    other_factory = {"role": "plant_user", "name": "陳大華"}
 
     assert can_view_sample(lab_a, sample_in_lab_a) is True
     assert can_manage_sample(lab_a, sample_in_lab_a) is True

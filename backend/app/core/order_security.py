@@ -6,21 +6,18 @@ from fastapi import HTTPException, status
 
 from app.common.dependencies import CurrentUser
 
-# The order module used to check legacy mock roles such as site_user/lab_manager.
-# Keep those business names as aliases, but resolve them from the real auth user
-# returned by /api/me instead of app.data.master_data.USERS.
 ROLE_ALIASES: dict[str, set[str]] = {
-    "site_user": {"site_user", "plant_user", "system_admin"},
-    "lab_manager": {"lab_manager", "lab_supervisor", "system_admin"},
-    "lab_staff": {"lab_staff", "lab_engineer", "lab_supervisor", "system_admin"},
-    "admin": {"admin", "system_admin"},
+    "plant_user": {"plant_user", "system_admin"},
+    "lab_supervisor": {"lab_supervisor", "system_admin"},
+    "lab_engineer": {"lab_engineer", "lab_supervisor", "system_admin"},
+    "system_admin": {"system_admin"},
 }
 
 PERMISSION_ALIASES: dict[str, set[str]] = {
-    "site_user": {"orders:create"},
-    "lab_manager": {"orders:approve"},
-    "lab_staff": {"orders:read"},
-    "admin": {"*"},
+    "plant_user": {"orders:create"},
+    "lab_supervisor": {"orders:approve"},
+    "lab_engineer": {"orders:read"},
+    "system_admin": {"*"},
 }
 
 

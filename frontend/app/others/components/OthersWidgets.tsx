@@ -50,8 +50,8 @@ export function CreateForm({
   ]
 
   const roleOptions = [
-    { value: 'factory_user', label: '廠區使用者' },
-    { value: 'lab_staff', label: '實驗室人員' },
+    { value: 'plant_user', label: '廠區使用者' },
+    { value: 'lab_engineer', label: '實驗室人員' },
     { value: 'lab_supervisor', label: '實驗室主管' },
     { value: 'system_admin', label: '系統管理者' },
   ]
@@ -170,8 +170,8 @@ export function CreateForm({
 
   function changeUserRole(role: string) {
     const roleNameMap: Record<string, string> = {
-      factory_user: '廠區使用者',
-      lab_staff: '實驗室人員',
+      plant_user: '廠區使用者',
+      lab_engineer: '實驗室人員',
       lab_supervisor: '實驗室主管',
       system_admin: '系統管理者',
     }
@@ -179,12 +179,12 @@ export function CreateForm({
     onChange('role', role)
     onChange('role_name', roleNameMap[role] ?? role)
 
-    if (role === 'factory_user') {
+    if (role === 'plant_user') {
       onChange('department', 'F12 廠')
       onChange('lab_name', '')
     }
 
-    if (role === 'lab_staff') {
+    if (role === 'lab_engineer') {
       onChange('department', 'Lab A')
       onChange('lab_name', 'Lab A')
     }

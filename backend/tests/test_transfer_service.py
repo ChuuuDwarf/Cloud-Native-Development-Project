@@ -12,15 +12,15 @@ from app.services.transfer_service import (
 
 def test_transfer_visibility_filter_for_lab_users_includes_incoming_and_outgoing():
     clauses, params = build_transfer_visibility_filter(
-        {"role": "lab_staff", "lab_name": "Lab A", "department": "Lab A"}
+        {"role": "lab_engineer", "lab_name": "Lab A", "department": "Lab A"}
     )
 
     assert clauses == ["(from_lab = :current_lab OR to_lab = :current_lab)"]
     assert params == {"current_lab": "Lab A"}
 
 
-def test_transfer_visibility_filter_blocks_factory_users_and_unknown_roles():
-    assert build_transfer_visibility_filter({"role": "factory_user", "name": "王小明"}) == (["1 = 0"], {})
+def test_transfer_visibility_filter_blocks_plant_users_and_unknown_roles():
+    assert build_transfer_visibility_filter({"role": "plant_user", "name": "王小明"}) == (["1 = 0"], {})
     assert build_transfer_visibility_filter({"role": "guest"}) == (["1 = 0"], {})
     assert build_transfer_visibility_filter({"role": "system_admin"}) == ([], {})
 

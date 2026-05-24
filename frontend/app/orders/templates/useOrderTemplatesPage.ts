@@ -135,6 +135,14 @@ export function useOrderTemplatesPage() {
     );
   }
 
+  function updateSampleNameGroup(group: SampleFormGroup, sampleName: string) {
+    setItems((current) =>
+      current.map((item, index) =>
+        index >= group.startIndex && index <= group.endIndex ? { ...item, sampleName } : item
+      )
+    );
+  }
+
   function moveExperiment(index: number, direction: -1 | 1) {
     setItems((current) => {
       const targetIndex = index + direction;
@@ -213,6 +221,7 @@ export function useOrderTemplatesPage() {
     addSample,
     removeItem,
     updateSampleGroup,
+    updateSampleNameGroup,
     moveExperiment,
     toggleExperimentForSample,
   };

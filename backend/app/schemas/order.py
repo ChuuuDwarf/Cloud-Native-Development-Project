@@ -11,8 +11,17 @@ from app.core.order_enums import OrderAction, OrderStatus, PriorityLevel
 
 class OrderItemCreate(BaseModel):
     sample_id: str = Field(alias="sampleId", min_length=1)
+    sample_name: str | None = Field(default=None, alias="sampleName")
     lab_id: str = Field(alias="labId", min_length=1)
     experiment_id: str = Field(alias="experimentId", min_length=1)
+
+    @field_validator("sample_name")
+    @classmethod
+    def normalize_sample_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
 
     model_config = {"populate_by_name": True}
 

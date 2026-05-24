@@ -148,6 +148,13 @@ const nav: NavSection[] = [
         label: "系統設定",
         roles: ["system_admin"],
       },
+      {
+        id: "others",
+        href: "/others",
+        icon: "",
+        label: "替代",
+        roles: ["system_admin"]
+      }
     ],
   },
 ];

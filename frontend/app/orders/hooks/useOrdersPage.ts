@@ -289,8 +289,9 @@ export function useOrdersPage() {
     setPriority(getOrderPriority(order));
     setItems(
       orderItems.length
-        ? orderItems.map(({ sampleId, labId, experimentId }) => ({
+        ? orderItems.map(({ sampleId, sampleName, labId, experimentId }) => ({
             sampleId,
+            sampleName: sampleName ?? "",
             labId,
             experimentId,
           }))
@@ -519,6 +520,14 @@ export function useOrdersPage() {
     );
   }
 
+  function updateSampleNameGroup(group: SampleFormGroup, sampleName: string) {
+    setItems((current) =>
+      current.map((item, index) =>
+        index >= group.startIndex && index <= group.endIndex ? { ...item, sampleName } : item
+      )
+    );
+  }
+
   function moveExperiment(index: number, direction: -1 | 1) {
     setItems((current) => {
       const targetIndex = index + direction;
@@ -671,6 +680,7 @@ export function useOrdersPage() {
     addSample,
     removeItem,
     updateSampleGroup,
+    updateSampleNameGroup,
     moveExperiment,
     toggleExperimentForSample,
   };

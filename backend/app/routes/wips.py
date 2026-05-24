@@ -19,9 +19,9 @@ ROLE_LABELS = {
     "system_admin": "系統管理者",
     "lab_supervisor": "實驗室主管",
     "lab_engineer": "實驗室人員",
-    "lab_staff": "實驗室人員",
+    "lab_engineer": "實驗室人員",
     "plant_user": "廠區使用者",
-    "factory_user": "廠區使用者",
+    "plant_user": "廠區使用者",
 }
 
 
@@ -438,6 +438,15 @@ async def wip_action(
                     "next_location": next_location,
                 },
             )
+
+            if action == "complete":
+                await update_sample_to_pending_transfer_if_ready(
+                    db=db,
+                    sample_id=wip["sample_id"],
+                    current_lab=current_lab,
+                    next_location=next_location,
+                    operator_name=operator_name,
+                )
 
     await db.execute(
         text(

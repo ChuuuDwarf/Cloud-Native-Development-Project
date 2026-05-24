@@ -12,22 +12,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 fallback_user = {
-    "id": "fallback",
-    "name": "張志明",
-    "role": "lab_staff",
-    "role_name": "實驗室人員",
-    "department": "Lab A",
-    "lab_name": "Lab A",
+    "id": "system",
+    "name": "系統",
+    "role": "system_admin",
+    "role_name": "系統管理者",
+    "department": None,
+    "lab_name": None,
     "email": "",
 }
 
 
-def get_active_user(request: Request | None = None):
+async def get_active_user(
+    db: AsyncSession,
+    request: Request | None = None,
+):
+    """讀正式目前使用者；不再依賴 mock user。"""
     try:
-        from app.routes.others import resolve_current_user
+        from app.services.temporary_others_service import resolve_current_user
 
-        return resolve_current_user(request)
+        return await resolve_current_user(db, request)
     except Exception:
+        await db.rollback()
         return fallback_user
 
 
@@ -36,22 +41,27 @@ def get_user_lab(user: dict):
 
 
 def get_lab_from_location(location: str | None):
+    """從位置字串推回 lab 名稱。
+
+    以前只支援 Lab A/B/C，現在改成支援正式 lab name：
+    例如「材料分析實驗室 實驗暫存區」=>「材料分析實驗室」。
+    """
     if not location:
         return None
 
     location = location.strip()
+    area_suffixes = [
+        "收樣區",
+        "實驗暫存區",
+        "機台區",
+        "交接待送區",
+        "待取件區",
+    ]
 
-    if location.startswith("Lab A"):
-        return "Lab A"
-
-    if location.startswith("Lab B"):
-        return "Lab B"
-
-    if location.startswith("Lab C"):
-        return "Lab C"
-
-    if location.startswith("Lab D"):
-        return "Lab D"
+    for area in area_suffixes:
+        suffix = f" {area}"
+        if location.endswith(suffix):
+            return location[: -len(suffix)].strip() or None
 
     return None
 
@@ -100,11 +110,11 @@ def normalize_location_for_action(
 
 
 def is_factory_role(role: str | None) -> bool:
-    return role in ("factory_user", "plant_user")
+    return role == "plant_user"
 
 
 def is_lab_role(role: str | None) -> bool:
-    return role in ("lab_staff", "lab_engineer", "lab_supervisor")
+    return role in ("lab_engineer", "lab_supervisor")
 
 
 def build_sample_visibility_filter(current_user: dict, scope: str | None = None):
@@ -156,7 +166,7 @@ def build_sample_visibility_filter(current_user: dict, scope: str | None = None)
 
         return where_clauses, params
 
-    if role in ("lab_staff", "lab_engineer"):
+    if role == "lab_engineer":
         current_lab = get_user_lab(current_user)
 
         if not current_lab:
@@ -207,7 +217,7 @@ async def can_view_sample(current_user: dict, sample: dict, db: AsyncSession | N
     if is_factory_role(role):
         return sample.get("applicant_name") == current_user.get("name")
 
-    if role in ("lab_staff", "lab_engineer"):
+    if role == "lab_engineer":
         current_lab = get_user_lab(current_user)
         current_location = sample.get("current_location") or ""
 

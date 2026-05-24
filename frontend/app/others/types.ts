@@ -2,10 +2,11 @@ export type CurrentUser = {
   id: string
   name: string
   role: string
-  role_name: string
-  department: string
-  lab_name: string | null
-  email: string
+  role_name?: string | null
+  department?: string | null
+  lab_name?: string | null
+  lab_code?: string | null
+  email?: string | null
 }
 
 export type RequestedExperiment = {
@@ -53,8 +54,23 @@ export type MasterDataItem = {
 export type OthersData = {
   current_user: CurrentUser
   users: CurrentUser[]
-  labs: Array<{ id: string; name: string; description: string }>
-  storage_locations: Array<{ id: string; code: string; name: string; lab_name: string }>
+  labs: Array<{
+    id: string
+    code?: string | null
+    name: string
+    description?: string | null
+    capacity?: number | null
+    is_active?: boolean | null
+  }>
+  storage_locations: Array<{
+    id: string
+    code: string
+    name: string
+    lab_name: string
+    lab_code?: string | null
+    area?: string | null
+    is_active?: boolean | null
+  }>
   orders: Array<{
     id: string
     order_no: string

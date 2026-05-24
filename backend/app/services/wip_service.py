@@ -14,24 +14,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 fallback_user = {
-    "id": "fallback",
-    "name": "張志明",
-    "role": "lab_staff",
-    "role_name": "實驗室人員",
-    "department": "Lab A",
-    "lab_name": "Lab A",
+    "id": "system",
+    "name": "系統",
+    "role": "system_admin",
+    "role_name": "系統管理者",
+    "department": None,
+    "lab_name": None,
     "email": "",
 }
 
 
-def get_active_user(request: Request | None = None):
+async def get_active_user(
+    db: AsyncSession,
+    request: Request | None = None,
+):
+    """讀正式目前使用者；不再依賴 mock user。"""
     try:
-        # TODO(integration): 目前暫時從 app.routes.others 取得使用者。
-        # 正式整合 role.md 後，請改接 GET /api/me 或正式 auth/user service。
-        from app.routes.others import resolve_current_user
+        from app.services.temporary_others_service import resolve_current_user
 
-        return resolve_current_user(request)
+        return await resolve_current_user(db, request)
     except Exception:
+        await db.rollback()
         return fallback_user
 
 
@@ -60,11 +63,11 @@ def machine_location(lab_name: str | None):
 
 
 def is_factory_role(role: str | None) -> bool:
-    return role in ("factory_user", "plant_user")
+    return role == "plant_user"
 
 
 def is_lab_role(role: str | None) -> bool:
-    return role in ("lab_staff", "lab_engineer", "lab_supervisor")
+    return role in ("lab_engineer", "lab_supervisor")
 
 
 def build_wip_visibility_filter(current_user: dict):
@@ -225,3 +228,125 @@ async def get_sample_by_id(sample_id: str, db: AsyncSession):
         return None
 
     return dict(sample._mapping)
+
+
+def parse_requested_experiments(experiment_item: str | None) -> list[dict[str, str]]:
+    if not experiment_item:
+        return []
+
+    experiments: list[dict[str, str]] = []
+
+    for part in experiment_item.split("、"):
+        part = part.strip()
+
+        if ":" not in part:
+            continue
+
+        lab_name, item_name = part.split(":", 1)
+        lab_name = lab_name.strip()
+        item_name = item_name.strip()
+
+        if lab_name and item_name:
+            experiments.append({"lab_name": lab_name, "experiment_item": item_name})
+
+    return experiments
+
+
+async def update_sample_to_pending_transfer_if_ready(
+    db: AsyncSession,
+    sample_id: str,
+    current_lab: str | None,
+    next_location: str | None,
+    operator_name: str,
+) -> None:
+    if not current_lab:
+        return
+
+    sample = await get_sample_by_id(sample_id, db)
+
+    if sample is None:
+        return
+
+    if sample.get("status") not in ("split", "pending_transfer"):
+        return
+
+    wips_result = await db.execute(
+        text(
+            """
+            SELECT
+                lab_name,
+                experiment_item,
+                status
+            FROM wips
+            WHERE sample_id = :sample_id
+            """
+        ),
+        {"sample_id": sample_id},
+    )
+    wips = [dict(row._mapping) for row in wips_result.fetchall()]
+
+    current_lab_wips = [wip for wip in wips if wip.get("lab_name") == current_lab]
+
+    if not current_lab_wips:
+        return
+
+    if any(wip.get("status") != "completed" for wip in current_lab_wips):
+        return
+
+    # 只要目前已建立的 WIP 都完成，就讓樣品進入 pending_transfer。
+    # pending_transfer 代表「待交接，尚未送出」，所以後續仍允許再分貨；
+    # 例如同一個 Lab 還有 requested_experiments 尚未產生 WIP 時，使用者可以在此狀態補分貨。
+    if any(wip.get("status") != "completed" for wip in wips):
+        return
+
+    if sample.get("status") == "pending_transfer":
+        return
+
+    await db.execute(
+        text(
+            """
+            UPDATE samples
+            SET
+                status = 'pending_transfer',
+                current_location = COALESCE(:next_location, current_location),
+                updated_at = NOW()
+            WHERE id = :sample_id
+            """
+        ),
+        {
+            "sample_id": sample_id,
+            "next_location": next_location,
+        },
+    )
+
+    await db.execute(
+        text(
+            """
+            INSERT INTO sample_histories (
+                sample_id,
+                action,
+                from_status,
+                to_status,
+                description,
+                operator_name,
+                lab_name
+            )
+            VALUES (
+                :sample_id,
+                'wips_completed_waiting_transfer',
+                :from_status,
+                'pending_transfer',
+                :description,
+                :operator_name,
+                :lab_name
+            )
+            """
+        ),
+        {
+            "sample_id": sample_id,
+            "from_status": sample.get("status"),
+            "description": f"{current_lab} 的 WIP 已完成，樣品待交接至下一個實驗室",
+            "operator_name": operator_name,
+            "lab_name": current_lab,
+        },
+    )

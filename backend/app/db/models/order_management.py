@@ -50,6 +50,7 @@ class OrderItemModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False, index=True)
     sample_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    sample_name: Mapped[str | None] = mapped_column(String(100))
     lab_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     experiment_id: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")

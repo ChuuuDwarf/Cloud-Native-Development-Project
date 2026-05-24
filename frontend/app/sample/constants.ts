@@ -15,6 +15,7 @@ export const sampleStatusText: Record<string, string> = {
   pending_receive: '待收樣',
   received: '已收樣',
   split: '已分貨',
+  pending_transfer: '待交接',
   transferring: '交接中',
   transfer_pending: '交接待送出',
   transferred_waiting_receive: '已轉出 / 等待接收實驗室收樣',

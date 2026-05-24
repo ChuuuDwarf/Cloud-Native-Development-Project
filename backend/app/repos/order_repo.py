@@ -16,7 +16,6 @@ from app.core.order_enums import OrderAction, OrderStatus, PriorityLevel
 from app.core.order_errors import bad_request, not_found
 from app.core.order_security import require_role, user_id
 from app.core.time import generate_order_no, utc_now
-from app.data.master_data import validate_order_master_data as validate_static_order_master_data
 from app.db.models import Department, Lab, LabCapability
 from app.db.models.order_management import (
     OrderHistoryModel,
@@ -40,6 +39,7 @@ from app.schemas.order import (
 
 class OrderItemMasterData(Protocol):
     sample_id: str
+    sample_name: str | None
     lab_id: str
     experiment_id: str
 
@@ -49,7 +49,7 @@ class OrderRepository:
         self.db = db
 
     async def create_order(self, payload: OrderCreate, current_user: CurrentUser) -> Order:
-        require_role(current_user, {"site_user"})
+        require_role(current_user, {"plant_user"})
         await self._validate_order_master_data(payload.department_id, payload.items)
 
         applicant_id = user_id(current_user)
@@ -105,7 +105,7 @@ class OrderRepository:
             and status_filter == OrderStatus.PENDING_APPROVAL
             and not applicant_id
         ):
-            actor = require_role(current_user, {"lab_manager"})
+            actor = require_role(current_user, {"lab_supervisor"})
             lab_ids = set(actor.get("labIds", []))
 
             if not lab_ids:
@@ -138,7 +138,7 @@ class OrderRepository:
         now = utc_now()
         order = await self._get_order_model(order_id)
         actor_id = user_id(current_user)
-        require_role(current_user, {"site_user"})
+        require_role(current_user, {"plant_user"})
         if actor_id != order.applicant_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -159,6 +159,7 @@ class OrderRepository:
             next_items = [
                 OrderItemCreate(
                     sampleId=item.sample_id,
+                    sampleName=item.sample_name,
                     labId=item.lab_id,
                     experimentId=item.experiment_id,
                 )
@@ -198,6 +199,7 @@ class OrderRepository:
                         [
                             OrderItemCreate(
                                 sampleId=item_patch.sample_id,
+                                sampleName=item_patch.sample_name,
                                 labId=item_patch.lab_id,
                                 experimentId=item_patch.experiment_id,
                             )
@@ -205,6 +207,7 @@ class OrderRepository:
                     )
 
                     target.sample_id = item_patch.sample_id
+                    target.sample_name = item_patch.sample_name
                     target.lab_id = item_patch.lab_id
                     target.experiment_id = item_patch.experiment_id
                     target.status = OrderStatus.DRAFT.value
@@ -239,7 +242,7 @@ class OrderRepository:
         now = utc_now()
         order = await self._get_order_model(order_id)
         actor_id = user_id(current_user)
-        require_role(current_user, {"site_user"})
+        require_role(current_user, {"plant_user"})
         if actor_id != order.applicant_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -280,7 +283,7 @@ class OrderRepository:
         from_status = order.status
 
         if payload.action in {OrderAction.SUBMIT, OrderAction.CANCEL}:
-            require_role(current_user, {"site_user"})
+            require_role(current_user, {"plant_user"})
             if actor_id != order.applicant_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -288,7 +291,7 @@ class OrderRepository:
                 )
 
         elif payload.action in {OrderAction.APPROVE, OrderAction.RETURN, OrderAction.REJECT}:
-            actor = require_role(current_user, {"lab_manager"})
+            actor = require_role(current_user, {"lab_supervisor"})
             lab_ids = set(actor.get("labIds", []))
             target_items = [
                 item
@@ -361,7 +364,7 @@ class OrderRepository:
 
         else:
             if payload.action == OrderAction.CONFIRM_DELIVERY:
-                require_role(current_user, {"site_user"})
+                require_role(current_user, {"plant_user"})
                 if actor_id != order.applicant_id:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
@@ -370,7 +373,7 @@ class OrderRepository:
 
                 await self.create_samples_for_confirmed_delivery(order, current_user)
             else:
-                require_role(current_user, {"lab_staff", "lab_manager"})
+                require_role(current_user, {"lab_engineer", "lab_supervisor"})
             order.status = to_status.value
 
         if payload.action == OrderAction.SUBMIT:
@@ -661,6 +664,19 @@ class OrderRepository:
                 f"{first_lab_name} 收樣區" if first_lab_name else "收樣區"
             )
 
+            sample_name_value = self._truncate_text(
+                next(
+                    (
+                        item.sample_name
+                        for item in sample_items
+                        if item.sample_name and item.sample_name.strip()
+                    ),
+                    None,
+                )
+                or sample_no,
+                100,
+            )
+
             sample_result = await self.db.execute(
                 text(
                     """
@@ -692,7 +708,7 @@ class OrderRepository:
                 {
                     "sample_no": sample_no,
                     "order_no": order.order_no,
-                    "sample_name": sample_no,
+                    "sample_name": sample_name_value,
                     "experiment_item": experiment_summary,
                     "applicant_name": current_user.name,
                     "applicant_department": order.department_id,
@@ -875,6 +891,7 @@ class OrderRepository:
     def _make_item(self, payload: OrderItemCreate, now: datetime) -> OrderItemModel:
         return OrderItemModel(
             sample_id=payload.sample_id,
+            sample_name=payload.sample_name,
             lab_id=payload.lab_id,
             experiment_id=payload.experiment_id,
             status=OrderStatus.DRAFT.value,
@@ -924,34 +941,22 @@ class OrderRepository:
         )
         capabilities_by_id = {str(capability.id): capability for capability in capabilities}
 
-        if department_exists or labs_by_key or capabilities_by_id:
-            if not department_exists:
-                raise bad_request(f"Unknown department: {department_id}")
+        if not department_exists:
+            raise bad_request(f"Unknown department: {department_id}")
 
-            for index, item in enumerate(items, start=1):
-                lab = labs_by_key.get(item.lab_id)
-                if lab is None:
-                    raise bad_request(f"Unknown lab in item {index}: {item.lab_id}")
+        for index, item in enumerate(items, start=1):
+            lab = labs_by_key.get(item.lab_id)
+            if lab is None:
+                raise bad_request(f"Unknown lab in item {index}: {item.lab_id}")
 
-                capability = capabilities_by_id.get(item.experiment_id)
-                if capability is None:
-                    raise bad_request(f"Unknown experiment in item {index}: {item.experiment_id}")
+            capability = capabilities_by_id.get(item.experiment_id)
+            if capability is None:
+                raise bad_request(f"Unknown experiment in item {index}: {item.experiment_id}")
 
-                if capability.lab_id != lab.id:
-                    raise bad_request(
-                        f"Experiment {item.experiment_id} does not belong to lab {item.lab_id}"
-                    )
-            return
-
-        static_items = [
-            OrderItemCreate(
-                sampleId=item.sample_id,
-                labId=item.lab_id,
-                experimentId=item.experiment_id,
-            )
-            for item in items
-        ]
-        validate_static_order_master_data(department_id, static_items)
+            if capability.lab_id != lab.id:
+                raise bad_request(
+                    f"Experiment {item.experiment_id} does not belong to lab {item.lab_id}"
+                )
 
     @staticmethod
     def _truncate_text(value: str | None, max_length: int) -> str | None:

@@ -12,25 +12,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 fallback_user = {
-    "id": "fallback",
-    "name": "張志明",
-    "role": "lab_staff",
-    "role_name": "實驗室人員",
-    "department": "Lab A",
-    "lab_name": "Lab A",
+    "id": "system",
+    "name": "系統",
+    "role": "system_admin",
+    "role_name": "系統管理者",
+    "department": None,
+    "lab_name": None,
     "email": "",
 }
 
 
-def get_active_user(request: Request | None = None):
-    try:
-        # TODO(integration): 目前暫時從 app.routes.others 取得使用者。
-        # 正式整合 role.md 後，請改接 GET /api/me 或正式 auth/user service。
-        from app.routes.others import resolve_current_user
+async def get_active_user(
+    db: AsyncSession,
+    request: Request | None = None,
+):
+    """讀正式目前使用者；不再依賴 mock user。
 
-        # 這裡保留舊行為，避免前端在正式 role API 上線前無法取得登入身分。
-        return resolve_current_user(request)
+    注意：這是 async function，route 端一定要用 await。
+    """
+    try:
+        from app.services.temporary_others_service import resolve_current_user
+
+        return await resolve_current_user(db, request)
     except Exception:
+        await db.rollback()
         return fallback_user
 
 
@@ -66,7 +71,7 @@ def build_transfer_visibility_filter(current_user: dict):
     if role == "system_admin":
         return where_clauses, params
 
-    if role in ("lab_staff", "lab_supervisor"):
+    if role in ("lab_engineer", "lab_supervisor"):
         current_lab = get_user_lab(current_user)
 
         if not current_lab:
@@ -80,7 +85,7 @@ def build_transfer_visibility_filter(current_user: dict):
         params["current_lab"] = current_lab
         return where_clauses, params
 
-    if role == "factory_user":
+    if role == "plant_user":
         where_clauses.append("1 = 0")
         return where_clauses, params
 

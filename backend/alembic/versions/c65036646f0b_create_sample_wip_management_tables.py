@@ -59,6 +59,7 @@ def upgrade():
                 'pending_receive',
                 'received',
                 'split',
+                'pending_transfer',
                 'transferring',
                 'in_storage',
                 'outbound',

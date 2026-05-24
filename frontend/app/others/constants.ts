@@ -15,20 +15,20 @@ export type TabKey = (typeof tabs)[number]['key']
 export const defaultForms: Record<TabKey, Record<string, string>> = {
   users: {
     name: '',
-    role: 'lab_staff',
+    role: 'lab_engineer',
     role_name: '實驗室人員',
-    department: 'Lab A',
-    lab_name: 'Lab A',
+    department: '',
+    lab_name: '',
     email: '',
   },
   labs: {
-    name: 'Lab A',
+    name: '',
     description: '材料與電性測試',
   },
   storage: {
     code: '',
     name: '',
-    lab_name: 'Lab A',
+    lab_name: '',
   },
   orders: {
     order_no: '',
@@ -36,7 +36,7 @@ export const defaultForms: Record<TabKey, Record<string, string>> = {
     applicant_department: 'F12 廠',
     sample_name: '晶圓切片',
     sample_quantity: '1',
-    requested_experiment_keys: 'Lab A::SEM 觀察',
+    requested_experiment_keys: '',
     priority: 'normal',
     status: 'approved',
   },
@@ -66,7 +66,7 @@ export const sampleStatusText: Record<string, string> = {
   pending_receive: '待收樣',
   received: '已收樣',
   split: '已分貨',
-  transferring: '交接中',
+  pending_transfer: '待交接',
   in_storage: '已入庫',
   outbound: '待取件',
   picked_up: '已取件',

@@ -53,6 +53,7 @@ export function OrderDetail({
                   rows={[
                     ["序號", `子單 ${index + 1}`],
                     ["樣品編號", item.sampleId],
+                    ["樣品名稱", item.sampleName || "-"],
                     ["實驗室", displayLabName(masterData, item.labId)],
                     ["實驗項目", displayExperimentName(masterData, item.experimentId)],
                     [

@@ -4,12 +4,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, apiPost } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error'
-import type { CurrentUser, OthersData, PayloadValue } from './types'
+import type { OthersData, PayloadValue } from './types'
 import { tabs, defaultForms, sampleStatusText, wipStatusText, priorityText, orderStatusText } from './constants'
 import type { TabKey } from './constants'
 import { formatRequestedExperiments } from './utils/format'
 import { CreateForm, SimpleTable } from './components/OthersWidgets'
-import { pageStyle, headerStyle, headerActionsStyle, titleStyle, subtitleStyle, cardStyle, cardHeaderStyle, sectionTitleStyle, mutedStyle, currentUserGridStyle, profileBoxStyle, avatarStyle, selectStyle, codeBlockStyle, pillStyle, statusPillStyle, tabHeaderStyle, tabBarStyle, tabStyle, activeTabStyle, primaryButtonStyle, secondaryButtonStyle, errorStyle, successStyle, noticeStyle, tableTitleStyle, tableWrapStyle, tableStyle, thStyle, tdStyle, monoTdStyle, emptyTdStyle, trStyle, successMiniTextStyle, masterGridStyle, miniCardStyle, chipWrapStyle, outlinePillStyle, mutedMonoStyle } from './styles'
+import { pageStyle, headerStyle, headerActionsStyle, titleStyle, subtitleStyle, cardStyle, cardHeaderStyle, sectionTitleStyle, mutedStyle, currentUserGridStyle, profileBoxStyle, avatarStyle, codeBlockStyle, pillStyle, statusPillStyle, tabHeaderStyle, tabBarStyle, tabStyle, activeTabStyle, primaryButtonStyle, secondaryButtonStyle, errorStyle, successStyle, noticeStyle, tableTitleStyle, tableWrapStyle, tableStyle, thStyle, tdStyle, monoTdStyle, emptyTdStyle, trStyle, successMiniTextStyle, masterGridStyle, miniCardStyle, chipWrapStyle, outlinePillStyle, mutedMonoStyle } from './styles'
 
 export default function OthersPage() {
   const [data, setData] = useState<OthersData | null>(null)
@@ -39,29 +39,6 @@ export default function OthersPage() {
     }
   }
 
-  async function switchUser(userId: string) {
-    try {
-      setSaving(true)
-      setError('')
-      setSuccessMessage('')
-
-      sessionStorage.setItem('mockUserId', userId)
-
-      // TODO(integration): 改接 role.md 的正式使用者/身分 API
-      await apiPost<CurrentUser>('/api/others/current-user', {
-        user_id: userId,
-      })
-
-      await loadData()
-      window.dispatchEvent(new Event('lims-current-user-changed'))
-      setSuccessMessage('目前分頁操作身分已切換，不會影響其他分頁')
-    } catch (err) {
-      setError(getErrorMessage(err, '切換使用者失敗'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function completeWip(wipId: string) {
     try {
       setSaving(true)
@@ -71,7 +48,7 @@ export default function OthersPage() {
       await apiPost(`/api/others/wips/${wipId}/complete`, {}) // TODO(integration): 改接 /api/wips/:id/actions complete
 
       await loadData()
-      setSuccessMessage('WIP 已標記完成，樣品位置已同步更新')
+      setSuccessMessage('WIP 狀態已標記為 completed；若此樣品目前所有 WIP 皆完成，樣品狀態會改為 pending_transfer，且仍可繼續分貨')
     } catch (err) {
       setError(getErrorMessage(err, '標記 WIP 完成失敗'))
     } finally {
@@ -231,14 +208,19 @@ export default function OthersPage() {
         <div>
           <h1 style={titleStyle}>替代資料切換</h1>
           <p style={subtitleStyle}>
-            先用 /api/others 補 sample_management.md 會用到、但其他模組尚未完成的資料。
-            這裡可以切換目前操作身分，也可以直接新增開發期假資料。
+            這裡整合正式 users、labs、orders、samples、wips 資料；storage locations 暫時由 labs 自動產生。
           </p>
         </div>
 
         <div style={headerActionsStyle}>
-          <button style={primaryButtonStyle} onClick={openCreateForm}>
-            新增資料
+          <button
+            style={{ ...secondaryButtonStyle, opacity: 0.55, cursor: 'not-allowed' }}
+            type="button"
+            disabled
+            onClick={openCreateForm}
+            title="mock 新增資料已移除，請改用正式模組建立資料"
+          >
+            新增資料已移除
           </button>
           <button style={secondaryButtonStyle} onClick={loadData}>
             重新整理
@@ -253,33 +235,24 @@ export default function OthersPage() {
         <div style={cardHeaderStyle}>
           <div>
             <div style={sectionTitleStyle}>目前操作身分</div>
-            <div style={mutedStyle}>用來模擬廠區使用者、實驗室 A/B 人員、主管、系統管理者。</div>
+            <div style={mutedStyle}>目前使用者由正式登入資訊或後端 /api/others current_user 決定，不再使用前端暫存的測試使用者。</div>
           </div>
-          <span style={pillStyle}>{currentUser.role_name}</span>
+          <span style={pillStyle}>{currentUser.role_name ?? currentUser.role ?? '-'}</span>
         </div>
 
         <div style={currentUserGridStyle}>
           <div style={profileBoxStyle}>
-            <div style={avatarStyle}>{currentUser.name.slice(0, 1)}</div>
+            <div style={avatarStyle}>{(currentUser.name ?? '系').slice(0, 1)}</div>
             <div>
-              <div style={{ fontWeight: 800 }}>{currentUser.name}</div>
-              <div style={mutedStyle}>{currentUser.department}</div>
-              <div style={mutedStyle}>{currentUser.email}</div>
+              <div style={{ fontWeight: 800 }}>{currentUser.name ?? '系統'}</div>
+              <div style={mutedStyle}>{currentUser.department ?? currentUser.lab_name ?? '-'}</div>
+              <div style={mutedStyle}>{currentUser.email ?? '-'}</div>
             </div>
           </div>
 
-          <select
-            value={currentUser.id}
-            onChange={(event) => switchUser(event.target.value)}
-            disabled={saving}
-            style={selectStyle}
-          >
-            {data.users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.role_name} / {user.name} / {user.department}
-              </option>
-            ))}
-          </select>
+          <div style={noticeStyle}>
+            mock 使用者切換已移除。若要切換身分，請從正式登入流程或後端 auth / users 資料處理。
+          </div>
         </div>
 
         <pre style={codeBlockStyle}>{currentUserPayload}</pre>
@@ -299,8 +272,8 @@ export default function OthersPage() {
             ))}
           </div>
 
-          <button style={primaryButtonStyle} onClick={openCreateForm}>
-            新增目前分類資料
+          <button style={secondaryButtonStyle} onClick={loadData}>
+            重新整理目前資料
           </button>
         </div>
 
@@ -320,11 +293,11 @@ export default function OthersPage() {
           <SimpleTable
             headers={['身分', '姓名', '部門', 'Lab', 'Email']}
             rows={data.users.map((user) => [
-              user.role_name,
+              user.role_name ?? user.role,
               user.name,
-              user.department,
+              user.department ?? '-',
               user.lab_name ?? '-',
-              user.email,
+              user.email ?? '-', 
             ])}
           />
         )}
@@ -332,7 +305,7 @@ export default function OthersPage() {
         {activeTab === 'labs' && (
           <SimpleTable
             headers={['代碼', '名稱', '說明']}
-            rows={data.labs.map((lab) => [lab.id, lab.name, lab.description])}
+            rows={data.labs.map((lab) => [lab.code ?? lab.id, lab.name, lab.description ?? '-'])}
           />
         )}
 

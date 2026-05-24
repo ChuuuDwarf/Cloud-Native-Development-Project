@@ -1,8 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useAuth } from '@/contexts/AuthContext'
 import { apiGet, apiPost } from '@/lib/api'
 import { getErrorMessage, logClientError } from '@/lib/error'
+import { masterDataApi } from '@/services/master-data-api'
 import type {
   CurrentUser,
   Sample,
@@ -12,7 +15,7 @@ import type {
   ReturnCandidate,
   Candidate,
 } from './types'
-import { fallbackUser, sampleStatusText, blockingTransferStatuses } from './constants'
+import { sampleStatusText, blockingTransferStatuses } from './constants'
 import {
   normalizeLab,
   getRequestedExperiments,
@@ -68,7 +71,11 @@ import {
 } from './styles'
 
 export default function SampleTransferPage() {
-  const [currentUser, setCurrentUser] = useState<CurrentUser>(fallbackUser)
+  const { user: authUser, isLoading: authLoading } = useAuth()
+  const masterQuery = useQuery({
+    queryKey: ['master-data'],
+    queryFn: masterDataApi.fetch,
+  })
   const [samples, setSamples] = useState<Sample[]>([])
   const [wips, setWips] = useState<Wip[]>([])
   const [transfers, setTransfers] = useState<Transfer[]>([])
@@ -79,8 +86,36 @@ export default function SampleTransferPage() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
 
-  const currentLab = currentUser.lab_name || currentUser.department || 'Lab A'
-  const operatorName = currentUser.name || fallbackUser.name
+  const currentLabData = masterQuery.data?.labs.find((lab) => lab.id === authUser?.labId)
+  const currentDepartment = masterQuery.data?.departments.find(
+    (department) => department.id === authUser?.departmentId,
+  )
+
+  const currentUser = useMemo<CurrentUser | null>(() => {
+    if (!authUser) return null
+
+    const roleLabelMap: Record<string, string> = {
+      system_admin: '系統管理者',
+      lab_supervisor: '實驗室主管',
+      lab_engineer: '實驗室人員',
+      lab_engineer: '實驗室人員',
+      plant_user: '廠區使用者',
+      plant_user: '廠區使用者',
+    }
+
+    return {
+      id: authUser.id,
+      name: authUser.name,
+      role: authUser.role,
+      role_name: roleLabelMap[authUser.role] ?? authUser.role,
+      department: currentDepartment?.name ?? currentDepartment?.code ?? '',
+      lab_name: currentLabData?.name ?? currentLabData?.code ?? null,
+      email: authUser.email,
+    }
+  }, [authUser, currentDepartment, currentLabData])
+
+  const currentLab = currentUser?.lab_name || currentUser?.department || ''
+  const operatorName = currentUser?.name ?? ''
 
   const isOutgoingTransfer = (transfer: Transfer) =>
     normalizeLab(transfer.from_lab) === normalizeLab(currentLab)
@@ -377,18 +412,12 @@ export default function SampleTransferPage() {
     )
   }, [candidates, selectedCandidateKey])
 
-  async function loadCurrentUser() {
-    try {
-      const me = await apiGet<CurrentUser>('/api/me')
-      setCurrentUser(me)
-      return me
-    } catch {
-      setCurrentUser(fallbackUser)
-      return fallbackUser
-    }
-  }
-
   async function loadData(options?: { resetCandidate?: boolean }) {
+    if (!currentUser) {
+      setLoading(false)
+      return
+    }
+
     const resetCandidate = options?.resetCandidate ?? true
 
     try {
@@ -396,15 +425,12 @@ export default function SampleTransferPage() {
       setError('')
       setSuccessMessage('')
 
-      const meData = await loadCurrentUser()
-
       const [sampleData, wipData, transferData] = await Promise.all([
         apiGet<Sample[]>('/api/samples'),
         apiGet<Wip[]>('/api/wips?include_all_for_flow=true'),
         apiGet<Transfer[]>('/api/transfers'),
       ])
 
-      setCurrentUser(meData)
       setSamples(sampleData)
       setWips(wipData)
       setTransfers(transferData)
@@ -550,7 +576,23 @@ export default function SampleTransferPage() {
   useEffect(() => {
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [currentUser?.id, currentUser?.role, currentUser?.lab_name])
+
+  if (authLoading || masterQuery.isLoading) {
+    return (
+      <section style={panelStyle}>
+        <div style={emptyStyle}>載入中...</div>
+      </section>
+    )
+  }
+
+  if (!currentUser) {
+    return (
+      <section style={panelStyle}>
+        <div style={emptyStyle}>尚未取得登入身分</div>
+      </section>
+    )
+  }
 
   return (
     <div>
@@ -573,7 +615,7 @@ export default function SampleTransferPage() {
       </div>
 
       <div style={currentUserBoxStyle}>
-        <div style={currentUserTitleStyle}>目前登入者</div>
+        <div style={currentUserTitleStyle}>目前操作身分</div>
         <div style={currentUserTextStyle}>
           {currentUser.name} · {currentUser.role_name ?? currentUser.role} · {currentLab}
         </div>

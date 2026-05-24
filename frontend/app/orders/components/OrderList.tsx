@@ -143,7 +143,8 @@ export function OrderList({
                           <span>{statusLabel[itemStatus as OrderStatus] || itemStatus}</span>
                         </div>
                         <div style={{ color: "var(--text2)", fontSize: 12, marginTop: 4 }}>
-                          樣品：{item.sampleId}｜實驗：
+                          樣品：{item.sampleId}
+                          {item.sampleName ? ` / ${item.sampleName}` : ""}｜實驗：
                           {displayExperimentName(masterData, item.experimentId)}
                           {item.approvedBy &&
                             `｜核准：${displayUserName(item.approvedBy, usersById, currentUser)}`}

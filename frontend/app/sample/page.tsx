@@ -90,7 +90,7 @@ export default function SamplePage() {
     lab_supervisor: '實驗室主管',
     lab_engineer: '實驗室人員',
     plant_user: '廠區使用者',
-    factory_user: '廠區使用者',
+    plant_user: '廠區使用者',
   }
 
   const roleLabel = currentUser ? roleLabelMap[currentUser.role] ?? currentUser.role : '—'
@@ -295,7 +295,7 @@ export default function SamplePage() {
     Boolean(selectedSample) &&
     !isFactoryUser &&
     selectedSampleInCurrentLab &&
-    selectedSample?.status === 'split' &&
+    (selectedSample?.status === 'split' || selectedSample?.status === 'pending_transfer') &&
     currentLabWipsCompleted &&
     !hasNextLab
 
@@ -303,7 +303,7 @@ export default function SamplePage() {
     Boolean(selectedSample) &&
     !isFactoryUser &&
     selectedSampleInCurrentLab &&
-    selectedSample?.status === 'split' &&
+    (selectedSample?.status === 'split' || selectedSample?.status === 'pending_transfer') &&
     currentLabWipsCompleted &&
     hasNextLab
 
@@ -324,7 +324,7 @@ export default function SamplePage() {
   }).length
 
   const inLabCount = baseSamplesForCount.filter((sample) => {
-    if (!['received', 'split', 'transferring', 'in_storage'].includes(sample.status)) {
+    if (!['received', 'split', 'pending_transfer', 'transferring', 'in_storage'].includes(sample.status)) {
       return false
     }
 
@@ -377,6 +377,7 @@ export default function SamplePage() {
     selectedSampleInCurrentLab &&
     (selectedSample?.status === 'pending_receive' ||
       selectedSample?.status === 'received' ||
+      selectedSample?.status === 'pending_transfer' ||
       selectedSample?.status === 'transferring' ||
       selectedSample?.status === 'split')
 
@@ -528,6 +529,7 @@ export default function SamplePage() {
       if (sample.status === 'pending_receive') return '樣品已送出，等待實驗室確認收樣。'
       if (sample.status === 'received') return '實驗室已收樣，等待建立或執行實驗子單。'
       if (sample.status === 'split') return '樣品已進入實驗流程，可在此追蹤 WIP / 實驗子單進度。'
+      if (sample.status === 'pending_transfer') return '本階段實驗已完成，等待實驗室交接至下一站。'
       if (sample.status === 'outbound') return '實驗已完成，樣品等待取回。實際拿到樣品後，可以確認取件。'
       if (sample.status === 'picked_up') return '樣品已取回，流程完成。'
       return '目前僅提供樣品狀態與歷程查詢。'
@@ -557,6 +559,10 @@ export default function SamplePage() {
 
     if (sample.status === 'split' && currentLabWipsCompleted && hasNextLab) {
       return '本 Lab 的 WIP 已完成，但此樣品後面還有其他實驗室要處理。下一步請前往交接流轉，移交給下一個 Lab。'
+    }
+
+    if (sample.status === 'pending_transfer') {
+      return '本 Lab 目前已建立的 WIP 都完成，樣品可前往交接流轉；若尚未送出，也可以回到 WIP / 分貨管理繼續補分貨。'
     }
 
     if (sample.status === 'split' && currentLabWipsCompleted && !hasNextLab) {

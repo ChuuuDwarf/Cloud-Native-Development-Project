@@ -16,6 +16,7 @@ export function SampleExperimentEditor({
   items,
   masterData,
   onSampleChange,
+  onSampleNameChange,
   onToggleExperiment,
   onMoveExperiment,
   onRemoveItem,
@@ -24,6 +25,7 @@ export function SampleExperimentEditor({
   items: FormItem[];
   masterData: Pick<MasterData, "labs" | "experiments">;
   onSampleChange: (group: SampleFormGroup, sampleId: string) => void;
+  onSampleNameChange: (group: SampleFormGroup, sampleName: string) => void;
   onToggleExperiment: (group: SampleFormGroup, experiment: Experiment, checked: boolean) => void;
   onMoveExperiment: (index: number, direction: -1 | 1) => void;
   onRemoveItem: (index: number) => void;
@@ -43,6 +45,15 @@ export function SampleExperimentEditor({
             <input
               value={group.sampleId}
               onChange={(event) => onSampleChange(group, event.target.value)}
+              style={inputStyle}
+            />
+          </Field>
+
+          <Field label="樣品名稱">
+            <input
+              value={group.sampleName}
+              onChange={(event) => onSampleNameChange(group, event.target.value)}
+              placeholder="例如：晶圓切片 A"
               style={inputStyle}
             />
           </Field>

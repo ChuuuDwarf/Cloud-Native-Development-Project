@@ -67,14 +67,14 @@ describe('wipForm 功能測試', () => {
     const userWithLab: CurrentUser = {
       id: 'u1',
       name: '張志明',
-      role: 'lab_staff',
+      role: 'lab_engineer',
       department: 'Lab B',
       lab_name: 'Lab A',
     }
     const userWithoutLab: CurrentUser = {
       id: 'u2',
       name: '李小華',
-      role: 'lab_staff',
+      role: 'lab_engineer',
       department: 'Lab B',
       lab_name: null,
     }

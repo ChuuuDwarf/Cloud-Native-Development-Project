@@ -21,7 +21,7 @@ async def get_transfers(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
+    current_user = await get_active_user(db, request)
     where_clauses, params = build_transfer_visibility_filter(current_user)
 
     where_sql = ""
@@ -68,9 +68,9 @@ async def create_transfer(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
+    current_user = await get_active_user(db, request)
 
-    if current_user.get("role") == "factory_user":
+    if current_user.get("role") == "plant_user":
         raise HTTPException(
             status_code=403,
             detail="廠區使用者不能建立交接單",
@@ -108,7 +108,7 @@ async def create_transfer(
 
     current_lab = get_user_lab(current_user)
 
-    if current_user.get("role") in ("lab_staff", "lab_supervisor"):
+    if current_user.get("role") in ("lab_engineer", "lab_supervisor"):
         if current_lab != from_lab:
             raise HTTPException(
                 status_code=403,
@@ -122,7 +122,7 @@ async def create_transfer(
         wip_no = payload.get("wip_no")
         current_status = sample.get("status")
 
-        if current_user.get("role") in ("lab_staff", "lab_supervisor"):
+        if current_user.get("role") in ("lab_engineer", "lab_supervisor"):
             sample_location = sample.get("current_location") or ""
             if current_lab and not sample_location.startswith(current_lab):
                 raise HTTPException(
@@ -137,7 +137,7 @@ async def create_transfer(
         wip_no = payload.get("wip_no") or wip.get("wip_no")
         current_status = wip.get("status")
 
-        if current_user.get("role") in ("lab_staff", "lab_supervisor"):
+        if current_user.get("role") in ("lab_engineer", "lab_supervisor"):
             wip_location = wip.get("current_location") or ""
             if current_lab and not wip_location.startswith(current_lab):
                 raise HTTPException(
@@ -337,9 +337,9 @@ async def transfer_action(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
+    current_user = await get_active_user(db, request)
 
-    if current_user.get("role") == "factory_user":
+    if current_user.get("role") == "plant_user":
         raise HTTPException(
             status_code=403,
             detail="廠區使用者不能操作交接單",
@@ -361,7 +361,7 @@ async def transfer_action(
     if not operator_name:
         raise HTTPException(status_code=400, detail="operator_name is required")
 
-    if current_user.get("role") in ("lab_staff", "lab_supervisor"):
+    if current_user.get("role") in ("lab_engineer", "lab_supervisor"):
         if (
             current_lab
             and transfer_data.get("from_lab")

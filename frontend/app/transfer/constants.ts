@@ -3,7 +3,7 @@ import type { CurrentUser } from './types'
 export const fallbackUser: CurrentUser = {
   id: 'fallback',
   name: '張志明',
-  role: 'lab_staff',
+  role: 'lab_engineer',
   role_name: '實驗室人員',
   department: 'Lab A',
   lab_name: 'Lab A',
@@ -14,6 +14,7 @@ export const sampleStatusText: Record<string, string> = {
   pending_receive: '待收樣',
   received: '已收樣',
   split: '已分貨',
+  pending_transfer: '待交接',
   transferring: '交接中',
   in_storage: '已入庫',
   outbound: '待取件',

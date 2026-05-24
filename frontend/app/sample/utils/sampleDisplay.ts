@@ -6,11 +6,11 @@ export function isSystemAdmin(user: CurrentUser) {
 }
 
 export function isLabUser(user: CurrentUser) {
-  return ['lab_staff', 'lab_engineer', 'lab_supervisor'].includes(user.role)
+  return ['lab_engineer', 'lab_supervisor'].includes(user.role)
 }
 
 export function isFactoryUser(user: CurrentUser) {
-  return ['plant_user', 'factory_user'].includes(user.role)
+  return user.role === 'plant_user'
 }
 
 export function getRoleLabel(user: CurrentUser) {
@@ -20,9 +20,7 @@ export function getRoleLabel(user: CurrentUser) {
     system_admin: '系統管理者',
     lab_supervisor: '實驗室主管',
     lab_engineer: '實驗室人員',
-    lab_staff: '實驗室人員',
     plant_user: '廠區使用者',
-    factory_user: '廠區使用者',
   }
 
   return roleLabelMap[user.role] ?? user.role ?? '未知角色'
@@ -36,6 +34,10 @@ export function isActiveSampleStatus(status: Sample['status']) {
   return !['outbound', 'picked_up', 'lost', 'damaged', 'cancelled'].includes(status)
 }
 
+function normalizeLocationText(value: string) {
+  return value.replace(/\s+/g, '').toLowerCase()
+}
+
 export function isSampleInCurrentLab(sample: Sample | null | undefined, user: CurrentUser) {
   if (!sample || !isLabUser(user)) return false
 
@@ -43,12 +45,17 @@ export function isSampleInCurrentLab(sample: Sample | null | undefined, user: Cu
   if (!currentLab) return false
 
   const location = sample.current_location ?? ''
-  return location.startsWith(currentLab)
+  if (!location) return false
+
+  // 樣品是否還在本 Lab，應以目前位置判斷，不應只用 pending_transfer 狀態判斷。
+  // pending_transfer 代表「可交接但尚未送出」，只要位置仍是本 Lab 的暫存 / 待送區，就仍視為在本 Lab。
+  return normalizeLocationText(location).startsWith(normalizeLocationText(currentLab))
 }
 
 export function shouldMaskSampleForLab(sample: Sample, user: CurrentUser) {
   if (!isLabUser(user)) return false
   if (['picked_up', 'lost', 'damaged', 'cancelled'].includes(sample.status)) return false
+  if (sample.status === 'pending_transfer') return false
 
   return !isSampleInCurrentLab(sample, user)
 }

@@ -44,6 +44,7 @@ def test_schema_has_lifecycle_status_constraints_for_samples_wips_and_transfers(
         "pending_receive",
         "received",
         "split",
+        "pending_transfer",
         "transferring",
         "in_storage",
         "outbound",

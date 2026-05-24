@@ -1,17 +1,26 @@
-# TODO(integration): 這個 route 是暫時替代層，專案合併後預期會刪除。
-# 目前提供 role/order/system_setting/schedule/warn 等模組尚未完成時的 mock API。
-# 後續請依 sample_management.md 改接：
-# - role.md: GET /api/me
-# - order_management.md: GET /api/orders/:id, POST /api/orders/:id/actions
-# - system_setting.md: GET /api/storage-locations, GET /api/labs, GET /api/master-data
-# - schedule.md: GET /api/schedules, GET /api/dispatches
-# - warn.md: GET /api/issues, POST /api/issues
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.services.wip_service import update_sample_to_pending_transfer_if_ready
+from app.services.temporary_others_service import (
+    experiment_temp_location,
+    get_generated_storage_locations,
+    get_real_labs,
+    get_real_order,
+    get_real_orders,
+    get_real_users,
+    generate_sample_no,
+    generate_unique_wip_no,
+    master_data,
+    normalize_requested_experiments,
+    parse_requested_experiments_from_sample,
+    receive_location,
+    removed_endpoint_response,
+    resolve_current_user,
+    resolve_real_lab_name,
+)
 
 router = APIRouter(
     prefix="/api",
@@ -19,18 +28,19 @@ router = APIRouter(
 )
 
 
-# 這個 route 檔現在只保留 API endpoint 與 request/response 組裝。
-# 權限、位置、ID、狀態流轉等 helper 已拆到 service 檔，方便後續維護與測試。
-from app.services.temporary_others_service import *  # noqa: F403 - route endpoint 會使用拆出的 helper
-
-# TODO(integration): 改接 role.md 的 GET /api/me。
 @router.get("/me")
-def get_current_user(request: Request):
-    return resolve_current_user(request)
+async def get_current_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    return await resolve_current_user(db, request)
 
 
 @router.get("/others")
-async def get_others(request: Request, db: AsyncSession = Depends(get_db)):
+async def get_others(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     sample_result = await db.execute(
         text(
             """
@@ -63,6 +73,7 @@ async def get_others(request: Request, db: AsyncSession = Depends(get_db)):
                 w.sample_id,
                 w.order_no,
                 w.lab_name,
+                COALESCE(l.name, w.lab_name) AS real_lab_name,
                 w.experiment_item,
                 w.priority,
                 w.status,
@@ -77,6 +88,10 @@ async def get_others(request: Request, db: AsyncSession = Depends(get_db)):
             FROM wips w
             LEFT JOIN samples s
                 ON s.id = w.sample_id
+            LEFT JOIN labs l
+                ON CAST(l.id AS TEXT) = w.lab_name
+                OR l.code = w.lab_name
+                OR l.name = w.lab_name
             ORDER BY w.created_at DESC
             LIMIT 100
             """
@@ -84,348 +99,79 @@ async def get_others(request: Request, db: AsyncSession = Depends(get_db)):
     )
     wips = [dict(row._mapping) for row in wip_result]
 
+    labs = await get_real_labs(db)
+    storage_locations = await get_generated_storage_locations(db)
+    current_user = await resolve_current_user(db, request)
+
+    try:
+        users = await get_real_users(db)
+    except Exception:
+        await db.rollback()
+        users = []
+
+    try:
+        orders = await get_real_orders(db)
+    except Exception:
+        await db.rollback()
+        orders = []
+
     return {
-        "current_user": resolve_current_user(request),
-        "users": mock_users,
-        "labs": mock_labs,
-        "storage_locations": mock_storage_locations,
-        "orders": mock_orders,
+        "current_user": current_user,
+        "users": users,
+        "labs": labs,
+        "storage_locations": storage_locations,
+        "orders": orders,
         "samples": samples,
         "wips": wips,
-        "schedules": mock_schedules,
-        "dispatches": mock_dispatches,
-        "issues": mock_issues,
+        # 這些模組如果還沒正式 DB，先回傳空陣列，不再吃 mock。
+        "schedules": [],
+        "dispatches": [],
+        "issues": [],
         "master_data": master_data,
     }
 
 
-@router.post("/others/current-user")
-def switch_current_user(payload: dict):
-    global current_user_id
-
-    user_id = payload.get("user_id")
-
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id is required")
-
-    user = find_user(user_id)
-
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    current_user_id = user_id
-    return user
-
-
+# mock user 已移除。這支保留路由避免前端打到時 NameError，但明確回 410。
 @router.post("/others/users")
-def create_mock_user(payload: dict):
-    role = payload.get("role", "lab_staff")
-    role_name = payload.get("role_name")
-
-    if not role_name:
-        role_name_map = {
-            "factory_user": "廠區使用者",
-            "lab_staff": "實驗室人員",
-            "lab_supervisor": "實驗室主管",
-            "system_admin": "系統管理者",
-        }
-        role_name = role_name_map.get(role, role)
-
-    user = {
-        "id": payload.get("id") or next_id("user", mock_users),
-        "name": payload.get("name") or "未命名使用者",
-        "role": role,
-        "role_name": role_name,
-        "department": payload.get("department") or "",
-        "lab_name": payload.get("lab_name") or None,
-        "email": payload.get("email") or "",
-    }
-
-    mock_users.append(user)
-    return user
+def create_user_removed(payload: dict):
+    return removed_endpoint_response("POST /api/others/users")
 
 
+# mock lab 已移除。請使用正式 labs table。
 @router.post("/others/labs")
-def create_mock_lab(payload: dict):
-    lab = {
-        "id": payload.get("id") or next_id("lab", mock_labs),
-        "name": payload.get("name") or "未命名實驗室",
-        "description": payload.get("description") or "",
-    }
-
-    mock_labs.append(lab)
-    return lab
+def create_lab_removed(payload: dict):
+    return removed_endpoint_response("POST /api/others/labs")
 
 
+# storage_locations 目前由 labs 自動產生，不再允許新增 mock storage。
 @router.post("/others/storage-locations")
-def create_mock_storage_location(payload: dict):
-    location = {
-        "id": payload.get("id") or next_id("storage", mock_storage_locations),
-        "code": payload.get("code") or f"LOC-{len(mock_storage_locations) + 1:03d}",
-        "name": payload.get("name") or "未命名儲位",
-        "lab_name": payload.get("lab_name") or "Lab A",
-    }
-
-    mock_storage_locations.append(location)
-    return location
+def create_storage_location_removed(payload: dict):
+    return removed_endpoint_response("POST /api/others/storage-locations")
 
 
 @router.post("/others/orders")
-async def create_mock_order(
-    payload: dict,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    current_user = resolve_current_user(request)
+def create_order_removed(payload: dict):
+    return removed_endpoint_response("POST /api/others/orders")
 
-    order_no = payload.get("order_no") or generate_order_no()
-    applicant_name = payload.get("applicant_name") or "未命名申請人"
-    applicant_department = payload.get("applicant_department") or "F12 廠"
-    sample_name = payload.get("sample_name") or "未命名樣品"
-    sample_quantity = payload.get("sample_quantity") or "1"
-    priority = payload.get("priority") or "normal"
-    status = payload.get("status") or "approved"
-
-    requested_experiments = payload.get("requested_experiments") or []
-
-    if not requested_experiments:
-        requested_experiments = [
-            {
-                "lab_name": payload.get("target_lab") or "Lab A",
-                "experiment_item": payload.get("test_item") or "SEM 觀察",
-            }
-        ]
-
-    if status not in ("approved", "pending_receive"):
-        raise HTTPException(
-            status_code=400,
-            detail="新增測試委託單時，status 只能是 approved 或 pending_receive",
-        )
-
-    existing_order = next(
-        (
-            item
-            for item in mock_orders
-            if item.get("order_no") == order_no or item.get("id") == payload.get("id")
-        ),
-        None,
-    )
-
-    if existing_order is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="這個委託單號已經存在，請換一個委託單號",
-        )
-
-    existing_sample_result = await db.execute(
-        text(
-            """
-            SELECT id
-            FROM samples
-            WHERE order_no = :order_no
-            LIMIT 1
-            """
-        ),
-        {"order_no": order_no},
-    )
-    existing_sample = existing_sample_result.fetchone()
-
-    if existing_sample is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="這個委託單號已經有對應的 sample，請換一個委託單號",
-        )
-
-    order = {
-        "id": payload.get("id") or next_id("order", mock_orders),
-        "order_no": order_no,
-        "applicant_name": applicant_name,
-        "applicant_department": applicant_department,
-        "sample_name": sample_name,
-        "sample_quantity": sample_quantity,
-        "requested_experiments": requested_experiments,
-        "priority": priority,
-        "status": status,
-        "note": payload.get("note"),
-    }
-
-    mock_orders.append(order)
-
-    # approved = 委託單已核准，但廠區還沒有確認送樣。
-    # 這時候不建立 samples，也不會出現在 Lab 收樣區。
-    if status == "approved":
-        return {
-            "order": order,
-            "sample": None,
-            "message": "委託單已建立為 approved。尚未確認送樣，因此不會產生待收樣 sample。",
-        }
-
-    # pending_receive = 廠區已確認送樣，才產生 sample 給實驗室收樣。
-    experiment_summary = "、".join(
-        [
-            f"{item.get('lab_name')}:{item.get('experiment_item')}"
-            for item in requested_experiments
-        ]
-    )
-
-    first_lab = requested_experiments[0].get("lab_name", "Lab A")
-    sample_no = await generate_sample_no(db)
-    current_location = receive_location(first_lab)
-
-    note = payload.get("note")
-
-    sample_result = await db.execute(
-        text(
-            """
-            INSERT INTO samples (
-                sample_no,
-                order_no,
-                sample_name,
-                experiment_item,
-                applicant_name,
-                applicant_department,
-                status,
-                current_location,
-                note
-            )
-            VALUES (
-                :sample_no,
-                :order_no,
-                :sample_name,
-                :experiment_item,
-                :applicant_name,
-                :applicant_department,
-                'pending_receive',
-                :current_location,
-                :note
-            )
-            RETURNING *
-            """
-        ),
-        {
-            "sample_no": sample_no,
-            "order_no": order_no,
-            "sample_name": sample_name,
-            "experiment_item": experiment_summary,
-            "applicant_name": applicant_name,
-            "applicant_department": applicant_department,
-            "current_location": current_location,
-            "note": note,
-        },
-    )
-
-    sample = dict(sample_result.fetchone()._mapping)
-
-    await db.execute(
-        text(
-            """
-            INSERT INTO sample_histories (
-                sample_id,
-                action,
-                from_status,
-                to_status,
-                description,
-                operator_name,
-                lab_name
-            )
-            VALUES (
-                :sample_id,
-                'delivery_confirmed_create_sample',
-                NULL,
-                'pending_receive',
-                :description,
-                :operator_name,
-                :lab_name
-            )
-            """
-        ),
-        {
-            "sample_id": sample["id"],
-            "description": (
-                f"已確認送樣，樣品 {sample_no} 正在等待實驗室收樣，"
-                f"目前位置：{current_location}"
-            ),
-            "operator_name": current_user["name"],
-            "lab_name": first_lab,
-        },
-    )
-
-    await db.commit()
-
-    return {
-        "order": order,
-        "sample": sample,
-        "message": "委託單已確認送樣，樣品已進入待收樣流程",
-    }
 
 @router.post("/others/schedules")
-def create_mock_schedule(payload: dict):
-    schedule = {
-        "id": payload.get("id") or next_id("schedule", mock_schedules),
-        "wip_no": payload.get("wip_no") or "WIP-NEW",
-        "machine_name": payload.get("machine_name") or "未指定機台",
-        "status": payload.get("status") or "waiting_schedule",
-        "start_time": payload.get("start_time") or None,
-    }
-
-    mock_schedules.append(schedule)
-    return schedule
+def create_schedule_removed(payload: dict):
+    return removed_endpoint_response("POST /api/others/schedules")
 
 
 @router.post("/others/dispatches")
-def create_mock_dispatch(payload: dict):
-    dispatch = {
-        "id": payload.get("id") or next_id("dispatch", mock_dispatches),
-        "wip_no": payload.get("wip_no") or "WIP-NEW",
-        "assignee_name": payload.get("assignee_name") or "未指定人員",
-        "status": payload.get("status") or "assigned",
-    }
-
-    mock_dispatches.append(dispatch)
-    return dispatch
+def create_dispatch_removed(payload: dict):
+    return removed_endpoint_response("POST /api/others/dispatches")
 
 
 @router.post("/others/issues")
-def create_mock_issue(payload: dict):
-    issue = {
-        "id": payload.get("id") or next_id("issue", mock_issues),
-        "type": payload.get("type", "warning"),
-        "target_type": payload.get("target_type") or payload.get("targetType") or "sample",
-        "target_no": payload.get("target_no") or payload.get("targetId") or "SMP-NEW",
-        "level": payload.get("level", "medium"),
-        "message": payload.get("message") or payload.get("reason") or "未填寫訊息",
-        "status": payload.get("status") or "open",
-    }
-
-    mock_issues.append(issue)
-    return issue
+def create_issue_removed(payload: dict):
+    return removed_endpoint_response("POST /api/others/issues")
 
 
 @router.post("/others/master-data")
-def create_mock_master_data(payload: dict):
-    category = payload.get("category")
-    value = payload.get("value")
-    label = payload.get("label")
-
-    if not category:
-        raise HTTPException(status_code=400, detail="category is required")
-
-    if not value:
-        raise HTTPException(status_code=400, detail="value is required")
-
-    if not label:
-        raise HTTPException(status_code=400, detail="label is required")
-
-    if category not in master_data:
-        master_data[category] = []
-
-    item = {
-        "value": value,
-        "label": label,
-    }
-
-    master_data[category].append(item)
-    return item
+def create_master_data_removed(payload: dict):
+    return removed_endpoint_response("POST /api/others/master-data")
 
 
 @router.post("/others/samples/{sample_id}/generate-wips")
@@ -434,7 +180,7 @@ async def generate_missing_wips_for_sample(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = resolve_current_user(request)
+    current_user = await resolve_current_user(db, request)
 
     sample_result = await db.execute(
         text(
@@ -454,10 +200,10 @@ async def generate_missing_wips_for_sample(
 
     sample = dict(sample_row._mapping)
 
-    if sample["status"] not in ("received", "split"):
+    if sample["status"] not in ("received", "split", "pending_transfer"):
         raise HTTPException(
             status_code=400,
-            detail="只有已收樣 received 或已分貨 split 的樣品可以補齊 WIP",
+            detail="只有已收樣 received、已分貨 split 或待交接 pending_transfer 的樣品可以補齊 WIP",
         )
 
     requested_experiments = parse_requested_experiments_from_sample(sample)
@@ -465,19 +211,25 @@ async def generate_missing_wips_for_sample(
     if len(requested_experiments) == 0:
         raise HTTPException(
             status_code=400,
-            detail="找不到 requested_experiments，請確認這筆樣品是從 /others 新增委託單產生",
+            detail=(
+                "找不到 requested_experiments，請確認 samples.experiment_item 格式是否正確，"
+                "例如：材料分析實驗室:SEM 觀察、電性測試實驗室:光學量測"
+            ),
         )
 
     created_wips = []
     skipped_wips = []
 
-    next_location = sample.get("current_location") or experiment_temp_location(
-        current_user.get("lab_name") or current_user.get("department")
-    )
-
     for index, item in enumerate(requested_experiments, start=1):
-        lab_name = item["lab_name"]
+        raw_lab_name = item["lab_name"]
         experiment_item = item["experiment_item"]
+        lab_name = await resolve_real_lab_name(db, raw_lab_name)
+
+        if not lab_name:
+            raise HTTPException(
+                status_code=400,
+                detail=f"無法解析實驗室名稱：{raw_lab_name}",
+            )
 
         exists_result = await db.execute(
             text(
@@ -485,13 +237,17 @@ async def generate_missing_wips_for_sample(
                 SELECT *
                 FROM wips
                 WHERE sample_id = :sample_id
-                  AND lab_name = :lab_name
+                  AND (
+                        lab_name = :raw_lab_name
+                     OR lab_name = :lab_name
+                  )
                   AND experiment_item = :experiment_item
                 LIMIT 1
                 """
             ),
             {
                 "sample_id": sample_id,
+                "raw_lab_name": raw_lab_name,
                 "lab_name": lab_name,
                 "experiment_item": experiment_item,
             },
@@ -502,7 +258,14 @@ async def generate_missing_wips_for_sample(
             skipped_wips.append(dict(exists._mapping))
             continue
 
-        wip_no = await generate_unique_wip_no(db, sample["sample_no"], index, lab_name)
+        wip_no = await generate_unique_wip_no(
+            db,
+            sample["sample_no"],
+            index,
+            lab_name,
+        )
+
+        wip_location = experiment_temp_location(lab_name)
 
         wip_result = await db.execute(
             text(
@@ -541,8 +304,8 @@ async def generate_missing_wips_for_sample(
                 "lab_name": lab_name,
                 "experiment_item": experiment_item,
                 "priority": "normal",
-                "current_location": next_location,
-                "note": "由 /others 測試功能依委託單需求補齊 WIP",
+                "current_location": wip_location,
+                "note": "由 /others 功能依樣品實驗需求補齊 WIP",
             },
         )
 
@@ -562,7 +325,7 @@ async def generate_missing_wips_for_sample(
                 )
                 VALUES (
                     :wip_id,
-                    'created_by_others_test',
+                    'created_by_others',
                     NULL,
                     'created',
                     :description,
@@ -573,12 +336,18 @@ async def generate_missing_wips_for_sample(
             {
                 "wip_id": created_wip["id"],
                 "description": (
-                    f"由 /others 測試功能建立 WIP："
-                    f"{lab_name} / {experiment_item}，位置：{next_location}"
+                    f"由 /others 功能建立 WIP："
+                    f"{lab_name} / {experiment_item}，位置：{wip_location}"
                 ),
-                "operator_name": current_user["name"],
+                "operator_name": current_user.get("name") or "系統",
             },
         )
+
+    sample_location = sample.get("current_location")
+
+    if not sample_location:
+        first_lab = await resolve_real_lab_name(db, requested_experiments[0]["lab_name"])
+        sample_location = experiment_temp_location(first_lab)
 
     await db.execute(
         text(
@@ -593,7 +362,7 @@ async def generate_missing_wips_for_sample(
         ),
         {
             "sample_id": sample_id,
-            "current_location": next_location,
+            "current_location": sample_location,
         },
     )
 
@@ -611,7 +380,7 @@ async def generate_missing_wips_for_sample(
             )
             VALUES (
                 :sample_id,
-                'generate_wips_by_others_test',
+                'generate_wips_by_others',
                 :from_status,
                 'split',
                 :description,
@@ -623,11 +392,12 @@ async def generate_missing_wips_for_sample(
         {
             "sample_id": sample_id,
             "from_status": sample["status"],
-            "description": f"由 /others 測試功能補齊 WIP，樣品狀態改為已分貨，位置：{next_location}",
-            "operator_name": current_user["name"],
-            "lab_name": current_user.get("lab_name") or current_user.get("department"),
+            "description": f"由 /others 功能補齊 WIP，樣品狀態改為已分貨，位置：{sample_location}",
+            "operator_name": current_user.get("name") or "系統",
+            "lab_name": await resolve_real_lab_name(db, requested_experiments[0]["lab_name"]),
         },
     )
+
     await db.commit()
 
     return {
@@ -643,14 +413,22 @@ async def complete_wip_by_others_test(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = resolve_current_user(request)
+    current_user = await resolve_current_user(db, request)
+    operator_name = current_user.get("name") or "系統"
 
     wip_result = await db.execute(
         text(
             """
-            SELECT *
-            FROM wips
-            WHERE id = :wip_id
+            SELECT
+                w.*,
+                COALESCE(l.name, w.lab_name) AS real_lab_name
+            FROM wips w
+            LEFT JOIN labs l
+                ON CAST(l.id AS TEXT) = w.lab_name
+                OR l.code = w.lab_name
+                OR l.name = w.lab_name
+            WHERE w.id = :wip_id
+            LIMIT 1
             """
         ),
         {"wip_id": wip_id},
@@ -662,8 +440,14 @@ async def complete_wip_by_others_test(
         raise HTTPException(status_code=404, detail="WIP not found")
 
     wip = dict(wip_row._mapping)
+    current_lab = wip.get("real_lab_name")
 
-    current_lab = current_user.get("lab_name") or current_user.get("department")
+    if not current_lab:
+        raise HTTPException(
+            status_code=400,
+            detail="WIP lab_name is missing or cannot resolve real lab name",
+        )
+
     next_location = experiment_temp_location(current_lab)
 
     result = await db.execute(
@@ -671,6 +455,7 @@ async def complete_wip_by_others_test(
             """
             UPDATE wips
             SET
+                lab_name = :lab_name,
                 status = 'completed',
                 progress = 100,
                 completed_at = NOW(),
@@ -682,9 +467,12 @@ async def complete_wip_by_others_test(
         ),
         {
             "wip_id": wip_id,
+            "lab_name": current_lab,
             "current_location": next_location,
         },
     )
+
+    updated_wip = dict(result.fetchone()._mapping)
 
     await db.execute(
         text(
@@ -702,6 +490,14 @@ async def complete_wip_by_others_test(
         },
     )
 
+    await update_sample_to_pending_transfer_if_ready(
+        db=db,
+        sample_id=wip["sample_id"],
+        current_lab=current_lab,
+        next_location=next_location,
+        operator_name=operator_name,
+    )
+
     await db.execute(
         text(
             """
@@ -715,7 +511,7 @@ async def complete_wip_by_others_test(
             )
             VALUES (
                 :wip_id,
-                'complete_by_others_test',
+                'complete_by_others',
                 :from_status,
                 'completed',
                 :description,
@@ -726,8 +522,8 @@ async def complete_wip_by_others_test(
         {
             "wip_id": wip_id,
             "from_status": wip["status"],
-            "description": f"由 /others 測試功能直接標記 WIP 完成，樣品回到 {next_location}",
-            "operator_name": current_user["name"],
+            "description": f"標記 WIP 完成，樣品回到 {next_location}",
+            "operator_name": operator_name,
         },
     )
 
@@ -735,39 +531,35 @@ async def complete_wip_by_others_test(
 
     return {
         "message": "WIP 已標記完成",
-        "wip": dict(result.fetchone()._mapping),
+        "wip": updated_wip,
     }
 
 
-# TODO(integration): 改接 system_setting.md 的 GET /api/master-data。
 @router.get("/master-data")
 def get_master_data():
     return master_data
 
 
-# TODO(integration): 改接 system_setting.md 的 GET /api/labs。
 @router.get("/labs")
-def get_labs():
-    return mock_labs
+async def get_labs(db: AsyncSession = Depends(get_db)):
+    return await get_real_labs(db)
 
 
-# TODO(integration): 改接 system_setting.md 的 GET /api/storage-locations。
 @router.get("/storage-locations")
-def get_storage_locations():
-    return mock_storage_locations
+async def get_storage_locations(db: AsyncSession = Depends(get_db)):
+    return await get_generated_storage_locations(db)
 
 
-# TODO(integration): 改接 order_management.md 的 GET /api/orders/:id。
 @router.get("/orders/{order_no}")
-def get_order(order_no: str):
-    order = next(
-        (
-            item
-            for item in mock_orders
-            if item["order_no"] == order_no or item["id"] == order_no
-        ),
-        None,
-    )
+async def get_order(
+    order_no: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        order = await get_real_order(db, order_no)
+    except Exception:
+        await db.rollback()
+        order = None
 
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -775,65 +567,54 @@ def get_order(order_no: str):
     return order
 
 
-# TODO(integration): 改接 order_management.md 的 POST /api/orders/:id/actions。
 @router.post("/orders/{order_no}/actions")
-def order_action(order_no: str, payload: dict):
-    order = get_order(order_no)
-
-    return {
-        "message": "Order action accepted by development mock route",
-        "order": order,
-        "action": payload.get("action"),
-    }
+def order_action_removed(order_no: str, payload: dict):
+    return removed_endpoint_response("POST /api/orders/{order_no}/actions")
 
 
-# TODO(integration): 改接 schedule.md 的 GET /api/schedules。
 @router.get("/schedules")
 def get_schedules():
-    return mock_schedules
+    return []
 
 
-# TODO(integration): 改接 schedule.md 的 GET /api/dispatches。
 @router.get("/dispatches")
 def get_dispatches():
-    return mock_dispatches
+    return []
 
 
-# TODO(integration): 改接 warn.md 的 GET /api/issues。
 @router.get("/issues")
 def get_issues():
-    return mock_issues
+    return []
 
 
-# TODO(integration): 改接 warn.md 的 POST /api/issues。
 @router.post("/issues")
 def create_issue(payload: dict):
-    return create_mock_issue(payload)
+    return removed_endpoint_response("POST /api/issues")
+
 
 @router.post("/others/orders/{order_id}/confirm-delivery")
-async def confirm_mock_order_delivery(
+async def confirm_order_delivery(
     order_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = resolve_current_user(request)
+    current_user = await resolve_current_user(db, request)
 
-    order = next(
-        (
-            item
-            for item in mock_orders
-            if item.get("id") == order_id or item.get("order_no") == order_id
-        ),
-        None,
-    )
+    try:
+        order = await get_real_order(db, order_id)
+    except Exception:
+        await db.rollback()
+        order = None
 
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    if order.get("status") != "approved":
+    status = order.get("status")
+
+    if status not in ("approved", "pending_receive"):
         raise HTTPException(
             status_code=400,
-            detail="只有 approved 狀態的委託單可以確認送樣",
+            detail="只有 approved 或 pending_receive 狀態的委託單可以確認送樣",
         )
 
     existing_sample_result = await db.execute(
@@ -850,36 +631,64 @@ async def confirm_mock_order_delivery(
     existing_sample = existing_sample_result.fetchone()
 
     if existing_sample is not None:
-        order["status"] = "pending_receive"
-
         return {
             "order": order,
             "sample": dict(existing_sample._mapping),
-            "message": "這張委託單已經有 sample，已標記為 pending_receive",
+            "message": "這張委託單已經有 sample",
         }
 
-    requested_experiments = order.get("requested_experiments") or []
+    requested_experiments = normalize_requested_experiments(
+        order.get("requested_experiments")
+        or order.get("experiment_items")
+        or order.get("experiment_item")
+    )
 
     if not requested_experiments:
-        requested_experiments = [
+        target_lab = order.get("target_lab") or order.get("lab_name")
+        test_item = order.get("test_item") or order.get("experiment_item")
+
+        if target_lab and test_item:
+            requested_experiments = [
+                {
+                    "lab_name": target_lab,
+                    "experiment_item": test_item,
+                }
+            ]
+
+    if not requested_experiments:
+        raise HTTPException(
+            status_code=400,
+            detail="找不到委託單的實驗需求，無法建立 sample",
+        )
+
+    normalized_experiments = []
+
+    for item in requested_experiments:
+        lab_name = await resolve_real_lab_name(db, item["lab_name"])
+
+        if not lab_name:
+            raise HTTPException(
+                status_code=400,
+                detail=f"無法解析實驗室名稱：{item['lab_name']}",
+            )
+
+        normalized_experiments.append(
             {
-                "lab_name": order.get("target_lab") or "Lab A",
-                "experiment_item": order.get("test_item") or "SEM 觀察",
+                "lab_name": lab_name,
+                "experiment_item": item["experiment_item"],
             }
-        ]
+        )
 
     experiment_summary = "、".join(
         [
-            f"{item.get('lab_name')}:{item.get('experiment_item')}"
-            for item in requested_experiments
+            f"{item['lab_name']}:{item['experiment_item']}"
+            for item in normalized_experiments
         ]
     )
 
-    first_lab = requested_experiments[0].get("lab_name", "Lab A")
+    first_lab = normalized_experiments[0]["lab_name"]
     sample_no = await generate_sample_no(db)
     current_location = receive_location(first_lab)
-
-    note = order.get("note")
 
     sample_result = await db.execute(
         text(
@@ -912,12 +721,12 @@ async def confirm_mock_order_delivery(
         {
             "sample_no": sample_no,
             "order_no": order["order_no"],
-            "sample_name": order.get("sample_name") or "未命名樣品",
+            "sample_name": order.get("sample_name") or order.get("name") or "未命名樣品",
             "experiment_item": experiment_summary,
-            "applicant_name": order.get("applicant_name") or current_user["name"],
+            "applicant_name": order.get("applicant_name") or current_user.get("name") or "未命名申請人",
             "applicant_department": order.get("applicant_department") or current_user.get("department"),
             "current_location": current_location,
-            "note": note,
+            "note": order.get("note"),
         },
     )
 
@@ -952,11 +761,10 @@ async def confirm_mock_order_delivery(
                 f"已確認送樣，樣品 {sample_no} 正在等待實驗室收樣，"
                 f"目前位置：{current_location}"
             ),
-            "operator_name": current_user["name"],
+            "operator_name": current_user.get("name") or "系統",
             "lab_name": first_lab,
         },
     )
-    order["status"] = "pending_receive"
 
     await db.commit()
 

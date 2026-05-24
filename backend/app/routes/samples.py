@@ -24,9 +24,9 @@ ROLE_LABELS = {
     "system_admin": "系統管理者",
     "lab_supervisor": "實驗室主管",
     "lab_engineer": "實驗室人員",
-    "lab_staff": "實驗室人員",
+    "lab_engineer": "實驗室人員",
     "plant_user": "廠區使用者",
-    "factory_user": "廠區使用者",
+    "plant_user": "廠區使用者",
 }
 
 
@@ -205,7 +205,7 @@ async def get_sample_history(
     elif role in ("system_admin", "lab_supervisor"):
         pass
 
-    elif role in ("lab_staff", "lab_engineer"):
+    elif role == "lab_engineer":
         if not current_lab:
             raise HTTPException(
                 status_code=403,
@@ -582,7 +582,7 @@ async def sample_action(
         return dict(result.fetchone()._mapping)
 
     if action == "outbound":
-        if sample["status"] != "split":
+        if sample["status"] not in ("split", "pending_transfer"):
             raise HTTPException(
                 status_code=400,
                 detail="只有已建立 WIP / 已分貨的樣品可以通知取件",

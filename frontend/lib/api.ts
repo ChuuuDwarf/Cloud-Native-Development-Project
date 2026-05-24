@@ -30,18 +30,9 @@ export class ApiError extends Error {
   }
 }
 
-function getMockUserId() {
-  if (typeof window === 'undefined') return null
-
-  return sessionStorage.getItem('mockUserId')
-}
-
 function buildHeaders(hasBody: boolean): HeadersInit {
-  const mockUserId = getMockUserId()
-
   return {
     ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-    ...(mockUserId ? { 'x-user-id': mockUserId } : {}),
   }
 }
 

@@ -10,6 +10,7 @@ export const templateStoragePrefix = "order-management-templates";
 
 export const emptyFormItem = {
   sampleId: "",
+  sampleName: "",
   labId: "",
   experimentId: "",
 };

@@ -38,6 +38,7 @@ export type TemplateMasterData = Pick<MasterData, "labs" | "experiments">;
 
 export type FormItem = {
   sampleId: string;
+  sampleName: string;
   labId: string;
   experimentId: string;
 };
@@ -53,6 +54,7 @@ export type OrderTemplate = {
 export type OrderItem = {
   id: number;
   sampleId: string;
+  sampleName?: string | null;
   labId: string;
   experimentId: string;
   status?: OrderStatus;
@@ -133,6 +135,7 @@ export type ModalState =
 
 export type SampleFormGroup = {
   sampleId: string;
+  sampleName: string;
   startIndex: number;
   endIndex: number;
   items: { item: FormItem; index: number }[];

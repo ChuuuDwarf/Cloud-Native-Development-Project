@@ -9,6 +9,7 @@ def item_to_schema(item: OrderItemModel) -> OrderItem:
     return OrderItem(
         id=item.id,
         sampleId=item.sample_id,
+        sampleName=item.sample_name,
         labId=item.lab_id,
         experimentId=item.experiment_id,
         status=item.status,
