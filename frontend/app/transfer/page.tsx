@@ -98,8 +98,6 @@ export default function SampleTransferPage() {
       system_admin: '系統管理者',
       lab_supervisor: '實驗室主管',
       lab_engineer: '實驗室人員',
-      lab_engineer: '實驗室人員',
-      plant_user: '廠區使用者',
       plant_user: '廠區使用者',
     }
 

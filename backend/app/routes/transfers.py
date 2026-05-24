@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.dependencies import CurrentUser, get_current_user
 from app.core.database import get_db
 
 router = APIRouter(
@@ -16,12 +17,67 @@ router = APIRouter(
 # 權限、位置、ID、狀態流轉等 helper 已拆到 service 檔，方便後續維護與測試。
 from app.services.transfer_service import *  # noqa: F403 - route endpoint 會使用拆出的 helper
 
+
+async def project_current_user(auth_user: CurrentUser, db: AsyncSession) -> dict:
+    lab_name = None
+    department_name = None
+
+    if auth_user.lab_id is not None:
+        lab_result = await db.execute(
+            text(
+                """
+                SELECT name
+                FROM labs
+                WHERE id = :lab_id
+                LIMIT 1
+                """
+            ),
+            {"lab_id": auth_user.lab_id},
+        )
+        lab = lab_result.fetchone()
+        if lab is not None:
+            lab_name = lab._mapping["name"]
+
+    if auth_user.department_id is not None:
+        department_result = await db.execute(
+            text(
+                """
+                SELECT name
+                FROM departments
+                WHERE id = :department_id
+                LIMIT 1
+                """
+            ),
+            {"department_id": auth_user.department_id},
+        )
+        department = department_result.fetchone()
+        if department is not None:
+            department_name = department._mapping["name"]
+
+    role_name_map = {
+        "system_admin": "系統管理者",
+        "lab_supervisor": "實驗室主管",
+        "lab_engineer": "實驗室人員",
+        "plant_user": "廠區使用者",
+    }
+
+    return {
+        "id": str(auth_user.id),
+        "name": auth_user.name,
+        "role": auth_user.role,
+        "role_name": role_name_map.get(auth_user.role, auth_user.role),
+        "department": department_name or lab_name or "",
+        "lab_name": lab_name,
+        "email": auth_user.email,
+    }
+
+
 @router.get("")
 async def get_transfers(
-    request: Request,
     db: AsyncSession = Depends(get_db),
+    auth_user: CurrentUser = Depends(get_current_user),
 ):
-    current_user = await get_active_user(db, request)
+    current_user = await project_current_user(auth_user, db)
     where_clauses, params = build_transfer_visibility_filter(current_user)
 
     where_sql = ""
@@ -65,10 +121,10 @@ async def get_transfers(
 @router.post("")
 async def create_transfer(
     payload: dict,
-    request: Request,
     db: AsyncSession = Depends(get_db),
+    auth_user: CurrentUser = Depends(get_current_user),
 ):
-    current_user = await get_active_user(db, request)
+    current_user = await project_current_user(auth_user, db)
 
     if current_user.get("role") == "plant_user":
         raise HTTPException(
@@ -334,10 +390,10 @@ async def create_transfer(
 async def transfer_action(
     transfer_id: str,
     payload: dict,
-    request: Request,
     db: AsyncSession = Depends(get_db),
+    auth_user: CurrentUser = Depends(get_current_user),
 ):
-    current_user = await get_active_user(db, request)
+    current_user = await project_current_user(auth_user, db)
 
     if current_user.get("role") == "plant_user":
         raise HTTPException(
