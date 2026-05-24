@@ -195,13 +195,13 @@ export default function SamplePage() {
   const visibleSelectedWips = useMemo(() => {
     if (!selectedSample) return []
 
-    if (currentUser.role === 'system_admin' || currentUser.role === 'factory_user') {
+    if (
+      currentUser.role === 'system_admin' ||
+      currentUser.role === 'factory_user' ||
+      currentUser.role === 'lab_staff' ||
+      currentUser.role === 'lab_supervisor'
+    ) {
       return selectedWips
-    }
-
-    if (currentUser.role === 'lab_staff' || currentUser.role === 'lab_supervisor') {
-      const currentLab = getUserLab(currentUser)
-      return selectedWips.filter((wip) => wip.lab_name === currentLab)
     }
 
     return []

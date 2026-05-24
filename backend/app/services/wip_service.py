@@ -64,7 +64,7 @@ def build_wip_visibility_filter(current_user: dict):
     where_clauses = []
     params = {}
 
-    if role == "system_admin":
+    if role in ("system_admin", "lab_supervisor"):
         return where_clauses, params
 
     if role == "factory_user":
@@ -72,43 +72,81 @@ def build_wip_visibility_filter(current_user: dict):
         params["applicant_name"] = current_user.get("name")
         return where_clauses, params
 
-    if role in ("lab_staff", "lab_supervisor"):
+    if role == "lab_staff":
         current_lab = get_user_lab(current_user)
 
         if not current_lab:
             where_clauses.append("1 = 0")
             return where_clauses, params
 
-        # 重要：
-        # WIP 是由哪個 Lab 建立 / 執行，就永遠屬於那個 Lab。
-        # 即使樣品後來轉交到其他 Lab，甚至最後被廠區取回，
-        # 原 Lab 仍然要看得到自己 Lab 的 WIP 紀錄。
-        where_clauses.append("w.lab_name = :current_lab")
         params["current_lab"] = current_lab
+
+        where_clauses.append(
+            """
+            (
+                w.lab_name = :current_lab
+                OR EXISTS (
+                    SELECT 1
+                    FROM transfers t
+                    WHERE t.target_type = 'sample'
+                      AND t.target_id = w.sample_id
+                      AND t.to_lab = :current_lab
+                )
+            )
+            """
+        )
+
         return where_clauses, params
 
     where_clauses.append("1 = 0")
     return where_clauses, params
 
-
-def can_view_wip(current_user: dict, wip: dict, sample: dict | None = None) -> bool:
+def can_view_wip(
+    current_user: dict,
+    wip: dict,
+    sample: dict | None = None,
+    db: Session | None = None,
+) -> bool:
     role = current_user.get("role")
 
-    if role == "system_admin":
+    if role in ("system_admin", "lab_supervisor"):
         return True
 
     if role == "factory_user":
         return bool(sample and sample.get("applicant_name") == current_user.get("name"))
 
-    if role in ("lab_staff", "lab_supervisor"):
+    if role == "lab_staff":
         current_lab = get_user_lab(current_user)
 
-        # 查看 WIP 用 lab_name，不用 current_location。
-        # 這樣 Lab A 已轉出的樣品，Lab A 還是可以看到自己做過的 WIP。
-        return bool(current_lab and wip.get("lab_name") == current_lab)
+        if not current_lab:
+            return False
+
+        if wip.get("lab_name") == current_lab:
+            return True
+
+        if db is None:
+            return False
+
+        related = db.execute(
+            text(
+                """
+                SELECT 1
+                FROM transfers t
+                WHERE t.target_type = 'sample'
+                  AND t.target_id = :sample_id
+                  AND t.to_lab = :current_lab
+                LIMIT 1
+                """
+            ),
+            {
+                "sample_id": wip.get("sample_id"),
+                "current_lab": current_lab,
+            },
+        ).fetchone()
+
+        return related is not None
 
     return False
-
 
 def can_manage_wip(current_user: dict, wip: dict) -> bool:
     role = current_user.get("role")

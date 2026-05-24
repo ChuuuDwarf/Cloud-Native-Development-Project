@@ -112,7 +112,43 @@ def build_sample_visibility_filter(current_user: dict, scope: str | None = None)
         params["applicant_name"] = current_user.get("name")
         return where_clauses, params
 
-    if role in ("lab_staff", "lab_supervisor"):
+    if role == "lab_supervisor":
+        current_lab = get_user_lab(current_user)
+
+        if not current_lab:
+            where_clauses.append("1 = 0")
+            return where_clauses, params
+
+        params["current_lab"] = current_lab
+        params["current_lab_prefix"] = f"{current_lab}%"
+
+        where_clauses.append(
+            """
+            (
+                s.current_location LIKE :current_lab_prefix
+                OR EXISTS (
+                    SELECT 1
+                    FROM wips w
+                    WHERE w.sample_id = s.id
+                      AND w.lab_name = :current_lab
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM transfers t
+                    WHERE t.target_type = 'sample'
+                      AND t.target_id = s.id
+                      AND (
+                          t.from_lab = :current_lab
+                          OR t.to_lab = :current_lab
+                      )
+                )
+            )
+            """
+        )
+
+        return where_clauses, params
+
+    if role == "lab_staff":
         current_lab = get_user_lab(current_user)
 
         if not current_lab:
@@ -154,17 +190,16 @@ def build_sample_visibility_filter(current_user: dict, scope: str | None = None)
     where_clauses.append("1 = 0")
     return where_clauses, params
 
-
 def can_view_sample(current_user: dict, sample: dict, db: Session | None = None) -> bool:
     role = current_user.get("role")
 
-    if role == "system_admin":
+    if role in ("system_admin", "lab_supervisor"):
         return True
 
     if role == "factory_user":
         return sample.get("applicant_name") == current_user.get("name")
 
-    if role in ("lab_staff", "lab_supervisor"):
+    if role == "lab_staff":
         current_lab = get_user_lab(current_user)
         current_location = sample.get("current_location") or ""
 
@@ -206,7 +241,6 @@ def can_view_sample(current_user: dict, sample: dict, db: Session | None = None)
         return related is not None
 
     return False
-
 
 def can_manage_sample(current_user: dict, sample: dict) -> bool:
     role = current_user.get("role")

@@ -64,6 +64,7 @@ import {
   smallPrimaryButtonStyle,
   smallSecondaryButtonStyle,
   smallDangerButtonStyle,
+  statusBadgeStyle,
 } from './styles'
 
 export default function SampleTransferPage() {
@@ -80,6 +81,52 @@ export default function SampleTransferPage() {
 
   const currentLab = currentUser.lab_name || currentUser.department || 'Lab A'
   const operatorName = currentUser.name || fallbackUser.name
+
+  const isOutgoingTransfer = (transfer: Transfer) =>
+    normalizeLab(transfer.from_lab) === normalizeLab(currentLab)
+
+  const isIncomingTransfer = (transfer: Transfer) =>
+    normalizeLab(transfer.to_lab) === normalizeLab(currentLab)
+
+  function getTransferStatusText(transfer: Transfer) {
+    if (transfer.status === 'pending') {
+      return isOutgoingTransfer(transfer) ? '待我方送出' : '等待對方送出'
+    }
+
+    if (transfer.status === 'transferring') {
+      return isIncomingTransfer(transfer) ? '待我方收樣' : '待對方收樣'
+    }
+
+    if (transfer.status === 'received') {
+      return isIncomingTransfer(transfer) ? '我方已收樣' : '對方已收樣'
+    }
+
+    if (transfer.status === 'cancelled') {
+      return '已取消'
+    }
+
+    return transfer.status
+  }
+
+  function getTransferActionHint(transfer: Transfer) {
+    if (transfer.status === 'pending') {
+      return isOutgoingTransfer(transfer) ? '尚未送出' : '等待對方送出'
+    }
+
+    if (transfer.status === 'transferring') {
+      return isIncomingTransfer(transfer) ? '等待我方確認收樣' : '已送至對方待收樣區'
+    }
+
+    if (transfer.status === 'received') {
+      return isIncomingTransfer(transfer) ? '我方已收樣' : '對方已收樣'
+    }
+
+    if (transfer.status === 'cancelled') {
+      return '已取消'
+    }
+
+    return ''
+  }
 
   const selectedTransfer = useMemo(() => {
     if (!selectedTransferId) return null
@@ -153,10 +200,8 @@ export default function SampleTransferPage() {
             return lastIndex
           },
           -1,
-        ) 
+        )
 
-        // 有明確實驗順序時，只能往目前 Lab 後面的站點送。
-        // 例如 LabA -> LabB，LabB 完成後不能再把 LabA 當成下一站。
         const downstreamExperiments =
           currentLabLastIndex >= 0
             ? requestedExperiments.slice(currentLabLastIndex + 1)
@@ -288,8 +333,6 @@ export default function SampleTransferPage() {
           -1,
         )
 
-        // 只有目前 Lab 是流程最後一站時，才顯示通知廠區取件。
-        // LabA -> LabB 的情境中，LabB 完成後會符合；LabA 完成時不會符合。
         if (
           currentLabLastIndex >= 0 &&
           currentLabLastIndex !== requestedExperiments.length - 1
@@ -512,7 +555,7 @@ export default function SampleTransferPage() {
         <div>
           <h1 style={titleStyle}>樣品交接管理</h1>
           <p style={subtitleStyle}>
-            TRANSFER OUT · 目前 Lab：{currentLab} · 這裡只負責把樣品送出到下一個 Lab 的待收樣區。
+            TRANSFER OUT · 目前 Lab：{currentLab} · 這裡負責建立交接、送出交接，以及查看我方相關交接狀態。
           </p>
         </div>
 
@@ -543,16 +586,18 @@ export default function SampleTransferPage() {
           value={
             transfers.filter(
               (transfer) =>
-                transfer.from_lab === currentLab && transfer.status === 'pending',
+                normalizeLab(transfer.from_lab) === normalizeLab(currentLab) &&
+                transfer.status === 'pending',
             ).length
           }
         />
         <SummaryCard
-          label="我方已送出"
+          label="待我方收樣"
           value={
             transfers.filter(
               (transfer) =>
-                transfer.from_lab === currentLab && transfer.status === 'transferring',
+                normalizeLab(transfer.to_lab) === normalizeLab(currentLab) &&
+                transfer.status === 'transferring',
             ).length
           }
         />
@@ -724,9 +769,9 @@ export default function SampleTransferPage() {
       <section style={panelStyle}>
         <div style={panelHeaderStyle}>
           <div>
-            <div style={panelTitleStyle}>我方交接單列表</div>
+            <div style={panelTitleStyle}>我方相關交接單列表</div>
             <div style={hintStyle}>
-              只顯示目前 Lab 送出的交接單。對方收到後會出現在對方的 /sample 待收樣。
+              顯示我方送出的交接單，以及其他 Lab 交給我方的待收樣 / 已收樣交接單。
             </div>
           </div>
 
@@ -743,7 +788,6 @@ export default function SampleTransferPage() {
                   {[
                     '交接單',
                     '樣品',
-                    'WIP',
                     'From',
                     'To',
                     '狀態',
@@ -763,11 +807,10 @@ export default function SampleTransferPage() {
                   <tr key={transfer.id} style={{ borderBottom: '1px solid var(--border2)' }}>
                     <td style={monoTdStyle}>{transfer.transfer_no ?? transfer.id.slice(0, 8)}</td>
                     <td style={monoTdStyle}>{transfer.sample_no ?? '-'}</td>
-                    <td style={monoTdStyle}>{transfer.wip_no ?? '-'}</td>
                     <td style={tdStyle}>{transfer.from_lab ?? '-'}</td>
                     <td style={tdStyle}>{transfer.to_lab ?? '-'}</td>
                     <td style={tdStyle}>
-                      <StatusBadge status={transfer.status} />
+                      <span style={statusBadgeStyle}>{getTransferStatusText(transfer)}</span>
                     </td>
                     <td style={tdStyle}>{transfer.handed_by ?? '-'}</td>
                     <td style={tdStyle}>{transfer.received_by ?? '-'}</td>
@@ -781,7 +824,7 @@ export default function SampleTransferPage() {
                           查看
                         </button>
 
-                        {transfer.from_lab === currentLab && transfer.status === 'pending' && (
+                        {isOutgoingTransfer(transfer) && transfer.status === 'pending' && (
                           <button
                             type="button"
                             onClick={() => sendTransfer(transfer)}
@@ -792,7 +835,7 @@ export default function SampleTransferPage() {
                           </button>
                         )}
 
-                        {transfer.from_lab === currentLab && transfer.status === 'pending' && (
+                        {isOutgoingTransfer(transfer) && transfer.status === 'pending' && (
                           <button
                             type="button"
                             onClick={() => cancelTransfer(transfer)}
@@ -803,14 +846,8 @@ export default function SampleTransferPage() {
                           </button>
                         )}
 
-                        {transfer.status === 'transferring' && (
-                          <span style={hintStyle}>已送至對方待收樣區</span>
-                        )}
-                        {transfer.status === 'received' && (
-                          <span style={hintStyle}>對方已收樣</span>
-                        )}
-                        {transfer.status === 'cancelled' && (
-                          <span style={hintStyle}>已取消</span>
+                        {getTransferActionHint(transfer) && (
+                          <span style={hintStyle}>{getTransferActionHint(transfer)}</span>
                         )}
                       </div>
                     </td>

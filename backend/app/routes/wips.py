@@ -149,7 +149,7 @@ def get_wip(
     wip = get_wip_or_404(wip_id, db)
     sample = get_sample_by_id(wip["sample_id"], db)
 
-    if not can_view_wip(current_user, wip, sample):
+    if not can_view_wip(current_user, wip, sample, db):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this WIP",

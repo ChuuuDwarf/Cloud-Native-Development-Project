@@ -149,7 +149,7 @@ def get_sample_history(
     role = current_user.get("role")
     current_lab = get_user_lab(current_user)
 
-    where_clauses = ["sample_id = :sample_id"]
+    where_clauses = ["h.sample_id = :sample_id"]
     params = {"sample_id": sample_id}
 
     if role == "factory_user":
@@ -159,12 +159,32 @@ def get_sample_history(
                 detail="You do not have permission to view this sample history",
             )
 
-    elif role in ("lab_staff", "lab_supervisor"):
-        where_clauses.append("lab_name = :current_lab")
+    elif role in ("system_admin", "lab_supervisor"):
+        pass
+
+    elif role == "lab_staff":
+        if not current_lab:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to view this sample history",
+            )
+
         params["current_lab"] = current_lab
 
-    elif role == "system_admin":
-        pass
+        where_clauses.append(
+            """
+            (
+                h.lab_name = :current_lab
+                OR h.created_at <= (
+                    SELECT MIN(COALESCE(t.received_at, t.transferred_at, t.updated_at, t.created_at))
+                    FROM transfers t
+                    WHERE t.target_type = 'sample'
+                      AND t.target_id = :sample_id
+                      AND t.to_lab = :current_lab
+                )
+            )
+            """
+        )
 
     else:
         raise HTTPException(
@@ -178,25 +198,24 @@ def get_sample_history(
         text(
             f"""
             SELECT
-                id,
-                sample_id,
-                action,
-                from_status,
-                to_status,
-                description,
-                operator_name,
-                lab_name,
-                created_at
-            FROM sample_histories
+                h.id,
+                h.sample_id,
+                h.action,
+                h.from_status,
+                h.to_status,
+                h.description,
+                h.operator_name,
+                h.lab_name,
+                h.created_at
+            FROM sample_histories h
             {where_sql}
-            ORDER BY created_at DESC
+            ORDER BY h.created_at DESC
             """
         ),
         params,
     )
 
     return [dict(row._mapping) for row in result]
-
 
 @router.patch("/{sample_id}")
 def update_sample(

@@ -1,14 +1,15 @@
 import type { Candidate, Transfer, TransferCandidate, ReturnCandidate, Wip } from '../types'
 import { priorityText, sampleStatusText, transferStatusText, wipStatusText } from '../constants'
 import { formatDateTime } from '../utils/transferFlow'
-import { titleStyle, summaryCardStyle, summaryValueStyle, summaryLabelStyle, hintStyle, infoLineLabelStyle, infoLineValueStyle, statusBadgeStyle, readyBadgeStyle, warningBadgeStyle, detailBoxStyle, sectionTitleStyle, detailGridStyle, infoBlockStyle, infoBlockLabelStyle, infoBlockValueStyle, wipListStyle, wipCardStyle, existingTransferBoxStyle, returnBoxStyle, existingTransferHeaderStyle, createTransferBoxStyle, warningNoticeStyle, actionBarStyle, primaryButtonStyle, secondaryButtonStyle, dangerButtonStyle, modalBackdropStyle, modalBackdropButtonStyle, modalCardStyle, modalHeaderStyle, modalHeaderActionsStyle, modalTitleStyle, modalSubtitleStyle, modalBodyStyle, iconButtonStyle, modalNoticeStyle } from '../styles'
+import { titleStyle, summaryCardStyle, summaryValueStyle, summaryLabelStyle, hintStyle, infoLineLabelStyle, infoLineValueStyle, statusBadgeStyle, readyBadgeStyle, warningBadgeStyle, detailBoxStyle, sectionTitleStyle, detailGridStyle, transferModalDetailGridStyle, infoBlockStyle, infoBlockLabelStyle, infoBlockValueStyle, wipListStyle, wipCardStyle, existingTransferBoxStyle, returnBoxStyle, existingTransferHeaderStyle, createTransferBoxStyle, warningNoticeStyle, actionBarStyle, primaryButtonStyle, secondaryButtonStyle, dangerButtonStyle, modalBackdropStyle, modalBackdropButtonStyle, modalCardStyle, modalHeaderStyle, modalHeaderActionsStyle, modalTitleStyle, modalSubtitleStyle, modalBodyStyle, iconButtonStyle, modalNoticeStyle } from '../styles'
+import type { CSSProperties } from 'react'
 
 export function TransferModal({
   transfer,
   currentLab,
   submitting,
   onClose,
-  onSendTransfer,
+  onSendTransfer, 
   onCancelTransfer,
 }: {
   transfer: Transfer
@@ -42,25 +43,25 @@ export function TransferModal({
         <div style={modalBodyStyle}>
           <div style={sectionTitleStyle}>交接單詳細資訊</div>
 
-          <div style={detailGridStyle}>
+          <div style={transferModalDetailGridStyle}>
             <InfoBlock label="交接單號" value={transfer.transfer_no ?? transfer.id} />
-            <InfoBlock label="交接類型" value={transfer.target_type} />
+            <InfoBlock label="樣品" value={transfer.sample_no ?? '-'} />
             <InfoBlock label="委託單號" value={transfer.order_no ?? '-'} />
             <InfoBlock label="樣品編號" value={transfer.sample_no ?? '-'} />
-            <InfoBlock label="WIP 編號" value={transfer.wip_no ?? '-'} />
+
             <InfoBlock label="來源實驗室" value={transfer.from_lab ?? '-'} />
             <InfoBlock label="目的實驗室" value={transfer.to_lab ?? '-'} />
             <InfoBlock label="交接人" value={transfer.handed_by ?? '-'} />
             <InfoBlock label="送出時間" value={formatDateTime(transfer.transferred_at)} />
+
             <InfoBlock label="簽收人" value={transfer.received_by ?? '-'} />
             <InfoBlock label="簽收時間" value={formatDateTime(transfer.received_at)} />
-            <InfoBlock
-              label="狀態"
-              value={transferStatusText[transfer.status] ?? transfer.status}
-            />
             <InfoBlock label="建立時間" value={formatDateTime(transfer.created_at)} />
             <InfoBlock label="更新時間" value={formatDateTime(transfer.updated_at)} />
-            <InfoBlock label="備註" value={transfer.note ?? '-'} />
+            <InfoBlock label="備註"
+              value={transfer.note ?? '-'}
+              style={{ gridColumn: '1 / -1' }}
+            />
           </div>
 
           <div style={modalNoticeStyle}>
@@ -361,11 +362,19 @@ export function InfoLine({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function InfoBlock({ label, value }: { label: string; value: string }) {
+export function InfoBlock({
+  label,
+  value,
+  style,
+}: {
+  label: string
+  value: string | number | null | undefined
+  style?: CSSProperties
+}) {
   return (
-    <div style={infoBlockStyle}>
+    <div style={{ ...infoBlockStyle, ...style }}>
       <div style={infoBlockLabelStyle}>{label}</div>
-      <div style={infoBlockValueStyle}>{value}</div>
+      <div style={infoBlockValueStyle}>{value ?? '-'}</div>
     </div>
   )
 }

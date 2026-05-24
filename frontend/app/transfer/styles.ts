@@ -501,3 +501,9 @@ export const modalNoticeStyle: CSSProperties = {
   fontSize: 13,
   lineHeight: 1.6,
 }
+
+export const transferModalDetailGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+  gap: 10,
+}
