@@ -1,39 +1,23 @@
-from __future__ import annotations
+"""HTTP routes for /api/master-data — shared dropdowns for all frontend pages."""
 
-from fastapi import APIRouter, Query
+from typing import Annotated
 
-from app.data.master_data import DEPARTMENTS, EXPERIMENTS, LABS
-from app.schemas.order import ApiResponse
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-router = APIRouter(prefix="/api", tags=["Master Data"])
+from app.common.dependencies import CurrentUser, get_current_user
+from app.common.schemas import ApiResponse
+from app.core.database import get_db
+from app.services.master_data import MasterDataService
 
-
-# @router.get("/master-data")
-# def get_master_data() -> ApiResponse:
-#     return ApiResponse(
-#         data={
-#             "departments": DEPARTMENTS,
-#             "labs": LABS,
-#             "experiments": EXPERIMENTS,
-#             "statuses": [{"value": item.value, "label": item.value} for item in OrderStatus],
-#             "priorities": [{"value": item.value, "label": item.value} for item in PriorityLevel],
-#         }
-#     )
+router = APIRouter(prefix="/api/master-data", tags=["MasterData"])
 
 
-@router.get("/labs")
-def get_labs() -> ApiResponse:
-    return ApiResponse(data=LABS)
-
-
-@router.get("/departments")
-def get_departments() -> ApiResponse:
-    return ApiResponse(data=DEPARTMENTS)
-
-
-@router.get("/experiments")
-def get_experiments(lab_id: str | None = Query(default=None, alias="labId")) -> ApiResponse:
-    experiments = EXPERIMENTS
-    if lab_id:
-        experiments = [item for item in experiments if item["labId"] == lab_id]
-    return ApiResponse(data=experiments)
+@router.get("", response_model=ApiResponse[dict])
+async def get_master_data(
+    session: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[CurrentUser, Depends(get_current_user)],
+) -> ApiResponse[dict]:
+    service = MasterDataService(session)
+    payload = await service.gather()
+    return ApiResponse(data=payload)

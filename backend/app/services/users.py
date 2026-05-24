@@ -1,15 +1,18 @@
 """Business logic for /api/users."""
 
 import uuid
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.enums import UserStatus
 from app.common.errors import ConflictError, NotFoundError, ValidationError
+from app.core.database import get_db
 from app.core.security import hash_password
 from app.db.models import User
-from app.modules.users.repository import UserRepository
-from app.modules.users.schemas import UserCreate, UserQuery, UserUpdate
+from app.repos.user_repo import UserRepository
+from app.schemas.users import UserCreate, UserQuery, UserUpdate
 
 
 class UserService:
@@ -98,3 +101,9 @@ class UserService:
         if missing:
             raise ValidationError(f"Unknown role ids: {sorted(str(m) for m in missing)}")
         return roles
+
+
+def get_user_service(
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> UserService:
+    return UserService(session)

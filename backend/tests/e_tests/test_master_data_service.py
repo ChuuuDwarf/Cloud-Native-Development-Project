@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from app.core import database as db_module
-from app.modules.master_data.service import MasterDataService
+from app.services.master_data import MasterDataService
 
 
 @pytest.mark.asyncio

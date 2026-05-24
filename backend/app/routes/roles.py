@@ -6,9 +6,8 @@ from fastapi import APIRouter, Depends
 
 from app.common.dependencies import CurrentUser, get_current_user
 from app.common.schemas import PageResponse
-from app.modules.roles.dependencies import get_role_service
-from app.modules.roles.schemas import PermissionResponse, RoleResponse
-from app.modules.roles.service import RoleService
+from app.schemas.roles import PermissionResponse, RoleResponse
+from app.services.roles import RoleService, get_role_service
 
 router = APIRouter(prefix="/api", tags=["Roles"])
 

@@ -16,8 +16,8 @@ from app.common.enums import UserStatus
 from app.common.errors import ConflictError, NotFoundError, ValidationError
 from app.core import database as db_module
 from app.db.models import Role, User
-from app.modules.users.schemas import UserCreate, UserUpdate
-from app.modules.users.service import UserService
+from app.schemas.users import UserCreate, UserUpdate
+from app.services.users import UserService
 
 
 async def _engineer_role_id() -> uuid.UUID:

@@ -61,7 +61,7 @@ async def get_current_user(
         raise UnauthorizedError("Token subject is not a valid user id") from exc
 
     # Import lazily so common/dependencies stays free of module-level DB deps.
-    from app.modules.auth.service import AuthService, project_user
+    from app.services.auth import AuthService, project_user
 
     user = await AuthService(session).find_by_id(user_id)
     if user is None:

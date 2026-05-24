@@ -1,12 +1,15 @@
 """AuthService — bcrypt verify + JWT issuance + role/permission projection."""
 
 import uuid
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.common.errors import UnauthorizedError
+from app.core.database import get_db
 from app.core.security import create_access_token, verify_password
 from app.db.models import Role, User
 
@@ -55,3 +58,9 @@ def project_user(user: User) -> tuple[str, list[str]]:
         for perm in role.permissions:
             perms.add(perm.code)
     return primary_role, sorted(perms)
+
+
+def get_auth_service(
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> AuthService:
+    return AuthService(session)

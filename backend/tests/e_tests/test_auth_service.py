@@ -14,9 +14,9 @@ from app.common.errors import UnauthorizedError
 from app.core import database as db_module
 from app.core.security import decode_access_token
 from app.db.models import Role, User
-from app.modules.auth.service import AuthService, project_user
-from app.modules.users.schemas import UserUpdate
-from app.modules.users.service import UserService
+from app.schemas.users import UserCreate, UserUpdate
+from app.services.auth import AuthService, project_user
+from app.services.users import UserService
 
 
 async def _load_user(email: str) -> User:
@@ -58,7 +58,7 @@ async def test_authenticate_disabled_user_raises_unauthorized() -> None:
     # Create then disable a throwaway account so we don't break the seeded set.
     async with db_module.AsyncSessionLocal() as session:
         created = await UserService(session).create_user(
-            __import__("app.modules.users.schemas", fromlist=["UserCreate"]).UserCreate(
+            UserCreate(
                 email="auth-disabled@example.com",
                 name="Disabled User",
                 password="GoodPass1234",
@@ -112,7 +112,7 @@ async def test_project_user_collapses_multiple_roles() -> None:
     """A user with two roles should see the union of their permissions and the
     first role's name as the primary role.
     """
-    from app.modules.users.schemas import UserCreate
+    from app.schemas.users import UserCreate
 
     # Look up both role IDs.
     async with db_module.AsyncSessionLocal() as session:

@@ -16,9 +16,8 @@ from fastapi import APIRouter, Depends, Response
 from app.common.dependencies import CurrentUser, get_current_user
 from app.common.schemas import ApiResponse
 from app.core.config import get_settings
-from app.modules.auth.dependencies import get_auth_service
-from app.modules.auth.schemas import LoginRequest, LoginResponse, MeResponse
-from app.modules.auth.service import AuthService, project_user
+from app.schemas.auth import LoginRequest, LoginResponse, MeResponse
+from app.services.auth import AuthService, get_auth_service, project_user
 
 router = APIRouter(prefix="/api", tags=["Auth"])
 
