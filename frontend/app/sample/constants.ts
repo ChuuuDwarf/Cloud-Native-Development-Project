@@ -3,7 +3,7 @@ import type { CurrentUser } from './types'
 export const fallbackUser: CurrentUser = {
   id: 'fallback',
   name: '實驗室人員A',
-  role: 'lab_staff',
+  role: 'lab_engineer',
   role_name: '實驗室人員',
   department: 'Lab A',
   lab_name: 'Lab A',

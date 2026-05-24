@@ -59,6 +59,14 @@ def machine_location(lab_name: str | None):
     return lab_location(lab_name, "機台區")
 
 
+def is_factory_role(role: str | None) -> bool:
+    return role in ("factory_user", "plant_user")
+
+
+def is_lab_role(role: str | None) -> bool:
+    return role in ("lab_staff", "lab_engineer", "lab_supervisor")
+
+
 def build_wip_visibility_filter(current_user: dict):
     role = current_user.get("role")
     where_clauses = []
@@ -67,12 +75,12 @@ def build_wip_visibility_filter(current_user: dict):
     if role in ("system_admin", "lab_supervisor"):
         return where_clauses, params
 
-    if role == "factory_user":
+    if is_factory_role(role):
         where_clauses.append("s.applicant_name = :applicant_name")
         params["applicant_name"] = current_user.get("name")
         return where_clauses, params
 
-    if role == "lab_staff":
+    if is_lab_role(role):
         current_lab = get_user_lab(current_user)
 
         if not current_lab:
@@ -112,10 +120,10 @@ async def can_view_wip(
     if role in ("system_admin", "lab_supervisor"):
         return True
 
-    if role == "factory_user":
+    if is_factory_role(role):
         return bool(sample and sample.get("applicant_name") == current_user.get("name"))
 
-    if role == "lab_staff":
+    if is_lab_role(role):
         current_lab = get_user_lab(current_user)
 
         if not current_lab:
@@ -155,7 +163,7 @@ def can_manage_wip(current_user: dict, wip: dict) -> bool:
     if role == "system_admin":
         return True
 
-    if role not in ("lab_staff", "lab_supervisor"):
+    if not is_lab_role(role):
         return False
 
     current_lab = get_user_lab(current_user)

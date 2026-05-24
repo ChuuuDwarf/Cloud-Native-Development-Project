@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import text
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.dependencies import CurrentUser, get_current_user
 from app.core.database import get_db
+from app.db.models.departments import Department
+from app.db.models.labs import Lab
 
 router = APIRouter(
     prefix="/api/wips",
@@ -10,6 +13,43 @@ router = APIRouter(
 )
 
 from app.services.wip_service import *  # noqa: F403
+
+
+ROLE_LABELS = {
+    "system_admin": "系統管理者",
+    "lab_supervisor": "實驗室主管",
+    "lab_engineer": "實驗室人員",
+    "lab_staff": "實驗室人員",
+    "plant_user": "廠區使用者",
+    "factory_user": "廠區使用者",
+}
+
+
+async def build_wip_current_user(current_user: CurrentUser, db: AsyncSession) -> dict:
+    lab_name = None
+    department_name = None
+
+    if current_user.lab_id:
+        lab = await db.scalar(select(Lab).where(Lab.id == current_user.lab_id))
+        if lab:
+            lab_name = lab.name
+
+    if current_user.department_id:
+        department = await db.scalar(
+            select(Department).where(Department.id == current_user.department_id)
+        )
+        if department:
+            department_name = department.name
+
+    return {
+        "id": str(current_user.id),
+        "name": current_user.name,
+        "role": current_user.role,
+        "role_name": ROLE_LABELS.get(current_user.role, current_user.role),
+        "department": department_name or "",
+        "lab_name": lab_name,
+        "email": current_user.email,
+    }
 
 
 def build_wip_flow_visibility_filter(current_user: dict):
@@ -27,12 +67,12 @@ def build_wip_flow_visibility_filter(current_user: dict):
     if role == "system_admin":
         return where_clauses, params
 
-    if role == "factory_user":
+    if is_factory_role(role):
         where_clauses.append("s.applicant_name = :applicant_name")
         params["applicant_name"] = current_user.get("name")
         return where_clauses, params
 
-    if role in ("lab_staff", "lab_supervisor"):
+    if is_lab_role(role):
         current_lab = get_user_lab(current_user)
 
         if not current_lab:
@@ -84,17 +124,17 @@ def build_wip_flow_visibility_filter(current_user: dict):
 
 @router.get("")
 async def get_wips(
-    request: Request,
     status: str | None = Query(default=None),
     include_all_for_flow: bool = Query(default=False),
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
+    wip_current_user = await build_wip_current_user(current_user, db)
 
     if include_all_for_flow:
-        where_clauses, params = build_wip_flow_visibility_filter(current_user)
+        where_clauses, params = build_wip_flow_visibility_filter(wip_current_user)
     else:
-        where_clauses, params = build_wip_visibility_filter(current_user)
+        where_clauses, params = build_wip_visibility_filter(wip_current_user)
 
     if status:
         where_clauses.append("w.status = :status")
@@ -142,14 +182,14 @@ async def get_wips(
 @router.get("/{wip_id}")
 async def get_wip(
     wip_id: str,
-    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
+    wip_current_user = await build_wip_current_user(current_user, db)
     wip = await get_wip_or_404(wip_id, db)
     sample = await get_sample_by_id(wip["sample_id"], db)
 
-    if not await can_view_wip(current_user, wip, sample, db):
+    if not await can_view_wip(wip_current_user, wip, sample, db):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this WIP",
@@ -161,14 +201,14 @@ async def get_wip(
 @router.get("/{wip_id}/history")
 async def get_wip_history(
     wip_id: str,
-    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
+    wip_current_user = await build_wip_current_user(current_user, db)
     wip = await get_wip_or_404(wip_id, db)
     sample = await get_sample_by_id(wip["sample_id"], db)
 
-    if not await can_view_wip(current_user, wip, sample):
+    if not await can_view_wip(wip_current_user, wip, sample):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this WIP",
@@ -201,13 +241,13 @@ async def get_wip_history(
 async def update_wip(
     wip_id: str,
     payload: dict,
-    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
+    wip_current_user = await build_wip_current_user(current_user, db)
     wip = await get_wip_or_404(wip_id, db)
 
-    if not can_manage_wip(current_user, wip):
+    if not can_manage_wip(wip_current_user, wip):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to update this WIP",
@@ -248,19 +288,19 @@ async def update_wip(
 async def wip_action(
     wip_id: str,
     payload: dict,
-    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     wip = await get_wip_or_404(wip_id, db)
-    current_user = get_active_user(request)
+    wip_current_user = await build_wip_current_user(current_user, db)
 
-    if not can_manage_wip(current_user, wip):
+    if not can_manage_wip(wip_current_user, wip):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to operate this WIP",
         )
 
-    current_lab = get_user_lab(current_user)
+    current_lab = get_user_lab(wip_current_user)
     action = payload.get("action")
 
     if action not in (
@@ -281,7 +321,7 @@ async def wip_action(
             ),
         )
 
-    operator_name = payload.get("operator_name") or current_user.get("name")
+    operator_name = payload.get("operator_name") or wip_current_user.get("name")
 
     if not operator_name:
         raise HTTPException(

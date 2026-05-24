@@ -50,7 +50,7 @@ const routeRoleRules: Array<{
   },
   {
     path: "/sample",
-    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer", "plant_user"],
   },
   {
     path: "/wip",

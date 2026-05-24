@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useAuth } from '@/contexts/AuthContext'
 import { apiGet, apiPost } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error'
-import { fallbackUser } from './constants'
+import { masterDataApi } from '@/services/master-data-api'
 import type { CurrentUser, Sample, SampleAction, SampleFilter, SampleHistory, Transfer, Wip } from './types'
 import { SampleDetailModal } from './components/SampleDetailModal'
 import { SampleTable } from './components/SampleTable'
@@ -12,6 +14,8 @@ import {
   getFilterButtonStyle,
   countBadgeStyle,
   currentUserBoxStyle,
+  currentUserIdentityPartStyle,
+  currentUserIdentityStyle,
   errorStyle,
   filterBarStyle,
   headerActionsStyle,
@@ -29,12 +33,26 @@ import {
   filterSamplesByView,
   getUserLab,
   isActiveSampleStatus,
+  isFactoryUser as checkIsFactoryUser,
+  isLabUser as checkIsLabUser,
   isSampleInCurrentLab,
   isSampleVisibleForUser,
+  normalizeSampleFilter,
 } from './utils/sampleDisplay'
 
+type ApiListResponse<T> = T[] | { data?: T[] }
+
+function normalizeApiArray<T>(payload: ApiListResponse<T>): T[] {
+  if (Array.isArray(payload)) return payload
+  return Array.isArray(payload.data) ? payload.data : []
+}
+
 export default function SamplePage() {
-  const [currentUser, setCurrentUser] = useState<CurrentUser>(fallbackUser)
+  const { user: authUser } = useAuth()
+  const masterQuery = useQuery({
+    queryKey: ['master-data'],
+    queryFn: masterDataApi.fetch,
+  })
   const [samples, setSamples] = useState<Sample[]>([])
   const [wips, setWips] = useState<Wip[]>([])
   const [transfers, setTransfers] = useState<Transfer[]>([])
@@ -49,8 +67,41 @@ export default function SamplePage() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
 
-  const isFactoryUser = currentUser.role === 'factory_user'
-  const operatorName = currentUser.name || fallbackUser.name
+  const currentLab = masterQuery.data?.labs.find((lab) => lab.id === authUser?.labId)
+  const currentDepartment = masterQuery.data?.departments.find(
+    (department) => department.id === authUser?.departmentId,
+  )
+
+  const currentUser = useMemo<CurrentUser | null>(() => {
+    if (!authUser) return null
+
+    return {
+      id: authUser.id,
+      name: authUser.name,
+      role: authUser.role,
+      department: currentDepartment?.name ?? currentDepartment?.code ?? authUser.departmentId ?? '',
+      lab_name: currentLab?.name ?? currentLab?.code ?? null,
+      email: authUser.email,
+    }
+  }, [authUser, currentDepartment, currentLab])
+
+  const roleLabelMap: Record<string, string> = {
+    system_admin: '系統管理者',
+    lab_supervisor: '實驗室主管',
+    lab_engineer: '實驗室人員',
+    plant_user: '廠區使用者',
+    factory_user: '廠區使用者',
+  }
+
+  const roleLabel = currentUser ? roleLabelMap[currentUser.role] ?? currentUser.role : '—'
+  const identityLabName = currentUser && checkIsLabUser(currentUser) ? currentLab?.name : undefined
+  const currentUserIdentityParts = currentUser
+    ? [identityLabName, roleLabel, currentUser.name].filter((part): part is string => Boolean(part))
+    : ['尚未取得登入身分']
+
+  const isFactoryUser = currentUser ? checkIsFactoryUser(currentUser) : false
+  const isLabUser = currentUser ? checkIsLabUser(currentUser) : false
+  const operatorName = currentUser?.name ?? ''
 
   function parseExperimentLabs(experimentItem: string | null | undefined) {
     if (!experimentItem) return []
@@ -93,8 +144,10 @@ export default function SamplePage() {
 
   const outgoingTransfersBySampleId = useMemo(() => {
     const map = new Map<string, Transfer>()
+    if (!currentUser) return map
+
     const currentLab = getUserLab(currentUser)
-    const isLabUser = currentUser.role === 'lab_staff' || currentUser.role === 'lab_supervisor'
+    const isLabUser = checkIsLabUser(currentUser)
 
     function getTransferPriority(transfer: Transfer) {
       if (!isLabUser || !currentLab) return 0
@@ -171,6 +224,8 @@ export default function SamplePage() {
   }, [isFactoryUser])
 
   const visibleSamples = useMemo(() => {
+    if (!currentUser) return []
+
     return filterSamplesByView(samples, currentUser, sampleFilter)
   }, [samples, currentUser, sampleFilter])
 
@@ -179,6 +234,8 @@ export default function SamplePage() {
   }, [visibleSamples, selectedSampleId])
 
   const selectedSampleInCurrentLab = useMemo(() => {
+    if (!currentUser) return false
+
     return isSampleInCurrentLab(selectedSample, currentUser)
   }, [selectedSample, currentUser])
 
@@ -193,13 +250,12 @@ export default function SamplePage() {
   }, [wips, selectedSample])
 
   const visibleSelectedWips = useMemo(() => {
-    if (!selectedSample) return []
+    if (!selectedSample || !currentUser) return []
 
     if (
       currentUser.role === 'system_admin' ||
-      currentUser.role === 'factory_user' ||
-      currentUser.role === 'lab_staff' ||
-      currentUser.role === 'lab_supervisor'
+      checkIsFactoryUser(currentUser) ||
+      checkIsLabUser(currentUser)
     ) {
       return selectedWips
     }
@@ -221,6 +277,8 @@ export default function SamplePage() {
   }, [visibleSelectedWips])
 
   const currentLabWips = useMemo(() => {
+    if (!currentUser) return []
+
     const currentLab = getUserLab(currentUser)
 
     if (!currentLab) return []
@@ -231,7 +289,7 @@ export default function SamplePage() {
   const currentLabWipsCompleted =
     currentLabWips.length > 0 && currentLabWips.every((wip) => wip.status === 'completed')
 
-  const hasNextLab = hasNextLabAfterCurrent(selectedSample, currentUser)
+  const hasNextLab = currentUser ? hasNextLabAfterCurrent(selectedSample, currentUser) : false
 
   const canNotifyPickup =
     Boolean(selectedSample) &&
@@ -250,13 +308,15 @@ export default function SamplePage() {
     hasNextLab
 
   const baseSamplesForCount = useMemo(() => {
+    if (!currentUser) return []
+
     return samples.filter((sample) => isSampleVisibleForUser(sample, currentUser))
   }, [samples, currentUser])
 
   const pendingReceiveCount = baseSamplesForCount.filter((sample) => {
     if (sample.status !== 'pending_receive') return false
 
-    if (currentUser.role === 'lab_staff' || currentUser.role === 'lab_supervisor') {
+    if (isLabUser && currentUser) {
       return isSampleInCurrentLab(sample, currentUser)
     }
 
@@ -268,7 +328,7 @@ export default function SamplePage() {
       return false
     }
 
-    if (currentUser.role === 'lab_staff' || currentUser.role === 'lab_supervisor') {
+    if (isLabUser && currentUser) {
       return isSampleInCurrentLab(sample, currentUser)
     }
 
@@ -278,7 +338,7 @@ export default function SamplePage() {
   const outboundCount = baseSamplesForCount.filter((sample) => {
     if (sample.status !== 'outbound') return false
 
-    if (currentUser.role === 'lab_staff' || currentUser.role === 'lab_supervisor') {
+    if (isLabUser && currentUser) {
       return isSampleInCurrentLab(sample, currentUser)
     }
 
@@ -286,13 +346,29 @@ export default function SamplePage() {
   }).length
 
   const pickedUpCount = baseSamplesForCount.filter((sample) => sample.status === 'picked_up').length
-  const visibleHistories = sampleHistories.slice(0, historyVisibleCount)
+  const activeCount = baseSamplesForCount.filter((sample) => isActiveSampleStatus(sample.status)).length
+  const totalCount = baseSamplesForCount.length
 
+  const summaryCards = isFactoryUser
+    ? [
+        { label: '我的進行中', value: activeCount },
+        { label: '我的待取件', value: outboundCount },
+        { label: '我的已取件', value: pickedUpCount },
+        { label: '我的全部樣品', value: totalCount },
+      ]
+    : [
+        { label: '待收樣', value: pendingReceiveCount },
+        { label: '實驗室內', value: inLabCount },
+        { label: '待取件', value: outboundCount },
+        { label: '已取件', value: pickedUpCount },
+      ]
+
+  const visibleHistories = sampleHistories.slice(0, historyVisibleCount)
   const canFactoryConfirmPickup =
     Boolean(selectedSample) &&
     isFactoryUser &&
     selectedSample?.status === 'outbound' &&
-    selectedSample?.applicant_name === currentUser.name
+    selectedSample?.applicant_name === currentUser?.name
 
   const shouldShowFactoryAction = canFactoryConfirmPickup
   const shouldShowLabActions =
@@ -306,41 +382,31 @@ export default function SamplePage() {
 
   const shouldShowActionSection = shouldShowFactoryAction || shouldShowLabActions
 
-  async function loadCurrentUser() {
-    try {
-      const me = await apiGet<CurrentUser>('/api/me')
-      setCurrentUser(me)
-
-      if (me.role === 'factory_user') {
-        setSampleFilter((prev) => (prev === 'current' ? 'all' : prev))
-      } else {
-        setSampleFilter((prev) => (prev === 'active' ? 'current' : prev))
-      }
-
-      return me
-    } catch {
-      setCurrentUser(fallbackUser)
-      return fallbackUser
-    }
-  }
-
   async function loadData() {
+    if (!currentUser) {
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
       setError('')
       setSuccessMessage('')
 
-      const meData = await loadCurrentUser()
+      const nextSampleFilter = normalizeSampleFilter(currentUser, sampleFilter)
+      setSampleFilter(nextSampleFilter)
 
-      const [sampleData, wipData, transferData] = await Promise.all([
-        apiGet<Sample[]>('/api/samples?scope=all'),
-        apiGet<Wip[]>('/api/wips'),
-        apiGet<Transfer[]>('/api/transfers'),
+      const [samplePayload, wipPayload, transferPayload] = await Promise.all([
+        apiGet<ApiListResponse<Sample>>('/api/samples?scope=all'),
+        apiGet<ApiListResponse<Wip>>('/api/wips'),
+        apiGet<ApiListResponse<Transfer>>('/api/transfers'),
       ])
 
-      const filteredSamples = filterSamplesByView(sampleData, meData, sampleFilter)
+      const sampleData = normalizeApiArray(samplePayload)
+      const wipData = normalizeApiArray(wipPayload)
+      const transferData = normalizeApiArray(transferPayload)
+      const filteredSamples = filterSamplesByView(sampleData, currentUser, nextSampleFilter)
 
-      setCurrentUser(meData)
       setSamples(sampleData)
       setWips(wipData)
       setTransfers(transferData)
@@ -388,6 +454,11 @@ export default function SamplePage() {
   }
 
   async function runSampleAction(sampleId: string, action: SampleAction) {
+    if (!currentUser) {
+      setError('尚未取得登入身分，請重新整理後再試')
+      return
+    }
+
     const targetSample = samples.find((sample) => sample.id === sampleId) ?? null
 
     const isFactoryPickup =
@@ -451,6 +522,7 @@ export default function SamplePage() {
 
   function getNextStep(sample: Sample | null) {
     if (!sample) return '請先選擇樣品'
+    if (!currentUser) return '尚未取得登入身分'
 
     if (isFactoryUser) {
       if (sample.status === 'pending_receive') return '樣品已送出，等待實驗室確認收樣。'
@@ -507,9 +579,30 @@ export default function SamplePage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [currentUser?.id, currentUser?.role, currentUser?.lab_name])
+
+  useEffect(() => {
+    if (!currentUser) return
+
+    const nextFilter = normalizeSampleFilter(currentUser, sampleFilter)
+
+    if (nextFilter !== sampleFilter) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSampleFilter(nextFilter)
+      setSelectedSampleId(null)
+      setDetailOpen(false)
+      setSampleHistories([])
+      setHistoryVisibleCount(5)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.role])
+
+  if (!currentUser) {
+    return <div style={panelHintStyle}>尚未取得登入身分</div>
+  }
 
   return (
     <div>
@@ -536,17 +629,19 @@ export default function SamplePage() {
       </div>
 
       <section style={summaryGridStyle}>
-        <SummaryCard label="待收樣" value={pendingReceiveCount} />
-        <SummaryCard label="實驗室內" value={inLabCount} />
-        <SummaryCard label="待取件" value={outboundCount} />
-        <SummaryCard label="已取件" value={pickedUpCount} />
+        {summaryCards.map((card) => (
+          <SummaryCard key={card.label} label={card.label} value={card.value} />
+        ))}
       </section>
 
       <section style={currentUserBoxStyle}>
         <div style={{ fontWeight: 800 }}>目前操作身分</div>
-        <div style={panelHintStyle}>
-          {currentUser.role_name ?? currentUser.role} · {currentUser.name} ·{' '}
-          {currentUser.lab_name ?? currentUser.department}
+        <div style={currentUserIdentityStyle}>
+          {currentUserIdentityParts.map((part) => (
+            <span key={part} style={currentUserIdentityPartStyle}>
+              {part}
+            </span>
+          ))}
         </div>
       </section>
 

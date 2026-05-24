@@ -33,7 +33,7 @@ const labSupervisor: CurrentUser = {
 const labUserWithoutLabName: CurrentUser = {
   id: 'u3',
   name: '林人員',
-  role: 'lab_staff',
+  role: 'lab_engineer',
   department: 'Lab A',
   lab_name: null,
 }
@@ -41,7 +41,7 @@ const labUserWithoutLabName: CurrentUser = {
 const labBUser: CurrentUser = {
   id: 'u4',
   name: '陳人員',
-  role: 'lab_staff',
+  role: 'lab_engineer',
   department: 'Lab B',
   lab_name: 'Lab B',
 }
@@ -49,7 +49,7 @@ const labBUser: CurrentUser = {
 const factoryUser: CurrentUser = {
   id: 'f1',
   name: '王小明',
-  role: 'factory_user',
+  role: 'plant_user',
   department: '廠區一課',
 }
 
@@ -126,7 +126,7 @@ describe('sampleDisplay 功能測試', () => {
   it('判斷樣品是否位於目前 Lab，處理 null sample、admin、非 Lab 角色與空位置', () => {
     expect(isSampleInCurrentLab(sample, labAUser)).toBe(true)
     expect(isSampleInCurrentLab(null, labAUser)).toBe(false)
-    expect(isSampleInCurrentLab(sample, systemAdmin)).toBe(true)
+    expect(isSampleInCurrentLab(sample, systemAdmin)).toBe(false)
     expect(isSampleInCurrentLab(sample, factoryUser)).toBe(false)
     expect(isSampleInCurrentLab(makeSample({ current_location: null }), labAUser)).toBe(false)
     expect(isSampleInCurrentLab(makeSample({ current_location: 'Lab B 實驗暫存區' }), labAUser)).toBe(false)
@@ -257,7 +257,11 @@ describe('sampleDisplay 功能測試', () => {
     ])
 
     expect(filterSamplesByView(samples, factoryUser, 'active').map((item) => item.id)).toEqual(['sample-1'])
-    expect(filterSamplesByView(samples, factoryUser, 'current').map((item) => item.id)).toEqual(['sample-1'])
+    expect(filterSamplesByView(samples, factoryUser, 'current').map((item) => item.id)).toEqual([
+      'sample-1',
+      'sample-3',
+      'sample-4',
+    ])
     expect(filterSamplesByView(samples, factoryUser, 'outbound').map((item) => item.id)).toEqual(['sample-3'])
     expect(filterSamplesByView(samples, factoryUser, 'picked_up').map((item) => item.id)).toEqual(['sample-4'])
   })
@@ -274,11 +278,13 @@ describe('sampleDisplay 功能測試', () => {
     expect(filterSamplesByView(samples, labAUser, 'current').map((item) => item.id)).toEqual([
       'sample-1',
       'sample-3',
+      'sample-5',
     ])
 
     expect(filterSamplesByView(samples, labAUser, 'active').map((item) => item.id)).toEqual([
       'sample-1',
-      'sample-2',
+      'sample-3',
+      'sample-5',
     ])
 
     expect(filterSamplesByView(samples, labAUser, 'outbound').map((item) => item.id)).toEqual(['sample-3'])

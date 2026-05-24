@@ -1,26 +1,38 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useQuery } from '@tanstack/react-query'
+import { useAuth } from '@/contexts/AuthContext'
 import { apiGet, apiPost } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error'
+import { masterDataApi } from '@/services/master-data-api'
 import type { CurrentUser, Sample, Wip, WipForm } from './types'
-import { fallbackUser, activeSampleStatuses, wipStatusText, priorityText, experimentOptions, operatorName } from './constants'
+import { activeSampleStatuses, wipStatusText, priorityText, experimentOptions } from './constants'
 import { createEmptyWipForm, getCurrentLab, getRequestedExperiments, makeAutoFormsForSample, formatRequestedExperiments, shouldOpenCreateWipByDefault } from './utils/wipForm'
 import { CollapsibleSection, InfoItem, Field, StatusBadge } from './components/WipCommon'
 import { titleStyle, headerStyle, headerActionsStyle, subtitleStyle, layoutStyle, leftPanelStyle, mainPanelStyle, panelStyle, panelHeaderStyle, sectionButtonGroupStyle, panelHintStyle, countBadgeStyle, sampleListStyle, sampleCardStyle, sampleCardTopStyle, sampleNameStyle, sampleMetaStyle, monoTextStyle, detailGridStyle, autoGenerateNoticeStyle, warningNoticeStyle, formListStyle, formCardStyle, formCardHeaderStyle, formActionsStyle, formGridStyle, inputStyle, textareaStyle, submitBarStyle, labListStyle, labGroupStyle, labGroupHeaderStyle, wipListStyle, wipCardStyle, wipTitleStyle, wipMetaStyle, emptyStyle, errorStyle, successStyle, autoTagStyle, primaryButtonStyle, secondaryButtonStyle, smallSecondaryButtonStyle, smallDangerButtonStyle } from './styles'
 
+type ApiListResponse<T> = T[] | { data?: T[] }
+
+function normalizeApiArray<T>(payload: ApiListResponse<T>): T[] {
+  if (Array.isArray(payload)) return payload
+  return Array.isArray(payload.data) ? payload.data : []
+}
+
 export default function WipPage() {
   const searchParams = useSearchParams()
   const sampleIdFromUrl = searchParams.get('sampleId')
+  const { user: authUser } = useAuth()
+  const masterQuery = useQuery({
+    queryKey: ['master-data'],
+    queryFn: masterDataApi.fetch,
+  })
 
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [samples, setSamples] = useState<Sample[]>([])
   const [wips, setWips] = useState<Wip[]>([])
   const [selectedSampleId, setSelectedSampleId] = useState<string>(sampleIdFromUrl ?? '')
-  const [forms, setForms] = useState<WipForm[]>([
-    createEmptyWipForm(fallbackUser.lab_name ?? fallbackUser.department),
-  ])
+  const [forms, setForms] = useState<WipForm[]>([createEmptyWipForm('')])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -32,8 +44,39 @@ export default function WipPage() {
     currentWips: true,
   })
 
+  const currentLabData = masterQuery.data?.labs.find((lab) => lab.id === authUser?.labId)
+  const currentDepartment = masterQuery.data?.departments.find(
+    (department) => department.id === authUser?.departmentId,
+  )
+  const labNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    masterQuery.data?.labs.forEach((lab) => {
+      map.set(lab.id, lab.name)
+    })
+    return map
+  }, [masterQuery.data?.labs])
+
+  const currentUser = useMemo<CurrentUser | null>(() => {
+    if (!authUser) return null
+
+    return {
+      id: authUser.id,
+      name: authUser.name,
+      role: authUser.role,
+      department: currentDepartment?.name ?? currentDepartment?.code ?? '',
+      lab_name: currentLabData?.name ?? null,
+      email: authUser.email,
+    }
+  }, [authUser, currentDepartment, currentLabData])
+
   const currentLab = getCurrentLab(currentUser)
-  const currentOperatorName = currentUser?.name ?? operatorName
+  const currentOperatorName = currentUser?.name ?? ''
+
+  const getWipLabName = useCallback((wip: Wip) => {
+    if (wip.lab_name) return wip.lab_name
+    if (wip.lab_id) return labNameById.get(wip.lab_id) ?? wip.lab_id
+    return '未指定實驗室'
+  }, [labNameById])
 
   const activeSamples = useMemo(() => {
     return samples.filter((sample) => activeSampleStatuses.has(sample.status))
@@ -55,13 +98,13 @@ export default function WipPage() {
     if (!selectedSampleId) return []
 
     return wips.filter((wip) => {
-      return wip.sample_id === selectedSampleId && wip.lab_name === currentLab
+      return wip.sample_id === selectedSampleId && getWipLabName(wip) === currentLab
     })
-  }, [wips, selectedSampleId, currentLab])
+  }, [wips, selectedSampleId, currentLab, getWipLabName])
 
   const wipsByLab = useMemo(() => {
     return selectedWips.reduce<Record<string, Wip[]>>((groups, wip) => {
-      const labName = wip.lab_name ?? '未指定實驗室'
+      const labName = getWipLabName(wip)
 
       if (!groups[labName]) {
         groups[labName] = []
@@ -70,7 +113,7 @@ export default function WipPage() {
       groups[labName].push(wip)
       return groups
     }, {})
-  }, [selectedWips])
+  }, [selectedWips, getWipLabName])
 
   const canCreateWip = selectedSample?.status === 'received' || selectedSample?.status === 'split'
 
@@ -81,15 +124,6 @@ export default function WipPage() {
       ...prev,
       [section]: !prev[section],
     }))
-  }
-
-  async function loadCurrentUser() {
-    try {
-      const meData = await apiGet<CurrentUser>('/api/me')
-      return meData
-    } catch {
-      return fallbackUser
-    }
   }
 
   function resetFormsForSample(sample: Sample | null, lab: string, wipData: Wip[]) {
@@ -104,20 +138,25 @@ export default function WipPage() {
   }
 
   async function loadData() {
+    if (!currentUser) {
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
       setError('')
       setSuccessMessage('')
 
-      const [meData, sampleData, wipData] = await Promise.all([
-        loadCurrentUser(),
-        apiGet<Sample[]>('/api/samples'),
-        apiGet<Wip[]>('/api/wips'),
+      const [samplePayload, wipPayload] = await Promise.all([
+        apiGet<ApiListResponse<Sample>>('/api/samples'),
+        apiGet<ApiListResponse<Wip>>('/api/wips'),
       ])
 
-      const lab = getCurrentLab(meData)
+      const sampleData = normalizeApiArray(samplePayload)
+      const wipData = normalizeApiArray(wipPayload)
+      const lab = getCurrentLab(currentUser)
 
-      setCurrentUser(meData)
       setSamples(sampleData)
       setWips(wipData)
 
@@ -358,9 +397,18 @@ export default function WipPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [currentUser?.id, currentUser?.lab_name])
+
+  if (!currentUser) {
+    return (
+      <section style={panelStyle}>
+        <div style={emptyStyle}>尚未取得登入身分</div>
+      </section>
+    )
+  }
 
   return (
     <div>

@@ -1,5 +1,4 @@
 import type { CurrentUser, RequestedExperiment, Sample, Wip, WipForm } from '../types'
-import { fallbackUser } from '../constants'
 
 export function createEmptyWipForm(labName = ''): WipForm {
   return {
@@ -12,7 +11,7 @@ export function createEmptyWipForm(labName = ''): WipForm {
 }
 
 export function getCurrentLab(user: CurrentUser | null) {
-  return user?.lab_name || user?.department || fallbackUser.lab_name || fallbackUser.department
+  return user?.lab_name || user?.department || ''
 }
 
 export function parseExperimentsFromSummary(summary: string | null): RequestedExperiment[] {
@@ -44,7 +43,7 @@ export function getRequestedExperiments(sample: Sample | null): RequestedExperim
   return parseExperimentsFromSummary(sample.experiment_item)
 }
 
-export function getSampleDefaultPriority(_sample: Sample | null) {
+export function getSampleDefaultPriority() {
   // 不再從 sample.note 取 priority。
   // 備註只給使用者填文字，WIP 預設 normal。
   return 'normal'
@@ -58,7 +57,7 @@ export function makeAutoFormsForSample(
   if (!sample) return [createEmptyWipForm(currentLab)]
 
   const requestedExperiments = getRequestedExperiments(sample)
-  const defaultPriority = getSampleDefaultPriority(sample)
+  const defaultPriority = getSampleDefaultPriority()
 
   const currentLabExperiments = requestedExperiments.filter((item) => item.lab_name === currentLab)
 

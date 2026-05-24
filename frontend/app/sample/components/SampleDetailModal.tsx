@@ -36,8 +36,28 @@ import {
   getDisplaySampleLocation,
   getDisplaySampleStatus,
   getUserLab,
+  isLabUser as checkIsLabUser,
   shouldMaskSampleForLab,
 } from '../utils/sampleDisplay'
+
+function formatExperimentRequirement(experimentItem: string | null) {
+  if (!experimentItem) return '-'
+
+  const items = experimentItem
+    .split('、')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  if (items.length <= 1) return experimentItem
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {items.map((item, index) => (
+        <div key={`${item}-${index}`}>{item}</div>
+      ))}
+    </div>
+  )
+}
 
 type SampleDetailModalProps = {
   sample: Sample
@@ -92,7 +112,7 @@ export function SampleDetailModal({
 }: SampleDetailModalProps) {
   const currentLab = getUserLab(currentUser)
   const shouldMaskForCurrentLab = shouldMaskSampleForLab(sample, currentUser)
-  const isLabUser = currentUser.role === 'lab_staff' || currentUser.role === 'lab_supervisor'
+  const isLabUser = checkIsLabUser(currentUser)
 
   const ownLabReceiveHistory = sampleHistories.find((history) => {
     if (history.action !== 'receive') return false
@@ -155,9 +175,7 @@ export function SampleDetailModal({
       <div style={modalHeaderStyle}>
         <div>
           <div style={modalTitleStyle}>{sample.sample_no}</div>
-          <div style={modalSubtitleStyle}>
-            {sample.order_no} · {sample.sample_name ?? '未命名樣品'}
-          </div>
+          <div style={modalSubtitleStyle}>委託單編號 {sample.order_no}</div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -180,9 +198,9 @@ export function SampleDetailModal({
 
         <div style={detailGridStyle}>
           <InfoItem label="樣品編號" value={sample.sample_no} />
-          <InfoItem label="委託單號" value={sample.order_no} />
+          <InfoItem label="委託單編號" value={sample.order_no} />
           <InfoItem label="樣品名稱" value={sample.sample_name ?? '-'} />
-          <InfoItem label="實驗需求" value={sample.experiment_item ?? '-'} />
+          <InfoItem label="實驗需求" value={formatExperimentRequirement(sample.experiment_item)} />
           <InfoItem label="申請人" value={sample.applicant_name ?? '-'} />
           <InfoItem label="申請部門" value={sample.applicant_department ?? '-'} />
           <InfoItem
@@ -245,7 +263,6 @@ export function SampleDetailModal({
             </>
           )}
 
-          <InfoItem label="備註" value={sample.note ?? '-'} />
         </div>
 
         <div style={sectionTitleStyle}>此樣品的 WIP / 實驗子單</div>

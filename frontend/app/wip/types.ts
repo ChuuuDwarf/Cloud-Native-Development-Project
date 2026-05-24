@@ -45,6 +45,7 @@ export type Wip = {
   wip_no: string
   sample_id: string
   order_no: string
+  lab_id?: string | null
   lab_name: string | null
   experiment_item: string | null
   priority: string

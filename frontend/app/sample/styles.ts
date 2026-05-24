@@ -58,6 +58,28 @@ export const currentUserBoxStyle: CSSProperties = {
   marginBottom: 14,
 }
 
+export const currentUserIdentityStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 10,
+  marginTop: 10,
+}
+
+export const currentUserIdentityPartStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  minHeight: 28,
+  padding: '4px 10px',
+  border: '1px solid var(--border2)',
+  borderRadius: 8,
+  background: 'var(--s2)',
+  color: 'var(--text)',
+  fontSize: 13,
+  fontWeight: 800,
+  whiteSpace: 'nowrap',
+}
+
 export const panelStyle: CSSProperties = {
   background: 'var(--s1)',
   border: '1px solid var(--border2)',

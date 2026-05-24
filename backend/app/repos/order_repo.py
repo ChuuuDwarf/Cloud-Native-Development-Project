@@ -735,8 +735,8 @@ class OrderRepository:
                 {
                     "sample_id": sample_id,
                     "description": (
-                        f"確認送樣後建立待收樣樣品 {sample_no}，"
-                        f"目前位置：{current_location}"
+                        f"確認送樣，待收樣品 {sample_no}，"
+                        f"目前位置：{first_lab_name or current_location}"
                     ),
                     "operator_name": current_user.name,
                     "lab_name": first_lab_name,

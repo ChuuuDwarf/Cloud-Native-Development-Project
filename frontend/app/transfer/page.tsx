@@ -135,14 +135,17 @@ export default function SampleTransferPage() {
   }, [transfers, selectedTransferId])
 
   const wipsBySampleId = useMemo(() => {
-    return wips.reduce<Record<string, Wip[]>>((groups, wip) => {
-      if (!groups[wip.sample_id]) {
-        groups[wip.sample_id] = []
-      }
+    return (Array.isArray(wips) ? wips : []).reduce<Record<string, Wip[]>>(
+      (groups, wip) => {
+        if (!groups[wip.sample_id]) {
+          groups[wip.sample_id] = []
+        }
 
-      groups[wip.sample_id].push(wip)
-      return groups
-    }, {})
+        groups[wip.sample_id].push(wip)
+        return groups
+      },
+      {}
+    )
   }, [wips])
 
   const transfersByTargetId = useMemo(() => {

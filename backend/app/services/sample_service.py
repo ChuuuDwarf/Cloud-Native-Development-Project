@@ -362,20 +362,67 @@ def normalize_lab_code(lab_name: str | None):
         return "LAB"
 
     cleaned = lab_name.strip().replace(" ", "")
+    lowered = cleaned.lower()
 
-    if cleaned.lower().startswith("laba"):
+    if lowered.startswith("laba"):
         return "A"
 
-    if cleaned.lower().startswith("labb"):
+    if lowered.startswith("labb"):
         return "B"
 
-    if cleaned.lower().startswith("labc"):
+    if lowered.startswith("labc"):
         return "C"
 
-    if cleaned.lower().startswith("labd"):
+    if lowered.startswith("labd"):
         return "D"
 
-    return cleaned.upper()
+    # 正式資料的 lab 通常是「材料分析實驗室」這類中文名稱；
+    # 若無法查到 labs.code，就用固定對照避免 WIP 編號塞整個實驗室名稱。
+    chinese_lab_code_map = {
+        "材料分析實驗室": "A",
+        "電性測試實驗室": "B",
+        "可靠度實驗室": "C",
+    }
+
+    return chinese_lab_code_map.get(cleaned, cleaned.upper())
+
+
+def normalize_lab_code_from_lab_code(lab_code: str | None):
+    if not lab_code:
+        return None
+
+    cleaned = lab_code.strip().upper()
+
+    if cleaned.startswith("LAB-") and len(cleaned) > 4:
+        return cleaned.split("-", 1)[1]
+
+    return cleaned
+
+
+async def resolve_lab_code(db: AsyncSession, lab_name: str | None):
+    if not lab_name:
+        return "LAB"
+
+    lab_result = await db.execute(
+        text(
+            """
+            SELECT code
+            FROM labs
+            WHERE name = :lab_name
+               OR code = :lab_name
+            LIMIT 1
+            """
+        ),
+        {"lab_name": lab_name},
+    )
+    lab = lab_result.fetchone()
+
+    if lab is not None:
+        lab_code = normalize_lab_code_from_lab_code(lab._mapping["code"])
+        if lab_code:
+            return lab_code
+
+    return normalize_lab_code(lab_name)
 
 
 async def generate_unique_wip_no(
@@ -397,7 +444,7 @@ async def generate_unique_wip_no(
     # SMP-2026-0003 + Lab B => WIP-2026-0003-B-01
 
     sample_no = sample.get("sample_no") or "SMP"
-    lab_code = normalize_lab_code(lab_name)
+    lab_code = await resolve_lab_code(db, lab_name)
 
     base_no = sample_no.replace("SMP-", "WIP-")
 

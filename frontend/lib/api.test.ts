@@ -32,9 +32,10 @@ describe('api helpers', () => {
     const result = await apiGet<{ ok: boolean }>('/api/samples')
 
     expect(result).toEqual({ ok: true })
-    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:8000/api/samples', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/api/samples', {
       method: 'GET',
       cache: 'no-store',
+      credentials: 'include',
       headers: {
         'x-user-id': 'user-laba-001',
       },
@@ -51,9 +52,10 @@ describe('api helpers', () => {
     })
 
     expect(result).toEqual({ id: 1 })
-    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:8000/api/wips', {
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/api/wips', {
       method: 'POST',
       cache: undefined,
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -71,9 +73,10 @@ describe('api helpers', () => {
 
     expect(result.status).toBe('updated')
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:8000/api/samples/1',
+      'http://localhost:8000/api/samples/1',
       expect.objectContaining({
         method: 'PATCH',
+        credentials: 'include',
         body: JSON.stringify({ note: '更新' }),
       }),
     )
@@ -87,9 +90,10 @@ describe('api helpers', () => {
 
     expect(result).toBeUndefined()
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:8000/api/samples/1',
+      'http://localhost:8000/api/samples/1',
       expect.objectContaining({
         method: 'DELETE',
+        credentials: 'include',
       }),
     )
   })
@@ -155,6 +159,23 @@ describe('api helpers', () => {
     )
 
     await expect(apiPost('/api/test', {})).rejects.toThrow('物件錯誤訊息')
+  })
+
+  it('後端回傳 error envelope 時會解析 error.message', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Authentication required',
+          },
+        },
+        { status: 401 },
+      ),
+    )
+
+    await expect(apiGet('/api/samples?scope=all')).rejects.toThrow('Authentication required')
   })
 
   it('非 JSON 錯誤回應會使用 fallback message', async () => {

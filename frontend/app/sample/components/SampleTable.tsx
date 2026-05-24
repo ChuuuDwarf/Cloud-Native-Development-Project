@@ -12,6 +12,7 @@ import {
 import {
   getDisplaySampleLocation,
   getDisplaySampleStatus,
+  isFactoryUser as checkIsFactoryUser,
   isSampleInCurrentLab,
 } from '../utils/sampleDisplay'
 
@@ -34,7 +35,7 @@ export function SampleTable({
   outgoingTransfersBySampleId,
   onOpenDetail,
 }: SampleTableProps) {
-  const isFactoryUser = currentUser.role === 'factory_user'
+  const isFactoryUser = checkIsFactoryUser(currentUser)
 
   if (loading) {
     return <div style={emptyStyle}>載入中...</div>

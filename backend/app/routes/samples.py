@@ -1,10 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import text
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.dependencies import CurrentUser, get_current_user
 from app.core.database import get_db
+from app.db.models.departments import Department
+from app.db.models.labs import Lab
 
 router = APIRouter(
     prefix="/api/samples",
@@ -15,6 +18,43 @@ router = APIRouter(
 # 這個 route 檔現在只保留 API endpoint 與 request/response 組裝。
 # 權限、位置、ID、狀態流轉等 helper 已拆到 service 檔，方便後續維護與測試。
 from app.services.sample_service import *  # noqa: F403 - route endpoint 會使用拆出的 helper
+
+
+ROLE_LABELS = {
+    "system_admin": "系統管理者",
+    "lab_supervisor": "實驗室主管",
+    "lab_engineer": "實驗室人員",
+    "lab_staff": "實驗室人員",
+    "plant_user": "廠區使用者",
+    "factory_user": "廠區使用者",
+}
+
+
+async def build_sample_current_user(current_user: CurrentUser, db: AsyncSession) -> dict:
+    lab_name = None
+    department_name = None
+
+    if current_user.lab_id:
+        lab = await db.scalar(select(Lab).where(Lab.id == current_user.lab_id))
+        if lab:
+            lab_name = lab.name
+
+    if current_user.department_id:
+        department = await db.scalar(
+            select(Department).where(Department.id == current_user.department_id)
+        )
+        if department:
+            department_name = department.name
+
+    return {
+        "id": str(current_user.id),
+        "name": current_user.name,
+        "role": current_user.role,
+        "role_name": ROLE_LABELS.get(current_user.role, current_user.role),
+        "department": department_name or "",
+        "lab_name": lab_name,
+        "email": current_user.email,
+    }
 
 
 def parse_required_labs_from_experiment_item(experiment_item: str | None):
@@ -65,13 +105,13 @@ def get_next_lab_after_current(experiment_item: str | None, current_lab: str | N
 
 @router.get("")
 async def get_samples(
-    request: Request,
     status: str | None = Query(default=None),
     scope: str | None = Query(default=None),
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
-    where_clauses, params = build_sample_visibility_filter(current_user, scope)
+    sample_current_user = await build_sample_current_user(current_user, db)
+    where_clauses, params = build_sample_visibility_filter(sample_current_user, scope)
 
     if status:
         where_clauses.append("s.status = :status")
@@ -91,7 +131,7 @@ async def get_samples(
                 s.sample_name,
                 s.experiment_item,
                 s.applicant_name,
-                s.applicant_department,
+                COALESCE(department.name, s.applicant_department) AS applicant_department,
                 s.status,
                 s.current_location,
                 s.storage_location_id,
@@ -103,6 +143,9 @@ async def get_samples(
                 s.created_at,
                 s.updated_at
             FROM samples s
+            LEFT JOIN departments department
+                ON CAST(department.id AS TEXT) = s.applicant_department
+                OR department.code = s.applicant_department
             {where_sql}
             ORDER BY s.created_at DESC
             """
@@ -116,13 +159,13 @@ async def get_samples(
 @router.get("/{sample_id}")
 async def get_sample(
     sample_id: str,
-    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
+    sample_current_user = await build_sample_current_user(current_user, db)
     sample = await get_sample_or_404(sample_id, db)
 
-    if not await can_view_sample(current_user, sample, db):
+    if not await can_view_sample(sample_current_user, sample, db):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this sample",
@@ -134,26 +177,26 @@ async def get_sample(
 @router.get("/{sample_id}/history")
 async def get_sample_history(
     sample_id: str,
-    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
+    sample_current_user = await build_sample_current_user(current_user, db)
     sample = await get_sample_or_404(sample_id, db)
 
-    if not await can_view_sample(current_user, sample, db):
+    if not await can_view_sample(sample_current_user, sample, db):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this sample",
         )
 
-    role = current_user.get("role")
-    current_lab = get_user_lab(current_user)
+    role = sample_current_user.get("role")
+    current_lab = get_user_lab(sample_current_user)
 
     where_clauses = ["h.sample_id = :sample_id"]
     params = {"sample_id": sample_id}
 
     if is_factory_role(role):
-        if sample.get("applicant_name") != current_user.get("name"):
+        if sample.get("applicant_name") != sample_current_user.get("name"):
             raise HTTPException(
                 status_code=403,
                 detail="You do not have permission to view this sample history",
@@ -221,13 +264,13 @@ async def get_sample_history(
 async def update_sample(
     sample_id: str,
     payload: dict,
-    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    current_user = get_active_user(request)
+    sample_current_user = await build_sample_current_user(current_user, db)
     sample = await get_sample_or_404(sample_id, db)
 
-    if not can_manage_sample(current_user, sample):
+    if not can_manage_sample(sample_current_user, sample):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to update this sample",
@@ -267,13 +310,13 @@ async def update_sample(
 async def sample_action(
     sample_id: str,
     payload: dict,
-    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     sample = await get_sample_or_404(sample_id, db)
-    current_user = get_active_user(request)
+    sample_current_user = await build_sample_current_user(current_user, db)
 
-    current_lab = get_user_lab(current_user)
+    current_lab = get_user_lab(sample_current_user)
     action = payload.get("action")
 
     if action not in (
@@ -288,8 +331,8 @@ async def sample_action(
             detail="action must be one of: receive, inbound, outbound, pickup_confirmed, split",
         )
 
-    can_operate = can_manage_sample(current_user, sample)
-    can_pickup = action == "pickup_confirmed" and can_confirm_pickup(current_user, sample)
+    can_operate = can_manage_sample(sample_current_user, sample)
+    can_pickup = action == "pickup_confirmed" and can_confirm_pickup(sample_current_user, sample)
 
     if not can_operate and not can_pickup:
         raise HTTPException(
@@ -297,13 +340,13 @@ async def sample_action(
             detail="You do not have permission to operate this sample",
         )
 
-    if is_factory_role(current_user.get("role")) and action != "pickup_confirmed":
+    if is_factory_role(sample_current_user.get("role")) and action != "pickup_confirmed":
         raise HTTPException(
             status_code=403,
             detail="廠區使用者只能在待取件狀態確認取件",
         )
 
-    operator_name = payload.get("operator_name") or current_user.get("name")
+    operator_name = payload.get("operator_name") or sample_current_user.get("name")
 
     if not operator_name:
         raise HTTPException(

@@ -1,11 +1,19 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000'
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  'http://localhost:8000'
+).replace(/\/api\/?$/, '')
 
 type ApiErrorPayload = {
   detail?: unknown
   message?: unknown
   code?: string
   path?: string
+  error?: {
+    code?: string
+    message?: unknown
+    details?: unknown
+  }
 }
 
 export class ApiError extends Error {
@@ -86,7 +94,7 @@ async function readErrorPayload(res: Response): Promise<ApiErrorPayload | null> 
 async function parseResponse<T>(res: Response, fallbackMessage: string): Promise<T> {
   if (!res.ok) {
     const payload = await readErrorPayload(res)
-    const message = stringifyDetail(payload?.detail ?? payload?.message, fallbackMessage)
+    const message = stringifyDetail(payload?.detail ?? payload?.message ?? payload?.error?.message, fallbackMessage)
     throw new ApiError(message, res.status, payload ?? undefined)
   }
 
@@ -111,6 +119,7 @@ async function apiRequest<T>(
     res = await fetch(`${API_BASE_URL}${path}`, {
       method,
       cache: method === 'GET' ? 'no-store' : undefined,
+      credentials: 'include',
       headers: buildHeaders(hasBody),
       body: hasBody ? JSON.stringify(body) : undefined,
     })

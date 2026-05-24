@@ -342,8 +342,8 @@ async def create_mock_order(
         {
             "sample_id": sample["id"],
             "description": (
-                f"廠區確認送樣，產生待收樣樣品 {sample_no}，"
-                f"位置：{current_location}"
+                f"已確認送樣，樣品 {sample_no} 正在等待實驗室收樣，"
+                f"目前位置：{current_location}"
             ),
             "operator_name": current_user["name"],
             "lab_name": first_lab,
@@ -355,7 +355,7 @@ async def create_mock_order(
     return {
         "order": order,
         "sample": sample,
-        "message": "委託單已確認送樣，並同步產生 /sample 可看到的待收樣資料",
+        "message": "委託單已確認送樣，樣品已進入待收樣流程",
     }
 
 @router.post("/others/schedules")
@@ -502,7 +502,7 @@ async def generate_missing_wips_for_sample(
             skipped_wips.append(dict(exists._mapping))
             continue
 
-        wip_no = await generate_unique_wip_no(db, sample["sample_no"], index)
+        wip_no = await generate_unique_wip_no(db, sample["sample_no"], index, lab_name)
 
         wip_result = await db.execute(
             text(
@@ -949,8 +949,8 @@ async def confirm_mock_order_delivery(
         {
             "sample_id": sample["id"],
             "description": (
-                f"廠區確認送樣，產生待收樣樣品 {sample_no}，"
-                f"位置：{current_location}"
+                f"已確認送樣，樣品 {sample_no} 正在等待實驗室收樣，"
+                f"目前位置：{current_location}"
             ),
             "operator_name": current_user["name"],
             "lab_name": first_lab,
@@ -963,5 +963,5 @@ async def confirm_mock_order_delivery(
     return {
         "order": order,
         "sample": sample,
-        "message": "已確認送樣，並建立待收樣 sample",
+        "message": "已確認送樣，樣品已進入待收樣流程",
     }
