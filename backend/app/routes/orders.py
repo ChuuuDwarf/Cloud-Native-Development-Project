@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/orders", tags=["Orders"])
 
 
 @router.get("")
-def list_orders(
+async def list_orders(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     status_filter: OrderStatus | None = Query(default=None, alias="status"),
@@ -24,7 +24,7 @@ def list_orders(
     current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> dict[str, Any]:
-    orders = service.list_orders(
+    orders = await service.list_orders(
         status_filter=status_filter,
         applicant_id=applicant_id,
         current_user=current_user,
@@ -45,12 +45,12 @@ def list_orders(
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_order(
+async def create_order(
     payload: OrderCreate,
     current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
-    order = service.create_order(payload, current_user)
+    order = await service.create_order(payload, current_user)
     return ApiResponse(
         data={
             "id": order.id,
@@ -63,7 +63,7 @@ def create_order(
 
 
 @router.get("/applicant/{applicant_id}")
-def list_orders_by_applicant(
+async def list_orders_by_applicant(
     applicant_id: str,
     current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
@@ -71,7 +71,7 @@ def list_orders_by_applicant(
     return ApiResponse(
         data=[
             order.model_dump(by_alias=True)
-            for order in service.list_orders(
+            for order in await service.list_orders(
                 applicant_id=applicant_id,
                 current_user=current_user,
             )
@@ -80,43 +80,43 @@ def list_orders_by_applicant(
 
 
 @router.get("/{order_id}")
-def get_order(
+async def get_order(
     order_id: int,
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
-    order = service.get_order(order_id)
+    order = await service.get_order(order_id)
     return ApiResponse(data=order.model_dump(by_alias=True))
 
 
 @router.patch("/{order_id}")
-def update_order(
+async def update_order(
     order_id: int,
     payload: OrderUpdate,
     current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
-    order = service.update_order(order_id, payload, current_user)
+    order = await service.update_order(order_id, payload, current_user)
     return ApiResponse(data=order.model_dump(by_alias=True), message="委託單已更新")
 
 
 @router.delete("/{order_id}")
-def delete_order(
+async def delete_order(
     order_id: int,
     current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
-    service.delete_order(order_id, current_user)
+    await service.delete_order(order_id, current_user)
     return ApiResponse(data={"id": order_id}, message="委託單已刪除")
 
 
 @router.post("/{order_id}/actions")
-def handle_order_action(
+async def handle_order_action(
     order_id: int,
     payload: OrderActionRequest,
     current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
-    order = service.apply_action(order_id, payload, current_user)
+    order = await service.apply_action(order_id, payload, current_user)
     message = TRANSITIONS[payload.action][2]
     return ApiResponse(
         data={
@@ -130,10 +130,10 @@ def handle_order_action(
 
 
 @router.get("/{order_id}/history")
-def get_order_history(
+async def get_order_history(
     order_id: int,
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
     return ApiResponse(
-        data=[item.model_dump(by_alias=True) for item in service.get_history(order_id)]
+        data=[item.model_dump(by_alias=True) for item in await service.get_history(order_id)]
     )

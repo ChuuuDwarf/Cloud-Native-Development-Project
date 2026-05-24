@@ -10,7 +10,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 fallback_user = {
@@ -101,11 +101,11 @@ def build_wip_visibility_filter(current_user: dict):
     where_clauses.append("1 = 0")
     return where_clauses, params
 
-def can_view_wip(
+async def can_view_wip(
     current_user: dict,
     wip: dict,
     sample: dict | None = None,
-    db: Session | None = None,
+    db: AsyncSession | None = None,
 ) -> bool:
     role = current_user.get("role")
 
@@ -127,7 +127,7 @@ def can_view_wip(
         if db is None:
             return False
 
-        related = db.execute(
+        related_result = await db.execute(
             text(
                 """
                 SELECT 1
@@ -142,7 +142,8 @@ def can_view_wip(
                 "sample_id": wip.get("sample_id"),
                 "current_lab": current_lab,
             },
-        ).fetchone()
+        )
+        related = related_result.fetchone()
 
         return related is not None
 
@@ -174,10 +175,10 @@ def validate_uuid(value: str | None, field_name: str) -> None:
         )
 
 
-def get_wip_or_404(wip_id: str, db: Session):
+async def get_wip_or_404(wip_id: str, db: AsyncSession):
     validate_uuid(wip_id, "wip_id")
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             SELECT *
@@ -196,10 +197,10 @@ def get_wip_or_404(wip_id: str, db: Session):
     return dict(wip._mapping)
 
 
-def get_sample_by_id(sample_id: str, db: Session):
+async def get_sample_by_id(sample_id: str, db: AsyncSession):
     validate_uuid(sample_id, "sample_id")
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             SELECT *

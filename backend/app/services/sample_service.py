@@ -8,7 +8,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 fallback_user = {
@@ -99,6 +99,14 @@ def normalize_location_for_action(
     return lab_location(current_lab, default_area)
 
 
+def is_factory_role(role: str | None) -> bool:
+    return role in ("factory_user", "plant_user")
+
+
+def is_lab_role(role: str | None) -> bool:
+    return role in ("lab_staff", "lab_engineer", "lab_supervisor")
+
+
 def build_sample_visibility_filter(current_user: dict, scope: str | None = None):
     role = current_user.get("role")
     where_clauses = []
@@ -107,7 +115,7 @@ def build_sample_visibility_filter(current_user: dict, scope: str | None = None)
     if role == "system_admin":
         return where_clauses, params
 
-    if role == "factory_user":
+    if is_factory_role(role):
         where_clauses.append("s.applicant_name = :applicant_name")
         params["applicant_name"] = current_user.get("name")
         return where_clauses, params
@@ -148,7 +156,7 @@ def build_sample_visibility_filter(current_user: dict, scope: str | None = None)
 
         return where_clauses, params
 
-    if role == "lab_staff":
+    if role in ("lab_staff", "lab_engineer"):
         current_lab = get_user_lab(current_user)
 
         if not current_lab:
@@ -190,16 +198,16 @@ def build_sample_visibility_filter(current_user: dict, scope: str | None = None)
     where_clauses.append("1 = 0")
     return where_clauses, params
 
-def can_view_sample(current_user: dict, sample: dict, db: Session | None = None) -> bool:
+async def can_view_sample(current_user: dict, sample: dict, db: AsyncSession | None = None) -> bool:
     role = current_user.get("role")
 
     if role in ("system_admin", "lab_supervisor"):
         return True
 
-    if role == "factory_user":
+    if is_factory_role(role):
         return sample.get("applicant_name") == current_user.get("name")
 
-    if role == "lab_staff":
+    if role in ("lab_staff", "lab_engineer"):
         current_lab = get_user_lab(current_user)
         current_location = sample.get("current_location") or ""
 
@@ -209,7 +217,7 @@ def can_view_sample(current_user: dict, sample: dict, db: Session | None = None)
         if db is None or not current_lab:
             return False
 
-        related = db.execute(
+        related_result = await db.execute(
             text(
                 """
                 SELECT 1
@@ -236,7 +244,8 @@ def can_view_sample(current_user: dict, sample: dict, db: Session | None = None)
                 "sample_id": sample.get("id"),
                 "current_lab": current_lab,
             },
-        ).fetchone()
+        )
+        related = related_result.fetchone()
 
         return related is not None
 
@@ -248,7 +257,7 @@ def can_manage_sample(current_user: dict, sample: dict) -> bool:
     if role == "system_admin":
         return True
 
-    if role not in ("lab_staff", "lab_supervisor"):
+    if not is_lab_role(role) and role != "system_admin":
         return False
 
     current_lab = get_user_lab(current_user)
@@ -259,7 +268,7 @@ def can_manage_sample(current_user: dict, sample: dict) -> bool:
 
 def can_confirm_pickup(current_user: dict, sample: dict) -> bool:
     return (
-        current_user.get("role") == "factory_user"
+        is_factory_role(current_user.get("role"))
         and sample.get("applicant_name") == current_user.get("name")
         and sample.get("status") == "outbound"
     )
@@ -275,10 +284,10 @@ def validate_uuid(value: str | None, field_name: str) -> None:
         )
 
 
-def get_sample_or_404(sample_id: str, db: Session):
+async def get_sample_or_404(sample_id: str, db: AsyncSession):
     validate_uuid(sample_id, "sample_id")
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             SELECT *
@@ -297,8 +306,8 @@ def get_sample_or_404(sample_id: str, db: Session):
     return dict(sample._mapping)
 
 
-def update_current_lab_wips_location(
-    db: Session,
+async def update_current_lab_wips_location(
+    db: AsyncSession,
     sample_id: str,
     current_lab: str | None,
     next_location: str,
@@ -306,7 +315,7 @@ def update_current_lab_wips_location(
     if not current_lab:
         return
 
-    db.execute(
+    await db.execute(
         text(
             """
             UPDATE wips
@@ -326,12 +335,12 @@ def update_current_lab_wips_location(
     )
 
 
-def update_all_wips_location(
-    db: Session,
+async def update_all_wips_location(
+    db: AsyncSession,
     sample_id: str,
     next_location: str,
 ):
-    db.execute(
+    await db.execute(
         text(
             """
             UPDATE wips
@@ -369,8 +378,8 @@ def normalize_lab_code(lab_name: str | None):
     return cleaned.upper()
 
 
-def generate_unique_wip_no(
-    db: Session,
+async def generate_unique_wip_no(
+    db: AsyncSession,
     sample: dict,
     lab_name: str | None,
     preferred_wip_no: str | None = None,
@@ -395,7 +404,7 @@ def generate_unique_wip_no(
     for index in range(1, 1000):
         candidate = f"{base_no}-{lab_code}-{index:02d}"
 
-        exists = db.execute(
+        exists_result = await db.execute(
             text(
                 """
                 SELECT 1
@@ -405,7 +414,8 @@ def generate_unique_wip_no(
                 """
             ),
             {"wip_no": candidate},
-        ).fetchone()
+        )
+        exists = exists_result.fetchone()
 
         if exists is None:
             return candidate

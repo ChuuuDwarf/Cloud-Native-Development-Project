@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 
@@ -64,11 +64,11 @@ def get_next_lab_after_current(experiment_item: str | None, current_lab: str | N
 
 
 @router.get("")
-def get_samples(
+async def get_samples(
     request: Request,
     status: str | None = Query(default=None),
     scope: str | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
     where_clauses, params = build_sample_visibility_filter(current_user, scope)
@@ -81,7 +81,7 @@ def get_samples(
     if where_clauses:
         where_sql = "WHERE " + " AND ".join(where_clauses)
 
-    result = db.execute(
+    result = await db.execute(
         text(
             f"""
             SELECT
@@ -114,15 +114,15 @@ def get_samples(
 
 
 @router.get("/{sample_id}")
-def get_sample(
+async def get_sample(
     sample_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
-    sample = get_sample_or_404(sample_id, db)
+    sample = await get_sample_or_404(sample_id, db)
 
-    if not can_view_sample(current_user, sample, db):
+    if not await can_view_sample(current_user, sample, db):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this sample",
@@ -132,15 +132,15 @@ def get_sample(
 
 
 @router.get("/{sample_id}/history")
-def get_sample_history(
+async def get_sample_history(
     sample_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
-    sample = get_sample_or_404(sample_id, db)
+    sample = await get_sample_or_404(sample_id, db)
 
-    if not can_view_sample(current_user, sample, db):
+    if not await can_view_sample(current_user, sample, db):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this sample",
@@ -152,7 +152,7 @@ def get_sample_history(
     where_clauses = ["h.sample_id = :sample_id"]
     params = {"sample_id": sample_id}
 
-    if role == "factory_user":
+    if is_factory_role(role):
         if sample.get("applicant_name") != current_user.get("name"):
             raise HTTPException(
                 status_code=403,
@@ -162,7 +162,7 @@ def get_sample_history(
     elif role in ("system_admin", "lab_supervisor"):
         pass
 
-    elif role == "lab_staff":
+    elif role in ("lab_staff", "lab_engineer"):
         if not current_lab:
             raise HTTPException(
                 status_code=403,
@@ -194,7 +194,7 @@ def get_sample_history(
 
     where_sql = "WHERE " + " AND ".join(where_clauses)
 
-    result = db.execute(
+    result = await db.execute(
         text(
             f"""
             SELECT
@@ -218,14 +218,14 @@ def get_sample_history(
     return [dict(row._mapping) for row in result]
 
 @router.patch("/{sample_id}")
-def update_sample(
+async def update_sample(
     sample_id: str,
     payload: dict,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
-    sample = get_sample_or_404(sample_id, db)
+    sample = await get_sample_or_404(sample_id, db)
 
     if not can_manage_sample(current_user, sample):
         raise HTTPException(
@@ -233,7 +233,7 @@ def update_sample(
             detail="You do not have permission to update this sample",
         )
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             UPDATE samples
@@ -256,7 +256,7 @@ def update_sample(
         },
     )
 
-    db.commit()
+    await db.commit()
 
     return dict(result.fetchone()._mapping)
 
@@ -264,13 +264,13 @@ def update_sample(
 # TODO(integration): sample actions 目前直接在此 route 執行收樣、分貨、交接、入庫、出庫、取件。
 # 正式模組合併後，若流程需要同步委託單/通知/排程，請改接對應模組 service 或 API。
 @router.post("/{sample_id}/actions")
-def sample_action(
+async def sample_action(
     sample_id: str,
     payload: dict,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    sample = get_sample_or_404(sample_id, db)
+    sample = await get_sample_or_404(sample_id, db)
     current_user = get_active_user(request)
 
     current_lab = get_user_lab(current_user)
@@ -297,7 +297,7 @@ def sample_action(
             detail="You do not have permission to operate this sample",
         )
 
-    if current_user.get("role") == "factory_user" and action != "pickup_confirmed":
+    if is_factory_role(current_user.get("role")) and action != "pickup_confirmed":
         raise HTTPException(
             status_code=403,
             detail="廠區使用者只能在待取件狀態確認取件",
@@ -318,7 +318,7 @@ def sample_action(
                 detail="只有待收樣或交接中的樣品可以確認收樣",
             )
 
-        transfer_for_receive = db.execute(
+        transfer_for_receive_result = await db.execute(
             text(
                 """
                 SELECT *
@@ -335,7 +335,8 @@ def sample_action(
                 "sample_id": sample_id,
                 "current_lab": current_lab,
             },
-        ).fetchone()
+        )
+        transfer_for_receive = transfer_for_receive_result.fetchone()
 
         transfer_for_receive_data = (
             dict(transfer_for_receive._mapping)
@@ -349,7 +350,7 @@ def sample_action(
             "實驗暫存區",
         )
 
-        result = db.execute(
+        result = await db.execute(
             text(
                 """
                 UPDATE samples
@@ -370,14 +371,14 @@ def sample_action(
             },
         )
 
-        update_current_lab_wips_location(
+        await update_current_lab_wips_location(
             db=db,
             sample_id=sample_id,
             current_lab=current_lab,
             next_location=next_location,
         )
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 UPDATE transfers
@@ -399,7 +400,7 @@ def sample_action(
             },
         )
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 INSERT INTO sample_histories (
@@ -437,7 +438,7 @@ def sample_action(
             transfer_no = transfer_for_receive_data.get("transfer_no")
 
             if from_lab and from_lab != current_lab:
-                db.execute(
+                await db.execute(
                     text(
                         """
                         INSERT INTO sample_histories (
@@ -472,7 +473,7 @@ def sample_action(
                     },
                 )
 
-        db.commit()
+        await db.commit()
 
         return dict(result.fetchone()._mapping)
 
@@ -482,7 +483,7 @@ def sample_action(
         if storage_location_id:
             validate_uuid(storage_location_id, "storage_location_id")
 
-        result = db.execute(
+        result = await db.execute(
             text(
                 """
                 UPDATE samples
@@ -502,7 +503,7 @@ def sample_action(
             },
         )
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 INSERT INTO sample_histories (
@@ -533,7 +534,7 @@ def sample_action(
             },
         )
 
-        db.commit()
+        await db.commit()
 
         return dict(result.fetchone()._mapping)
 
@@ -544,7 +545,7 @@ def sample_action(
                 detail="只有已建立 WIP / 已分貨的樣品可以通知取件",
             )
 
-        pending_transfer = db.execute(
+        pending_transfer_result = await db.execute(
             text(
                 """
                 SELECT
@@ -561,7 +562,8 @@ def sample_action(
                 """
             ),
             {"sample_id": sample_id},
-        ).fetchone()
+        )
+        pending_transfer = pending_transfer_result.fetchone()
 
         if pending_transfer is not None:
             pending_transfer_data = dict(pending_transfer._mapping)
@@ -577,7 +579,7 @@ def sample_action(
                 ),
             )
 
-        incomplete_wips = db.execute(
+        incomplete_wips_result = await db.execute(
             text(
                 """
                 SELECT
@@ -591,7 +593,8 @@ def sample_action(
                 """
             ),
             {"sample_id": sample_id},
-        ).fetchall()
+        )
+        incomplete_wips = incomplete_wips_result.fetchall()
 
         if incomplete_wips:
             items = [
@@ -624,7 +627,7 @@ def sample_action(
             "待取件區",
         )
 
-        result = db.execute(
+        result = await db.execute(
             text(
                 """
                 UPDATE samples
@@ -644,13 +647,13 @@ def sample_action(
             },
         )
 
-        update_all_wips_location(
+        await update_all_wips_location(
             db=db,
             sample_id=sample_id,
             next_location=next_location,
         )
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 INSERT INTO sample_histories (
@@ -682,7 +685,7 @@ def sample_action(
             },
         )
 
-        db.commit()
+        await db.commit()
 
         return dict(result.fetchone()._mapping)
 
@@ -696,7 +699,7 @@ def sample_action(
         pickup_lab = get_lab_from_location(sample.get("current_location"))
         next_location = payload.get("current_location") or "已由使用者取回"
 
-        result = db.execute(
+        result = await db.execute(
             text(
                 """
                 UPDATE samples
@@ -717,13 +720,13 @@ def sample_action(
             },
         )
 
-        update_all_wips_location(
+        await update_all_wips_location(
             db=db,
             sample_id=sample_id,
             next_location=next_location,
         )
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 INSERT INTO sample_histories (
@@ -754,7 +757,7 @@ def sample_action(
             },
         )
 
-        db.commit()
+        await db.commit()
 
         return dict(result.fetchone()._mapping)
 
@@ -775,7 +778,7 @@ def sample_action(
 
         created_wips = []
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 UPDATE samples
@@ -792,7 +795,7 @@ def sample_action(
             },
         )
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 INSERT INTO sample_histories (
@@ -840,7 +843,7 @@ def sample_action(
                     detail="experiment_item is required for each WIP",
                 )
 
-            existing_wip = db.execute(
+            existing_wip_result = await db.execute(
                 text(
                     """
                     SELECT *
@@ -856,20 +859,21 @@ def sample_action(
                     "lab_name": lab_name,
                     "experiment_item": experiment_item,
                 },
-            ).fetchone()
+            )
+            existing_wip = existing_wip_result.fetchone()
 
             if existing_wip is not None:
                 created_wips.append(dict(existing_wip._mapping))
                 continue
 
-            wip_no = generate_unique_wip_no(
+            wip_no = await generate_unique_wip_no(
                 db=db,
                 sample=sample,
                 lab_name=lab_name,
                 preferred_wip_no=item.get("wip_no"),
             )
 
-            result = db.execute(
+            result = await db.execute(
                 text(
                     """
                     INSERT INTO wips (
@@ -914,7 +918,7 @@ def sample_action(
             created_wip = dict(result.fetchone()._mapping)
             created_wips.append(created_wip)
 
-            db.execute(
+            await db.execute(
                 text(
                     """
                     INSERT INTO wip_histories (
@@ -945,7 +949,7 @@ def sample_action(
                 },
             )
 
-        db.commit()
+        await db.commit()
 
         return {
             "message": "Sample split successfully",

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from app.core.database import get_db
 
 router = APIRouter(
     prefix="/api/wips",
@@ -83,11 +83,11 @@ def build_wip_flow_visibility_filter(current_user: dict):
 
 
 @router.get("")
-def get_wips(
+async def get_wips(
     request: Request,
     status: str | None = Query(default=None),
     include_all_for_flow: bool = Query(default=False),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
 
@@ -104,7 +104,7 @@ def get_wips(
     if where_clauses:
         where_sql = "WHERE " + " AND ".join(where_clauses)
 
-    result = db.execute(
+    result = await db.execute(
         text(
             f"""
             SELECT
@@ -140,16 +140,16 @@ def get_wips(
 
 
 @router.get("/{wip_id}")
-def get_wip(
+async def get_wip(
     wip_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
-    wip = get_wip_or_404(wip_id, db)
-    sample = get_sample_by_id(wip["sample_id"], db)
+    wip = await get_wip_or_404(wip_id, db)
+    sample = await get_sample_by_id(wip["sample_id"], db)
 
-    if not can_view_wip(current_user, wip, sample, db):
+    if not await can_view_wip(current_user, wip, sample, db):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this WIP",
@@ -159,22 +159,22 @@ def get_wip(
 
 
 @router.get("/{wip_id}/history")
-def get_wip_history(
+async def get_wip_history(
     wip_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
-    wip = get_wip_or_404(wip_id, db)
-    sample = get_sample_by_id(wip["sample_id"], db)
+    wip = await get_wip_or_404(wip_id, db)
+    sample = await get_sample_by_id(wip["sample_id"], db)
 
-    if not can_view_wip(current_user, wip, sample):
+    if not await can_view_wip(current_user, wip, sample):
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to view this WIP",
         )
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             SELECT
@@ -198,14 +198,14 @@ def get_wip_history(
 
 
 @router.patch("/{wip_id}")
-def update_wip(
+async def update_wip(
     wip_id: str,
     payload: dict,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
-    wip = get_wip_or_404(wip_id, db)
+    wip = await get_wip_or_404(wip_id, db)
 
     if not can_manage_wip(current_user, wip):
         raise HTTPException(
@@ -213,7 +213,7 @@ def update_wip(
             detail="You do not have permission to update this WIP",
         )
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             UPDATE wips
@@ -239,19 +239,19 @@ def update_wip(
     )
 
     updated_wip = dict(result.fetchone()._mapping)
-    db.commit()
+    await db.commit()
 
     return updated_wip
 
 
 @router.post("/{wip_id}/actions")
-def wip_action(
+async def wip_action(
     wip_id: str,
     payload: dict,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    wip = get_wip_or_404(wip_id, db)
+    wip = await get_wip_or_404(wip_id, db)
     current_user = get_active_user(request)
 
     if not can_manage_wip(current_user, wip):
@@ -357,14 +357,14 @@ def wip_action(
     }
     params.update(extra_params)
 
-    result = db.execute(text(sql), params)
+    result = await db.execute(text(sql), params)
     updated_wip = dict(result.fetchone()._mapping)
 
     if action in ("start", "resume", "complete"):
         next_location = extra_params.get("next_location")
 
         if next_location:
-            db.execute(
+            await db.execute(
                 text(
                     """
                     UPDATE samples
@@ -380,7 +380,7 @@ def wip_action(
                 },
             )
 
-            db.execute(
+            await db.execute(
                 text(
                     """
                     UPDATE wips
@@ -399,7 +399,7 @@ def wip_action(
                 },
             )
 
-    db.execute(
+    await db.execute(
         text(
             """
             INSERT INTO wip_histories (
@@ -430,6 +430,6 @@ def wip_action(
         },
     )
 
-    db.commit()
+    await db.commit()
 
     return updated_wip

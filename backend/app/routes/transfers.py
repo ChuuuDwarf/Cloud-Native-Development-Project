@@ -2,9 +2,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from app.core.database import get_db
 
 router = APIRouter(
     prefix="/api/transfers",
@@ -17,9 +17,9 @@ router = APIRouter(
 from app.services.transfer_service import *  # noqa: F403 - route endpoint 會使用拆出的 helper
 
 @router.get("")
-def get_transfers(
+async def get_transfers(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
     where_clauses, params = build_transfer_visibility_filter(current_user)
@@ -28,7 +28,7 @@ def get_transfers(
     if where_clauses:
         where_sql = "WHERE " + " AND ".join(where_clauses)
 
-    result = db.execute(
+    result = await db.execute(
         text(
             f"""
             SELECT
@@ -63,10 +63,10 @@ def get_transfers(
 # TODO(integration): 建立交接單目前在本 route 寫入 transfers。
 # 正式整合樣品流轉/倉儲模組後，可考慮改由 transfer service 統一處理通知與簽收流程。
 @router.post("")
-def create_transfer(
+async def create_transfer(
     payload: dict,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
 
@@ -116,7 +116,7 @@ def create_transfer(
             )
 
     if target_type == "sample":
-        sample = get_sample_or_404(target_id, db)
+        sample = await get_sample_or_404(target_id, db)
         order_no = payload.get("order_no") or sample.get("order_no")
         sample_no = payload.get("sample_no") or sample.get("sample_no")
         wip_no = payload.get("wip_no")
@@ -131,7 +131,7 @@ def create_transfer(
                 )
 
     else:
-        wip = get_wip_or_404(target_id, db)
+        wip = await get_wip_or_404(target_id, db)
         order_no = payload.get("order_no") or wip.get("order_no")
         sample_no = payload.get("sample_no")
         wip_no = payload.get("wip_no") or wip.get("wip_no")
@@ -145,7 +145,7 @@ def create_transfer(
                     detail="只能交接目前位於自己實驗室的 WIP",
                 )
 
-    existing = db.execute(
+    existing_result = await db.execute(
         text(
             """
             SELECT *
@@ -161,7 +161,8 @@ def create_transfer(
             "target_type": target_type,
             "target_id": target_id,
         },
-    ).fetchone()
+    )
+    existing = existing_result.fetchone()
 
     if existing is not None:
         raise HTTPException(
@@ -169,7 +170,7 @@ def create_transfer(
             detail="這個樣品或 WIP 已經有尚未完成的交接申請",
         )
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             INSERT INTO transfers (
@@ -202,7 +203,7 @@ def create_transfer(
             """
         ),
         {
-            "transfer_no": payload.get("transfer_no") or generate_transfer_no(db),
+            "transfer_no": payload.get("transfer_no") or await generate_transfer_no(db),
             "target_type": target_type,
             "target_id": target_id,
             "order_no": order_no,
@@ -219,7 +220,7 @@ def create_transfer(
     waiting_location = transfer_waiting_location(from_lab)
 
     if target_type == "sample":
-        db.execute(
+        await db.execute(
             text(
                 """
                 UPDATE samples
@@ -235,14 +236,14 @@ def create_transfer(
             },
         )
 
-        update_next_lab_wips_location(
+        await update_next_lab_wips_location(
             db=db,
             sample_id=target_id,
             to_lab=to_lab,
             next_location=waiting_location,
         )
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 INSERT INTO sample_histories (
@@ -276,7 +277,7 @@ def create_transfer(
         )
 
     if target_type == "wip":
-        db.execute(
+        await db.execute(
             text(
                 """
                 UPDATE wips
@@ -292,7 +293,7 @@ def create_transfer(
             },
         )
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 INSERT INTO wip_histories (
@@ -322,7 +323,7 @@ def create_transfer(
             },
         )
 
-    db.commit()
+    await db.commit()
 
     return transfer
 
@@ -330,11 +331,11 @@ def create_transfer(
 # TODO(integration): 交接確認目前直接更新 transfer/sample/wip 狀態。
 # 正式模組合併後，請確認是否需同步 storage/order/schedule/warn 模組事件。
 @router.post("/{transfer_id}/actions")
-def transfer_action(
+async def transfer_action(
     transfer_id: str,
     payload: dict,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = get_active_user(request)
 
@@ -345,7 +346,7 @@ def transfer_action(
         )
 
     current_lab = get_user_lab(current_user)
-    transfer_data = get_transfer_or_404(transfer_id, db)
+    transfer_data = await get_transfer_or_404(transfer_id, db)
 
     action = payload.get("action")
 
@@ -387,7 +388,7 @@ def transfer_action(
                 detail="to_lab is required before sending transfer",
             )
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 UPDATE transfers
@@ -402,9 +403,9 @@ def transfer_action(
         )
 
         if transfer_data["target_type"] == "sample":
-            sample = get_sample_or_404(transfer_data["target_id"], db)
+            sample = await get_sample_or_404(transfer_data["target_id"], db)
 
-            db.execute(
+            await db.execute(
                 text(
                     """
                     UPDATE samples
@@ -421,14 +422,14 @@ def transfer_action(
                 },
             )
 
-            update_next_lab_wips_location(
+            await update_next_lab_wips_location(
                 db=db,
                 sample_id=transfer_data["target_id"],
                 to_lab=to_lab,
                 next_location=next_location,
             )
 
-            db.execute(
+            await db.execute(
                 text(
                     """
                     INSERT INTO sample_histories (
@@ -465,9 +466,9 @@ def transfer_action(
             )
 
         if transfer_data["target_type"] == "wip":
-            wip = get_wip_or_404(transfer_data["target_id"], db)
+            wip = await get_wip_or_404(transfer_data["target_id"], db)
 
-            db.execute(
+            await db.execute(
                 text(
                     """
                     UPDATE wips
@@ -483,7 +484,7 @@ def transfer_action(
                 },
             )
 
-            db.execute(
+            await db.execute(
                 text(
                     """
                     INSERT INTO wip_histories (
@@ -517,7 +518,7 @@ def transfer_action(
                 },
             )
 
-        db.commit()
+        await db.commit()
 
         return {
             "message": "Transfer sent successfully. Sample moved to next lab receive area.",
@@ -532,7 +533,7 @@ def transfer_action(
                 detail="只有 pending 狀態可以取消",
             )
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 UPDATE transfers
@@ -546,10 +547,10 @@ def transfer_action(
         )
 
         if transfer_data["target_type"] == "sample":
-            sample = get_sample_or_404(transfer_data["target_id"], db)
+            sample = await get_sample_or_404(transfer_data["target_id"], db)
             fallback_location = transfer_waiting_location(transfer_data.get("from_lab"))
 
-            db.execute(
+            await db.execute(
                 text(
                     """
                     UPDATE samples
@@ -565,7 +566,7 @@ def transfer_action(
                 },
             )
 
-            db.execute(
+            await db.execute(
                 text(
                     """
                     INSERT INTO sample_histories (
@@ -599,9 +600,9 @@ def transfer_action(
             )
 
         if transfer_data["target_type"] == "wip":
-            wip = get_wip_or_404(transfer_data["target_id"], db)
+            wip = await get_wip_or_404(transfer_data["target_id"], db)
 
-            db.execute(
+            await db.execute(
                 text(
                     """
                     INSERT INTO wip_histories (
@@ -631,7 +632,7 @@ def transfer_action(
                 },
             )
 
-        db.commit()
+        await db.commit()
 
         return {"message": "Transfer cancelled successfully"}
 

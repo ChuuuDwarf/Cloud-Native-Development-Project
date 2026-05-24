@@ -6,11 +6,9 @@ Route 檔應只保留 HTTP endpoint，避免 API 入口與流程邏輯混在一�
 
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import HTTPException, Request
 from sqlalchemy import text
-from sqlalchemy.orm import Session
-
-from database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 fallback_user = {
@@ -100,8 +98,8 @@ def validate_uuid(value: str | None, field_name: str) -> None:
         )
 
 
-def generate_transfer_no(db: Session):
-    result = db.execute(
+async def generate_transfer_no(db: AsyncSession):
+    result = await db.execute(
         text(
             """
             SELECT COUNT(*) AS total
@@ -115,7 +113,7 @@ def generate_transfer_no(db: Session):
     for index in range(total + 1, total + 1000):
         transfer_no = f"TRF-2026-{index:04d}"
 
-        exists = db.execute(
+        exists_result = await db.execute(
             text(
                 """
                 SELECT 1
@@ -125,7 +123,8 @@ def generate_transfer_no(db: Session):
                 """
             ),
             {"transfer_no": transfer_no},
-        ).fetchone()
+        )
+        exists = exists_result.fetchone()
 
         if exists is None:
             return transfer_no
@@ -133,10 +132,10 @@ def generate_transfer_no(db: Session):
     raise HTTPException(status_code=500, detail="Unable to generate transfer_no")
 
 
-def get_transfer_or_404(transfer_id: str, db: Session):
+async def get_transfer_or_404(transfer_id: str, db: AsyncSession):
     validate_uuid(transfer_id, "transfer_id")
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             SELECT *
@@ -155,10 +154,10 @@ def get_transfer_or_404(transfer_id: str, db: Session):
     return dict(transfer._mapping)
 
 
-def get_sample_or_404(sample_id: str, db: Session):
+async def get_sample_or_404(sample_id: str, db: AsyncSession):
     validate_uuid(sample_id, "sample_id")
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             SELECT *
@@ -177,10 +176,10 @@ def get_sample_or_404(sample_id: str, db: Session):
     return dict(sample._mapping)
 
 
-def get_wip_or_404(wip_id: str, db: Session):
+async def get_wip_or_404(wip_id: str, db: AsyncSession):
     validate_uuid(wip_id, "wip_id")
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             SELECT *
@@ -199,8 +198,8 @@ def get_wip_or_404(wip_id: str, db: Session):
     return dict(wip._mapping)
 
 
-def update_next_lab_wips_location(
-    db: Session,
+async def update_next_lab_wips_location(
+    db: AsyncSession,
     sample_id: str,
     to_lab: str | None,
     next_location: str,
@@ -208,7 +207,7 @@ def update_next_lab_wips_location(
     if not to_lab:
         return
 
-    db.execute(
+    await db.execute(
         text(
             """
             UPDATE wips

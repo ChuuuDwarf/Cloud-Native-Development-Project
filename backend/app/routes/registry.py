@@ -14,6 +14,8 @@ from app.routes.roles import router as roles_router
 from app.routes.samples import router as samples_router
 from app.routes.users import router as users_router
 from app.routes.workflow_views import router as workflow_views_router
+from app.routes.transfers import router as transfers_router
+from app.routes.wips import router as wips_router
 
 ALL_ROUTERS: list[APIRouter] = [
     auth_router,
@@ -25,4 +27,6 @@ ALL_ROUTERS: list[APIRouter] = [
     samples_router,
     workflow_views_router,
     quotas_router,
+    transfers_router,
+    wips_router,
 ]

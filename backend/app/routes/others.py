@@ -9,9 +9,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from app.core.database import get_db
 
 router = APIRouter(
     prefix="/api",
@@ -30,8 +30,8 @@ def get_current_user(request: Request):
 
 
 @router.get("/others")
-def get_others(request: Request, db: Session = Depends(get_db)):
-    sample_result = db.execute(
+async def get_others(request: Request, db: AsyncSession = Depends(get_db)):
+    sample_result = await db.execute(
         text(
             """
             SELECT
@@ -54,7 +54,7 @@ def get_others(request: Request, db: Session = Depends(get_db)):
     )
     samples = [dict(row._mapping) for row in sample_result]
 
-    wip_result = db.execute(
+    wip_result = await db.execute(
         text(
             """
             SELECT
@@ -171,10 +171,10 @@ def create_mock_storage_location(payload: dict):
 
 
 @router.post("/others/orders")
-def create_mock_order(
+async def create_mock_order(
     payload: dict,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = resolve_current_user(request)
 
@@ -217,7 +217,7 @@ def create_mock_order(
             detail="這個委託單號已經存在，請換一個委託單號",
         )
 
-    existing_sample = db.execute(
+    existing_sample_result = await db.execute(
         text(
             """
             SELECT id
@@ -227,7 +227,8 @@ def create_mock_order(
             """
         ),
         {"order_no": order_no},
-    ).fetchone()
+    )
+    existing_sample = existing_sample_result.fetchone()
 
     if existing_sample is not None:
         raise HTTPException(
@@ -268,12 +269,12 @@ def create_mock_order(
     )
 
     first_lab = requested_experiments[0].get("lab_name", "Lab A")
-    sample_no = generate_sample_no(db)
+    sample_no = await generate_sample_no(db)
     current_location = receive_location(first_lab)
 
     note = payload.get("note")
 
-    sample_result = db.execute(
+    sample_result = await db.execute(
         text(
             """
             INSERT INTO samples (
@@ -315,7 +316,7 @@ def create_mock_order(
 
     sample = dict(sample_result.fetchone()._mapping)
 
-    db.execute(
+    await db.execute(
         text(
             """
             INSERT INTO sample_histories (
@@ -349,7 +350,7 @@ def create_mock_order(
         },
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "order": order,
@@ -428,14 +429,14 @@ def create_mock_master_data(payload: dict):
 
 
 @router.post("/others/samples/{sample_id}/generate-wips")
-def generate_missing_wips_for_sample(
+async def generate_missing_wips_for_sample(
     sample_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = resolve_current_user(request)
 
-    sample_result = db.execute(
+    sample_result = await db.execute(
         text(
             """
             SELECT *
@@ -478,7 +479,7 @@ def generate_missing_wips_for_sample(
         lab_name = item["lab_name"]
         experiment_item = item["experiment_item"]
 
-        exists = db.execute(
+        exists_result = await db.execute(
             text(
                 """
                 SELECT *
@@ -494,15 +495,16 @@ def generate_missing_wips_for_sample(
                 "lab_name": lab_name,
                 "experiment_item": experiment_item,
             },
-        ).fetchone()
+        )
+        exists = exists_result.fetchone()
 
         if exists is not None:
             skipped_wips.append(dict(exists._mapping))
             continue
 
-        wip_no = generate_unique_wip_no(db, sample["sample_no"], index)
+        wip_no = await generate_unique_wip_no(db, sample["sample_no"], index)
 
-        wip_result = db.execute(
+        wip_result = await db.execute(
             text(
                 """
                 INSERT INTO wips (
@@ -547,7 +549,7 @@ def generate_missing_wips_for_sample(
         created_wip = dict(wip_result.fetchone()._mapping)
         created_wips.append(created_wip)
 
-        db.execute(
+        await db.execute(
             text(
                 """
                 INSERT INTO wip_histories (
@@ -578,7 +580,7 @@ def generate_missing_wips_for_sample(
             },
         )
 
-    db.execute(
+    await db.execute(
         text(
             """
             UPDATE samples
@@ -595,7 +597,7 @@ def generate_missing_wips_for_sample(
         },
     )
 
-    db.execute(
+    await db.execute(
         text(
             """
             INSERT INTO sample_histories (
@@ -626,7 +628,7 @@ def generate_missing_wips_for_sample(
             "lab_name": current_user.get("lab_name") or current_user.get("department"),
         },
     )
-    db.commit()
+    await db.commit()
 
     return {
         "message": "WIP 補齊完成",
@@ -636,14 +638,14 @@ def generate_missing_wips_for_sample(
 
 
 @router.post("/others/wips/{wip_id}/complete")
-def complete_wip_by_others_test(
+async def complete_wip_by_others_test(
     wip_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = resolve_current_user(request)
 
-    wip_result = db.execute(
+    wip_result = await db.execute(
         text(
             """
             SELECT *
@@ -664,7 +666,7 @@ def complete_wip_by_others_test(
     current_lab = current_user.get("lab_name") or current_user.get("department")
     next_location = experiment_temp_location(current_lab)
 
-    result = db.execute(
+    result = await db.execute(
         text(
             """
             UPDATE wips
@@ -684,7 +686,7 @@ def complete_wip_by_others_test(
         },
     )
 
-    db.execute(
+    await db.execute(
         text(
             """
             UPDATE samples
@@ -700,7 +702,7 @@ def complete_wip_by_others_test(
         },
     )
 
-    db.execute(
+    await db.execute(
         text(
             """
             INSERT INTO wip_histories (
@@ -729,7 +731,7 @@ def complete_wip_by_others_test(
         },
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "message": "WIP 已標記完成",
@@ -809,10 +811,10 @@ def create_issue(payload: dict):
     return create_mock_issue(payload)
 
 @router.post("/others/orders/{order_id}/confirm-delivery")
-def confirm_mock_order_delivery(
+async def confirm_mock_order_delivery(
     order_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user = resolve_current_user(request)
 
@@ -834,7 +836,7 @@ def confirm_mock_order_delivery(
             detail="只有 approved 狀態的委託單可以確認送樣",
         )
 
-    existing_sample = db.execute(
+    existing_sample_result = await db.execute(
         text(
             """
             SELECT *
@@ -844,7 +846,8 @@ def confirm_mock_order_delivery(
             """
         ),
         {"order_no": order["order_no"]},
-    ).fetchone()
+    )
+    existing_sample = existing_sample_result.fetchone()
 
     if existing_sample is not None:
         order["status"] = "pending_receive"
@@ -873,12 +876,12 @@ def confirm_mock_order_delivery(
     )
 
     first_lab = requested_experiments[0].get("lab_name", "Lab A")
-    sample_no = generate_sample_no(db)
+    sample_no = await generate_sample_no(db)
     current_location = receive_location(first_lab)
 
     note = order.get("note")
 
-    sample_result = db.execute(
+    sample_result = await db.execute(
         text(
             """
             INSERT INTO samples (
@@ -920,7 +923,7 @@ def confirm_mock_order_delivery(
 
     sample = dict(sample_result.fetchone()._mapping)
 
-    db.execute(
+    await db.execute(
         text(
             """
             INSERT INTO sample_histories (
@@ -955,7 +958,7 @@ def confirm_mock_order_delivery(
     )
     order["status"] = "pending_receive"
 
-    db.commit()
+    await db.commit()
 
     return {
         "order": order,

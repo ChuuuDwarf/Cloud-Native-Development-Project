@@ -6,8 +6,9 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import String, cast, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import String, cast, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.common.dependencies import CurrentUser
 from app.core.order_constants import EDITABLE_STATUSES, FINAL_STATUSES, TRANSITIONS
@@ -44,12 +45,12 @@ class OrderItemMasterData(Protocol):
 
 
 class OrderRepository:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    def create_order(self, payload: OrderCreate, current_user: CurrentUser) -> Order:
+    async def create_order(self, payload: OrderCreate, current_user: CurrentUser) -> Order:
         require_role(current_user, {"site_user"})
-        self._validate_order_master_data(payload.department_id, payload.items)
+        await self._validate_order_master_data(payload.department_id, payload.items)
 
         applicant_id = user_id(current_user)
         now = utc_now()
@@ -66,7 +67,7 @@ class OrderRepository:
         )
         order.items = [self._make_item(item, now) for item in payload.items]
         self.db.add(order)
-        self.db.flush()
+        await self.db.flush()
 
         order.order_no = generate_order_no(order.id)
         self._append_history(
@@ -76,10 +77,10 @@ class OrderRepository:
             from_status=None,
             to_status=OrderStatus.DRAFT.value,
         )
-        self.db.commit()
-        return self.get_order(order.id)
+        await self.db.commit()
+        return await self.get_order(order.id)
 
-    def list_orders(
+    async def list_orders(
         self,
         status_filter: OrderStatus | None = None,
         applicant_id: str | None = None,
@@ -127,15 +128,15 @@ class OrderRepository:
 
             stmt = stmt.where(approvable_item_exists)
 
-        orders = self.db.execute(stmt).unique().scalars().all()
+        orders = (await self.db.execute(stmt)).unique().scalars().all()
         return [order_to_schema(order) for order in orders]
 
-    def get_order(self, order_id: int) -> Order:
-        return order_to_schema(self._get_order_model(order_id))
+    async def get_order(self, order_id: int) -> Order:
+        return order_to_schema(await self._get_order_model(order_id))
 
-    def update_order(self, order_id: int, payload: OrderUpdate, current_user: CurrentUser) -> Order:
+    async def update_order(self, order_id: int, payload: OrderUpdate, current_user: CurrentUser) -> Order:
         now = utc_now()
-        order = self._get_order_model(order_id)
+        order = await self._get_order_model(order_id)
         actor_id = user_id(current_user)
         require_role(current_user, {"site_user"})
         if actor_id != order.applicant_id:
@@ -164,7 +165,7 @@ class OrderRepository:
                 for item in order.items
             ]
 
-        self._validate_order_master_data(next_department_id, next_items)
+        await self._validate_order_master_data(next_department_id, next_items)
 
         if payload.department_id is not None:
             order.department_id = payload.department_id
@@ -192,7 +193,7 @@ class OrderRepository:
                         raise bad_request("Only returned order items can be edited individually")
 
                     # validate mapping for new lab/experiment
-                    self._validate_order_master_data(
+                    await self._validate_order_master_data(
                         order.department_id,
                         [
                             OrderItemCreate(
@@ -219,7 +220,7 @@ class OrderRepository:
                 order.total_items = len(order.items)
             else:
                 order.items.clear()
-                self.db.flush()
+                await self.db.flush()
                 order.items = [self._make_item(item, now) for item in payload.items]
                 order.total_items = len(order.items)
 
@@ -231,12 +232,12 @@ class OrderRepository:
             from_status=order.status,
             to_status=order.status,
         )
-        self.db.commit()
-        return self.get_order(order.id)
+        await self.db.commit()
+        return await self.get_order(order.id)
 
-    def delete_order(self, order_id: int, current_user: CurrentUser) -> None:
+    async def delete_order(self, order_id: int, current_user: CurrentUser) -> None:
         now = utc_now()
-        order = self._get_order_model(order_id)
+        order = await self._get_order_model(order_id)
         actor_id = user_id(current_user)
         require_role(current_user, {"site_user"})
         if actor_id != order.applicant_id:
@@ -256,16 +257,16 @@ class OrderRepository:
             from_status=order.status,
             to_status=order.status,
         )
-        self.db.commit()
+        await self.db.commit()
 
-    def apply_action(
+    async def apply_action(
         self,
         order_id: int,
         payload: OrderActionRequest,
         current_user: CurrentUser,
     ) -> Order:
         now = utc_now()
-        order = self._get_order_model(order_id)
+        order = await self._get_order_model(order_id)
         current_status = OrderStatus(order.status)
         actor_id = user_id(current_user)
 
@@ -339,7 +340,7 @@ class OrderRepository:
 
                 order.status = self.aggregate_approval_status(order)
                 if order.status == OrderStatus.APPROVED.value:
-                    self.record_quota_usage(order)
+                    await self.record_quota_usage(order)
 
             elif payload.action == OrderAction.RETURN:
                 for item in target_items:
@@ -366,12 +367,14 @@ class OrderRepository:
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Only the applicant can confirm sample delivery",
                     )
+
+                await self.create_samples_for_confirmed_delivery(order, current_user)
             else:
                 require_role(current_user, {"lab_staff", "lab_manager"})
             order.status = to_status.value
 
         if payload.action == OrderAction.SUBMIT:
-            remaining_quota = self.effective_remaining_quota(order)
+            remaining_quota = await self.effective_remaining_quota(order)
             for index, item in enumerate(order.items):
                 item.status = OrderStatus.PENDING_APPROVAL.value
                 item.approved_by = None
@@ -385,7 +388,7 @@ class OrderRepository:
                 item.quota_exceeded = index >= remaining_quota
                 item.updated_at = now
 
-            quota_check = self.check_quota_for_order(order)
+            quota_check = await self.check_quota_for_order(order)
             if quota_check["needOverride"]:
                 order.last_reason = "配額超額,需主管特批"
             else:
@@ -409,24 +412,24 @@ class OrderRepository:
             reason=payload.reason,
             quota_override=payload.quota_override,
         )
-        self.db.commit()
-        return self.get_order(order.id)
+        await self.db.commit()
+        return await self.get_order(order.id)
 
-    def get_history(self, order_id: int) -> list[OrderHistory]:
-        order = self._get_order_model(order_id)
+    async def get_history(self, order_id: int) -> list[OrderHistory]:
+        order = await self._get_order_model(order_id)
         stmt = (
             select(OrderHistoryModel)
             .where(OrderHistoryModel.order_id == order.id)
             .order_by(OrderHistoryModel.action_time.asc(), OrderHistoryModel.id.asc())
         )
-        histories = self.db.execute(stmt).scalars().all()
+        histories = (await self.db.execute(stmt)).scalars().all()
         return [history_to_schema(history) for history in histories]
 
-    def list_quota_settings(self) -> list[QuotaSettingModel]:
+    async def list_quota_settings(self) -> list[QuotaSettingModel]:
         stmt = select(QuotaSettingModel).order_by(QuotaSettingModel.id.asc())
-        return list(self.db.execute(stmt).scalars().all())
+        return list((await self.db.execute(stmt)).scalars().all())
 
-    def create_quota_setting(self, payload: QuotaPayload) -> QuotaSettingModel:
+    async def create_quota_setting(self, payload: QuotaPayload) -> QuotaSettingModel:
         now = utc_now()
         quota = QuotaSettingModel(
             scope_type=payload.scope_type,
@@ -439,12 +442,12 @@ class OrderRepository:
             updated_at=now,
         )
         self.db.add(quota)
-        self.db.commit()
-        self.db.refresh(quota)
+        await self.db.commit()
+        await self.db.refresh(quota)
         return quota
 
-    def update_quota_setting(self, quota_id: int, payload: QuotaPatchPayload) -> QuotaSettingModel:
-        quota = self.db.get(QuotaSettingModel, quota_id)
+    async def update_quota_setting(self, quota_id: int, payload: QuotaPatchPayload) -> QuotaSettingModel:
+        quota = await self.db.get(QuotaSettingModel, quota_id)
         if quota is None:
             raise not_found("Quota setting not found")
         if payload.monthly_limit is not None:
@@ -456,16 +459,16 @@ class OrderRepository:
         if payload.is_active is not None:
             quota.is_active = payload.is_active
         quota.updated_at = utc_now()
-        self.db.commit()
-        self.db.refresh(quota)
+        await self.db.commit()
+        await self.db.refresh(quota)
         return quota
 
-    def check_quota_for_order(self, order: OrderModel) -> dict[str, Any]:
+    async def check_quota_for_order(self, order: OrderModel) -> dict[str, Any]:
         checks: list[dict[str, Any]] = [
             item
             for item in (
-                self._quota_check("user", order.applicant_id, order.total_items, order.priority),
-                self._quota_check(
+                await self._quota_check("user", order.applicant_id, order.total_items, order.priority),
+                await self._quota_check(
                     "department", order.department_id, order.total_items, order.priority
                 ),
             )
@@ -474,7 +477,7 @@ class OrderRepository:
         allowed = all(item["allowed"] for item in checks) if checks else True
         return {"allowed": allowed, "needOverride": not allowed, "checks": checks}
 
-    def check_quota(
+    async def check_quota(
         self,
         applicant_id: str,
         department_id: str,
@@ -484,20 +487,20 @@ class OrderRepository:
         checks: list[dict[str, Any]] = [
             item
             for item in (
-                self._quota_check("user", applicant_id, item_count, priority),
-                self._quota_check("department", department_id, item_count, priority),
+                await self._quota_check("user", applicant_id, item_count, priority),
+                await self._quota_check("department", department_id, item_count, priority),
             )
             if item is not None
         ]
         allowed = all(item["allowed"] for item in checks) if checks else True
         return {"allowed": allowed, "needOverride": not allowed, "checks": checks}
 
-    def effective_remaining_quota(self, order: OrderModel) -> int:
+    async def effective_remaining_quota(self, order: OrderModel) -> int:
         remaining_values: list[int] = [
             value
             for value in (
-                self._quota_remaining("user", order.applicant_id, order.priority),
-                self._quota_remaining("department", order.department_id, order.priority),
+                await self._quota_remaining("user", order.applicant_id, order.priority),
+                await self._quota_remaining("department", order.department_id, order.priority),
             )
             if value is not None
         ]
@@ -522,9 +525,11 @@ class OrderRepository:
             return OrderStatus.PENDING_APPROVAL.value
         return order.status
 
-    def record_quota_usage(self, order: OrderModel) -> None:
-        existing_usage = self.db.execute(
+    async def record_quota_usage(self, order: OrderModel) -> None:
+        existing_usage = (
+            await self.db.execute(
             select(QuotaUsageModel).where(QuotaUsageModel.order_id == order.id)
+            )
         ).scalar_one_or_none()
         if existing_usage:
             return
@@ -552,7 +557,193 @@ class OrderRepository:
                 )
             )
 
-    def _quota_check(
+    async def create_samples_for_confirmed_delivery(
+        self,
+        order: OrderModel,
+        current_user: CurrentUser,
+    ) -> None:
+        """Create pending samples when the applicant confirms delivery.
+
+        Business rule:
+        - One physical sample should only create one row in `samples`.
+        - Multiple approved order items with the same `sample_id` are merged into the
+          same sample row.
+        - The merged `experiment_item` keeps lab/experiment information so the sample
+          module can split/dispatch the sample into WIPs later.
+        """
+
+        approved_items = [
+            item for item in order.items if item.status == OrderStatus.APPROVED.value
+        ]
+        if not approved_items:
+            return
+
+        lab_keys = {item.lab_id for item in approved_items if item.lab_id}
+        experiment_keys = {
+            item.experiment_id for item in approved_items if item.experiment_id
+        }
+
+        labs = (
+            (
+                await self.db.execute(
+                    select(Lab).where(
+                        (cast(Lab.id, String).in_(lab_keys)) | (Lab.code.in_(lab_keys))
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        labs_by_key: dict[str, Lab] = {str(lab.id): lab for lab in labs}
+        labs_by_key.update({lab.code: lab for lab in labs})
+
+        capabilities = (
+            (
+                await self.db.execute(
+                    select(LabCapability).where(
+                        cast(LabCapability.id, String).in_(experiment_keys)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        capabilities_by_id: dict[str, LabCapability] = {
+            str(capability.id): capability for capability in capabilities
+        }
+
+        items_by_sample_no: dict[str, list[OrderItemModel]] = {}
+        for item in approved_items:
+            items_by_sample_no.setdefault(item.sample_id, []).append(item)
+
+        for sample_no, sample_items in items_by_sample_no.items():
+            # `samples.sample_no` is unique. This makes confirm_delivery idempotent:
+            # if the button/API is triggered again, do not create duplicates.
+            existing_sample = (
+                await self.db.execute(
+                    text(
+                        """
+                        SELECT id
+                        FROM samples
+                        WHERE sample_no = :sample_no
+                        LIMIT 1
+                        """
+                    ),
+                    {"sample_no": sample_no},
+                )
+            ).fetchone()
+            if existing_sample is not None:
+                continue
+
+            experiment_parts: list[str] = []
+            first_lab_name: str | None = None
+
+            for item in sample_items:
+                lab = labs_by_key.get(item.lab_id)
+                capability = capabilities_by_id.get(item.experiment_id)
+
+                lab_name = lab.name if lab is not None else item.lab_id
+                experiment_name = (
+                    capability.experiment_item
+                    if capability is not None
+                    else item.experiment_id
+                )
+
+                if first_lab_name is None:
+                    first_lab_name = lab_name
+
+                part = f"{lab_name}:{experiment_name}"
+                if part not in experiment_parts:
+                    experiment_parts.append(part)
+
+            experiment_summary = self._truncate_text("、".join(experiment_parts), 100)
+            current_location = (
+                f"{first_lab_name} 收樣區" if first_lab_name else "收樣區"
+            )
+
+            sample_result = await self.db.execute(
+                text(
+                    """
+                    INSERT INTO samples (
+                        sample_no,
+                        order_no,
+                        sample_name,
+                        experiment_item,
+                        applicant_name,
+                        applicant_department,
+                        status,
+                        current_location,
+                        note
+                    )
+                    VALUES (
+                        :sample_no,
+                        :order_no,
+                        :sample_name,
+                        :experiment_item,
+                        :applicant_name,
+                        :applicant_department,
+                        'pending_receive',
+                        :current_location,
+                        :note
+                    )
+                    RETURNING id
+                    """
+                ),
+                {
+                    "sample_no": sample_no,
+                    "order_no": order.order_no,
+                    "sample_name": sample_no,
+                    "experiment_item": experiment_summary,
+                    "applicant_name": current_user.name,
+                    "applicant_department": order.department_id,
+                    "current_location": current_location,
+                    "note": self._truncate_text(
+                        f"由委託單 {order.order_no} 確認送樣自動建立",
+                        500,
+                    ),
+                },
+            )
+            created_sample = sample_result.fetchone()
+            if created_sample is None:
+                continue
+
+            sample_id = created_sample._mapping["id"]
+
+            await self.db.execute(
+                text(
+                    """
+                    INSERT INTO sample_histories (
+                        sample_id,
+                        action,
+                        from_status,
+                        to_status,
+                        description,
+                        operator_name,
+                        lab_name
+                    )
+                    VALUES (
+                        :sample_id,
+                        'delivery_confirmed_create_sample',
+                        NULL,
+                        'pending_receive',
+                        :description,
+                        :operator_name,
+                        :lab_name
+                    )
+                    """
+                ),
+                {
+                    "sample_id": sample_id,
+                    "description": (
+                        f"確認送樣後建立待收樣樣品 {sample_no}，"
+                        f"目前位置：{current_location}"
+                    ),
+                    "operator_name": current_user.name,
+                    "lab_name": first_lab_name,
+                },
+            )
+
+    async def _quota_check(
         self,
         scope_type: str,
         scope_id: str,
@@ -560,7 +751,8 @@ class OrderRepository:
         priority: str,
     ) -> dict[str, Any] | None:
         quota = (
-            self.db.execute(
+            (
+                await self.db.execute(
                 select(QuotaSettingModel)
                 .where(
                     QuotaSettingModel.scope_type == scope_type,
@@ -568,6 +760,7 @@ class OrderRepository:
                     QuotaSettingModel.is_active.is_(True),
                 )
                 .order_by(QuotaSettingModel.updated_at.desc(), QuotaSettingModel.id.desc())
+            )
             )
             .scalars()
             .first()
@@ -579,13 +772,15 @@ class OrderRepository:
         now = utc_now()
 
         usages = (
-            self.db.execute(
+            (
+                await self.db.execute(
                 select(QuotaUsageModel).where(
                     QuotaUsageModel.scope_type == scope_type,
                     QuotaUsageModel.scope_id == scope_id,
                     QuotaUsageModel.year == now.year,
                     QuotaUsageModel.month == now.month,
                 )
+            )
             )
             .scalars()
             .all()
@@ -595,7 +790,7 @@ class OrderRepository:
         urgent_used = sum(item.urgent_used_count for item in usages)
         critical_used = sum(item.critical_used_count for item in usages)
 
-        reserved = self._reserved_quota_count(scope_type, scope_id)
+        reserved = await self._reserved_quota_count(scope_type, scope_id)
 
         urgent_requested = item_count if priority == PriorityLevel.URGENT.value else 0
         critical_requested = item_count if priority == PriorityLevel.CRITICAL.value else 0
@@ -631,7 +826,7 @@ class OrderRepository:
             "needOverride": not allowed,
         }
 
-    def _reserved_quota_count(self, scope_type: str, scope_id: str) -> int:
+    async def _reserved_quota_count(self, scope_type: str, scope_id: str) -> int:
         if not scope_id or scope_id == "__not_applicable__":
             return 0
 
@@ -647,12 +842,12 @@ class OrderRepository:
         else:
             return 0
 
-        pending_orders = self.db.execute(select(OrderModel).where(*conditions)).scalars().all()
+        pending_orders = (await self.db.execute(select(OrderModel).where(*conditions))).scalars().all()
 
         return sum(order.total_items for order in pending_orders)
 
-    def _quota_remaining(self, scope_type: str, scope_id: str, priority: str) -> int | None:
-        check = self._quota_check(scope_type, scope_id, 0, priority)
+    async def _quota_remaining(self, scope_type: str, scope_id: str, priority: str) -> int | None:
+        check = await self._quota_check(scope_type, scope_id, 0, priority)
         if check is None:
             return None
 
@@ -666,13 +861,13 @@ class OrderRepository:
 
         return min(remaining_values)
 
-    def _get_order_model(self, order_id: int) -> OrderModel:
+    async def _get_order_model(self, order_id: int) -> OrderModel:
         stmt = (
             select(OrderModel)
             .options(joinedload(OrderModel.items))
             .where(OrderModel.id == order_id, OrderModel.is_deleted.is_(False))
         )
-        order = self.db.execute(stmt).unique().scalar_one_or_none()
+        order = (await self.db.execute(stmt)).unique().scalar_one_or_none()
         if order is None:
             raise not_found("Order not found")
         return order
@@ -687,26 +882,30 @@ class OrderRepository:
             updated_at=now,
         )
 
-    def _validate_order_master_data(
+    async def _validate_order_master_data(
         self,
         department_id: str,
         items: Sequence[OrderItemMasterData],
     ) -> None:
-        department_exists = self.db.execute(
+        department_exists = (
+            await self.db.execute(
             select(Department.id).where(
                 Department.is_active.is_(True),
                 (cast(Department.id, String) == department_id) | (Department.code == department_id),
+            )
             )
         ).scalar_one_or_none()
 
         lab_ids = {item.lab_id for item in items}
         experiment_ids = {item.experiment_id for item in items}
         labs = (
-            self.db.execute(
+            (
+                await self.db.execute(
                 select(Lab).where(
                     Lab.is_active.is_(True),
                     (cast(Lab.id, String).in_(lab_ids)) | (Lab.code.in_(lab_ids)),
                 )
+            )
             )
             .scalars()
             .all()
@@ -715,8 +914,10 @@ class OrderRepository:
         labs_by_key.update({lab.code: lab for lab in labs})
 
         capabilities = (
-            self.db.execute(
+            (
+                await self.db.execute(
                 select(LabCapability).where(cast(LabCapability.id, String).in_(experiment_ids))
+            )
             )
             .scalars()
             .all()
@@ -751,6 +952,14 @@ class OrderRepository:
             for item in items
         ]
         validate_static_order_master_data(department_id, static_items)
+
+    @staticmethod
+    def _truncate_text(value: str | None, max_length: int) -> str | None:
+        if value is None:
+            return None
+        if len(value) <= max_length:
+            return value
+        return value[: max_length - 1] + "…"
 
     def _append_history(
         self,
