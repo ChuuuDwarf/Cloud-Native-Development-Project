@@ -63,12 +63,17 @@ def create_app() -> FastAPI:
             ).model_dump(),
         )
 
+    @app.get("/health", tags=["Health"])
+    async def health() -> dict:
+        return {"status": "ok", "service": "lims-backend"}
+
     @app.get("/", tags=["Health"])
     async def root() -> dict:
         return {
             "service": "lims-backend",
             "docs": "/api-docs",
             "openapi": "/openapi.json",
+            "health": "/health",
         }
 
     for router in ALL_ROUTERS:
