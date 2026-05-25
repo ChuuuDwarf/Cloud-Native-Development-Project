@@ -14,12 +14,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    # Attach to both the default compose network (so backend/frontend/celery
-    # keep reaching it as `postgres`) and lims_devnet (so the devcontainer
-    # workspace, which lives on lims_devnet, can resolve it by the same name).
-    networks:
-      - default
-      - lims_devnet
 
   redis:
     image: redis:7-alpine
@@ -33,9 +27,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    networks:
-      - default
-      - lims_devnet
 
   backend:
     build: ./backend
@@ -159,12 +150,3 @@ volumes:
   redisdata:
   uploads:
   pgadmindata:
-
-networks:
-  # Bridge network shared with the .devcontainer workspace. Declared external
-  # so this compose file does NOT create or delete it — the devcontainer
-  # workflow owns its lifecycle (`make devcontainer-net`). Non-devcontainer
-  # users still need to create it once (or run `make devcontainer-up`) before
-  # `docker compose up`, since postgres/redis are now attached to it.
-  lims_devnet:
-    external: true
