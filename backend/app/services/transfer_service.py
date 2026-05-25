@@ -28,7 +28,7 @@ async def get_active_user(
 ):
     """讀正式目前使用者；不再依賴 mock user。"""
     try:
-        from app.services.temporary_others_service import resolve_current_user
+        from app.services.workflow_helpers import resolve_current_user
 
         return await resolve_current_user(db, request)
     except Exception:

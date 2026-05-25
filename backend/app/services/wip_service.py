@@ -25,7 +25,7 @@ async def get_active_user(
     request: Request | None = None,
 ):
     try:
-        from app.services.temporary_others_service import resolve_current_user
+        from app.services.workflow_helpers import resolve_current_user
 
         return await resolve_current_user(db, request)
     except Exception:
