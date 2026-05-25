@@ -105,5 +105,3 @@ export type OthersData = {
   }>
   master_data: Record<string, MasterDataItem[]>
 }
-
-export type PayloadValue = string | null | RequestedExperiment[]

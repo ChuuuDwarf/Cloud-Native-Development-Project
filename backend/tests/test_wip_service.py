@@ -7,6 +7,7 @@ from app.services.wip_service import (
     can_manage_wip,
     can_view_wip,
     experiment_temp_location,
+    get_completable_wip_slots_for_current_segment,
     find_first_incomplete_wip_slot,
     find_wip_experiment_index_from_slots,
     lab_location,
@@ -100,6 +101,40 @@ def test_wip_order_slots_allow_second_same_lab_after_first_completed_in_aab_flow
     assert first_incomplete is not None
     assert first_incomplete["wip"]["id"] == "a-2"
     assert find_wip_experiment_index_from_slots(slots, "a-2") == 1
+
+
+def test_wip_complete_order_guard_allows_any_wip_in_contiguous_same_lab_segment():
+    experiments = parse_requested_experiments("Lab A:SEM、Lab A:EDX、Lab B:CV")
+    wips = [
+        {"id": "a-1", "lab_name": "Lab A", "experiment_item": "SEM", "status": "created"},
+        {"id": "a-2", "lab_name": "Lab A", "experiment_item": "EDX", "status": "created"},
+        {"id": "b-1", "lab_name": "Lab B", "experiment_item": "CV", "status": "created"},
+    ]
+
+    slots = build_ordered_wip_slots(experiments, wips)
+    completable_ids = {
+        slot["wip"]["id"]
+        for slot in get_completable_wip_slots_for_current_segment(slots)
+    }
+
+    assert completable_ids == {"a-1", "a-2"}
+
+
+def test_wip_complete_order_guard_blocks_same_lab_after_intermediate_lab():
+    experiments = parse_requested_experiments("Lab A:SEM、Lab B:CV、Lab A:EDX")
+    wips = [
+        {"id": "a-1", "lab_name": "Lab A", "experiment_item": "SEM", "status": "created"},
+        {"id": "b-1", "lab_name": "Lab B", "experiment_item": "CV", "status": "created"},
+        {"id": "a-2", "lab_name": "Lab A", "experiment_item": "EDX", "status": "created"},
+    ]
+
+    slots = build_ordered_wip_slots(experiments, wips)
+    completable_ids = [
+        slot["wip"]["id"]
+        for slot in get_completable_wip_slots_for_current_segment(slots)
+    ]
+
+    assert completable_ids == ["a-1"]
 
 
 def test_wip_create_order_guard_allows_contiguous_same_lab_wips():

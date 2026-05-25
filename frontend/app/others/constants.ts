@@ -1,5 +1,3 @@
-import type { RequestedExperiment } from './types'
-
 export const tabs = [
   { key: 'users', label: '使用者 / 權限' },
   { key: 'labs', label: '實驗室' },
@@ -11,55 +9,6 @@ export const tabs = [
 ] as const
 
 export type TabKey = (typeof tabs)[number]['key']
-
-export const defaultForms: Record<TabKey, Record<string, string>> = {
-  users: {
-    name: '',
-    role: 'lab_engineer',
-    role_name: '實驗室人員',
-    department: '',
-    lab_name: '',
-    email: '',
-  },
-  labs: {
-    name: '',
-    description: '材料與電性測試',
-  },
-  storage: {
-    code: '',
-    name: '',
-    lab_name: '',
-  },
-  orders: {
-    order_no: '',
-    applicant_name: '王建國',
-    applicant_department: 'F12 廠',
-    sample_name: '晶圓切片',
-    sample_quantity: '1',
-    requested_experiment_keys: '',
-    priority: 'normal',
-    status: 'approved',
-  },
-  schedules: {
-    wip_no: '',
-    machine_name: '',
-    status: 'waiting_schedule',
-    start_time: '',
-  },
-  issues: {
-    type: 'warning',
-    target_type: 'sample',
-    target_no: '',
-    level: 'medium',
-    message: '',
-    status: 'open',
-  },
-  master: {
-    category: 'sample_statuses',
-    value: '',
-    label: '',
-  },
-}
 
 export const sampleStatusText: Record<string, string> = {
   approved: '已核准 / 未送樣',

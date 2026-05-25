@@ -1,14 +1,13 @@
 'use client'
 
-// TODO(integration): 這個頁面是暫時替代頁。專案合併後請改接 sample_management.md 內列出的正式模組 API：/api/me、/api/orders、/api/storage-locations、/api/labs、/api/master-data、/api/schedules、/api/dispatches、/api/issues。
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { apiGet, apiPost } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error'
-import type { OthersData, PayloadValue } from './types'
-import { tabs, defaultForms, sampleStatusText, wipStatusText, priorityText, orderStatusText } from './constants'
+import type { OthersData } from './types'
+import { tabs, sampleStatusText, wipStatusText, priorityText, orderStatusText } from './constants'
 import type { TabKey } from './constants'
 import { formatRequestedExperiments } from './utils/format'
-import { CreateForm, SimpleTable } from './components/OthersWidgets'
+import { SimpleTable } from './components/OthersWidgets'
 import { pageStyle, headerStyle, headerActionsStyle, titleStyle, subtitleStyle, cardStyle, cardHeaderStyle, sectionTitleStyle, mutedStyle, currentUserGridStyle, profileBoxStyle, avatarStyle, codeBlockStyle, pillStyle, statusPillStyle, tabHeaderStyle, tabBarStyle, tabStyle, activeTabStyle, primaryButtonStyle, secondaryButtonStyle, errorStyle, successStyle, noticeStyle, tableTitleStyle, tableWrapStyle, tableStyle, thStyle, tdStyle, monoTdStyle, emptyTdStyle, trStyle, successMiniTextStyle, masterGridStyle, miniCardStyle, chipWrapStyle, outlinePillStyle, mutedMonoStyle } from './styles'
 
 export default function OthersPage() {
@@ -16,24 +15,19 @@ export default function OthersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('users')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [showCreateForm, setShowCreateForm] = useState(false)
-  const [form, setForm] = useState<Record<string, string>>(defaultForms.users)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
 
-  const currentUserPayload = useMemo(() => {
-    if (!data?.current_user) return ''
-    return JSON.stringify(data.current_user, null, 2)
-  }, [data?.current_user])
+  const currentUserPayload = data?.current_user ? JSON.stringify(data.current_user, null, 2) : ''
 
   async function loadData() {
     try {
       setLoading(true)
       setError('')
-      const result = await apiGet<OthersData>('/api/others') // TODO(integration): 改接正式 role/order/system_setting/schedule/warn 模組 API 後移除 /api/others 聚合資料
+      const result = await apiGet<OthersData>('/api/others')
       setData(result)
     } catch (err) {
-      setError(getErrorMessage(err, '載入替代資料失敗'))
+      setError(getErrorMessage(err, '載入系統資料失敗'))
     } finally {
       setLoading(false)
     }
@@ -45,10 +39,10 @@ export default function OthersPage() {
       setError('')
       setSuccessMessage('')
 
-      await apiPost(`/api/others/wips/${wipId}/complete`, {}) // TODO(integration): 改接 /api/wips/:id/actions complete
+      await apiPost(`/api/others/wips/${wipId}/complete`, {})
 
       await loadData()
-      setSuccessMessage('WIP 狀態已標記為 completed；系統會依實驗順序更新樣品狀態並建立必要交接單')
+      setSuccessMessage('WIP 狀態已標記為 completed；系統會依實驗順序更新樣品狀態')
     } catch (err) {
       setError(getErrorMessage(err, '標記 WIP 完成失敗'))
     } finally {
@@ -62,7 +56,7 @@ export default function OthersPage() {
       setError('')
       setSuccessMessage('')
 
-      await apiPost(`/api/others/orders/${orderId}/confirm-delivery`, {}) // TODO(integration): 改接 order_management.md 的 /api/orders/:id/actions
+      await apiPost(`/api/others/orders/${orderId}/confirm-delivery`, {})
 
       await loadData()
       setSuccessMessage('已確認送樣，樣品已建立並送到對應 Lab 收樣區')
@@ -73,128 +67,23 @@ export default function OthersPage() {
     }
   }
 
-  function openCreateForm() {
-    setForm(defaultForms[activeTab])
-    setShowCreateForm(true)
-    setError('')
-    setSuccessMessage('')
-  }
-
-  function closeCreateForm() {
-    setShowCreateForm(false)
-    setForm(defaultForms[activeTab])
-  }
-
-  function updateForm(key: string, value: string) {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }))
-  }
-
-  function getCreateEndpoint(tab: TabKey) {
-    if (tab === 'storage') return '/api/others/storage-locations' // TODO(integration): 改接 system_setting.md 的 /api/storage-locations
-    if (tab === 'master') return '/api/others/master-data' // TODO(integration): 改接 system_setting.md 的 /api/master-data
-    return `/api/others/${tab}` // TODO(integration): 依 tab 改接正式模組 API，不要再依賴 /api/others
-  }
-
-  function normalizePayload(payload: Record<string, string>) {
-    const result: Record<string, string | null> = {}
-
-    Object.entries(payload).forEach(([key, value]) => {
-      result[key] = value.trim() === '' ? null : value
-    })
-
-    return result
-  }
-
-  function buildCreatePayload() {
-    let payload: Record<string, PayloadValue> = normalizePayload(form)
-
-    if (activeTab === 'orders') {
-      const keys = form.requested_experiment_keys
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean)
-
-      const requestedExperiments = keys.map((key) => {
-        const [labName, experimentItem] = key.split('::')
-
-        return {
-          lab_name: labName,
-          experiment_item: experimentItem,
-        }
-      })
-
-      payload = {
-        ...payload,
-        requested_experiments: requestedExperiments,
-      }
-
-      delete payload.requested_experiment_keys
-    }
-
-    return payload
-  }
-
-  async function createData() {
-    try {
-      setSaving(true)
-      setError('')
-      setSuccessMessage('')
-
-      if (activeTab === 'orders') {
-        const selectedKeys = form.requested_experiment_keys
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean)
-
-        if (selectedKeys.length === 0) {
-          setError('請至少選擇一個實驗室 / 實驗項目')
-          return
-        }
-      }
-
-      await apiPost(getCreateEndpoint(activeTab), buildCreatePayload())
-      await loadData()
-
-      setShowCreateForm(false)
-      setForm(defaultForms[activeTab])
-
-      if (activeTab === 'orders') {
-        if (form.status === 'approved') {
-          setSuccessMessage('委託單新增成功，狀態為已核准 / 未送樣，請在委託單表格按「確認送樣」後才會建立 sample')
-        } else {
-          setSuccessMessage('委託單新增成功，並已同步建立一筆 /sample 可看到的待收樣資料')
-        }
-      } else {
-        setSuccessMessage('新增成功，資料已更新')
-      }
-    } catch (err) {
-      setError(getErrorMessage(err, '新增資料失敗'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
   function changeTab(tab: TabKey) {
     setActiveTab(tab)
-    setShowCreateForm(false)
-    setForm(defaultForms[tab])
     setError('')
     setSuccessMessage('')
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData()
   }, [])
 
-  if (loading) return <div style={pageStyle}>載入替代資料中...</div>
+  if (loading) return <div style={pageStyle}>載入系統資料中...</div>
 
   if (!data) {
     return (
       <div style={pageStyle}>
-        <h1 style={titleStyle}>替代資料切換</h1>
+        <h1 style={titleStyle}>系統資料檢視</h1>
         <div style={errorStyle}>{error || '沒有資料'}</div>
       </div>
     )
@@ -206,22 +95,13 @@ export default function OthersPage() {
     <div style={pageStyle}>
       <div style={headerStyle}>
         <div>
-          <h1 style={titleStyle}>替代資料切換</h1>
+          <h1 style={titleStyle}>系統資料檢視</h1>
           <p style={subtitleStyle}>
             這裡整合正式 users、labs、orders、samples、wips 資料；storage locations 暫時由 labs 自動產生。
           </p>
         </div>
 
         <div style={headerActionsStyle}>
-          <button
-            style={{ ...secondaryButtonStyle, opacity: 0.55, cursor: 'not-allowed' }}
-            type="button"
-            disabled
-            onClick={openCreateForm}
-            title="mock 新增資料已移除，請改用正式模組建立資料"
-          >
-            新增資料已移除
-          </button>
           <button style={secondaryButtonStyle} onClick={loadData}>
             重新整理
           </button>
@@ -276,18 +156,6 @@ export default function OthersPage() {
             重新整理目前資料
           </button>
         </div>
-
-        {showCreateForm && (
-          <CreateForm
-            activeTab={activeTab}
-            form={form}
-            saving={saving}
-            onChange={updateForm}
-            onCancel={closeCreateForm}
-            onSubmit={createData}
-            masterKeys={Object.keys(data.master_data)}
-          />
-        )}
 
         {activeTab === 'users' && (
           <SimpleTable

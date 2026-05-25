@@ -73,6 +73,38 @@ function shouldUseOutgoingTransferView(
   return !isSampleInCurrentLab(sample, user)
 }
 
+function getTransferDisplayStatus(transfer?: Transfer) {
+  if (!transfer) return 'transferred_out'
+
+  if (transfer.status === 'pending') return 'transfer_pending'
+  if (transfer.status === 'transferring') return 'transferred_waiting_receive'
+  if (transfer.status === 'received') return 'transferred_received'
+  if (transfer.status === 'cancelled') return 'cancelled'
+
+  return 'transferred_out'
+}
+
+function getTransferDisplayLocation(transfer?: Transfer) {
+  if (!transfer) return '已離開本實驗室'
+
+  if (transfer.status === 'pending') return '本實驗室交接待送區'
+  if (transfer.status === 'transferring') {
+    return transfer.to_lab
+      ? `已送出，等待接收實驗室（${transfer.to_lab}）收樣`
+      : '已送出，等待接收實驗室收樣'
+  }
+
+  if (transfer.status === 'received') {
+    return transfer.to_lab
+      ? `已由接收實驗室（${transfer.to_lab}）收樣`
+      : '已由接收實驗室收樣'
+  }
+
+  if (transfer.status === 'cancelled') return '交接已取消'
+
+  return '已離開本實驗室'
+}
+
 export function isSampleVisibleForUser(sample: Sample, user: CurrentUser) {
   if (isSystemAdmin(user)) return true
 
@@ -146,14 +178,7 @@ export function getDisplaySampleStatus(
   outgoingTransfer?: Transfer,
 ) {
   if (shouldUseOutgoingTransferView(sample, user, outgoingTransfer)) {
-    const transfer = outgoingTransfer as Transfer
-
-    if (transfer.status === 'pending') return 'transfer_pending'
-    if (transfer.status === 'transferring') return 'transferred_waiting_receive'
-    if (transfer.status === 'received') return 'transferred_received'
-    if (transfer.status === 'cancelled') return 'cancelled'
-
-    return 'transferred_out'
+    return getTransferDisplayStatus(outgoingTransfer)
   }
 
   if (['picked_up', 'lost', 'damaged', 'cancelled'].includes(sample.status)) {
@@ -164,14 +189,7 @@ export function getDisplaySampleStatus(
     return sample.status
   }
 
-  if (!outgoingTransfer) return 'transferred_out'
-
-  if (outgoingTransfer.status === 'pending') return 'transfer_pending'
-  if (outgoingTransfer.status === 'transferring') return 'transferred_waiting_receive'
-  if (outgoingTransfer.status === 'received') return 'transferred_received'
-  if (outgoingTransfer.status === 'cancelled') return 'cancelled'
-
-  return 'transferred_out'
+  return getTransferDisplayStatus(outgoingTransfer)
 }
 
 export function getDisplaySampleLocation(
@@ -180,24 +198,7 @@ export function getDisplaySampleLocation(
   outgoingTransfer?: Transfer,
 ) {
   if (shouldUseOutgoingTransferView(sample, user, outgoingTransfer)) {
-    const transfer = outgoingTransfer as Transfer
-
-    if (transfer.status === 'pending') return '本實驗室交接待送區'
-    if (transfer.status === 'transferring') {
-      return transfer.to_lab
-        ? `已送出，等待接收實驗室（${transfer.to_lab}）收樣`
-        : '已送出，等待接收實驗室收樣'
-    }
-
-    if (transfer.status === 'received') {
-      return transfer.to_lab
-        ? `已由接收實驗室（${transfer.to_lab}）收樣`
-        : '已由接收實驗室收樣'
-    }
-
-    if (transfer.status === 'cancelled') return '交接已取消'
-
-    return '已離開本實驗室'
+    return getTransferDisplayLocation(outgoingTransfer)
   }
 
   if (sample.status === 'picked_up') return sample.current_location ?? '已由使用者取回'
@@ -209,24 +210,7 @@ export function getDisplaySampleLocation(
     return sample.current_location ?? '-'
   }
 
-  if (!outgoingTransfer) return '已離開本實驗室'
-
-  if (outgoingTransfer.status === 'pending') return '本實驗室交接待送區'
-  if (outgoingTransfer.status === 'transferring') {
-    return outgoingTransfer.to_lab
-      ? `已送出，等待接收實驗室（${outgoingTransfer.to_lab}）收樣`
-      : '已送出，等待接收實驗室收樣'
-  }
-
-  if (outgoingTransfer.status === 'received') {
-    return outgoingTransfer.to_lab
-      ? `已由接收實驗室（${outgoingTransfer.to_lab}）收樣`
-      : '已由接收實驗室收樣'
-  }
-
-  if (outgoingTransfer.status === 'cancelled') return '交接已取消'
-
-  return '已離開本實驗室'
+  return getTransferDisplayLocation(outgoingTransfer)
 }
 
 export function formatDateTime(value: string | null | undefined) {

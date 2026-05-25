@@ -40,6 +40,10 @@ import {
   isSampleVisibleForUser,
   normalizeSampleFilter,
 } from './utils/sampleDisplay'
+import {
+  findCompletedTransferBoundaryIndex,
+  parseExperimentsFromSummary,
+} from '../transfer/utils/transferFlow'
 
 type ApiListResponse<T> = T[] | { data?: T[] }
 
@@ -102,45 +106,6 @@ export default function SamplePage() {
   const isFactoryUser = currentUser ? checkIsFactoryUser(currentUser) : false
   const isLabUser = currentUser ? checkIsLabUser(currentUser) : false
   const operatorName = currentUser?.name ?? ''
-
-  function parseExperimentLabs(experimentItem: string | null | undefined) {
-    if (!experimentItem) return []
-
-    const labs: string[] = []
-
-    experimentItem
-      .split('、')
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .forEach((part) => {
-        const [labName] = part.split(':')
-
-        if (!labName) return
-
-        const normalizedLabName = labName.trim()
-
-        if (normalizedLabName && !labs.includes(normalizedLabName)) {
-          labs.push(normalizedLabName)
-        }
-      })
-
-    return labs
-  }
-
-  function hasNextLabAfterCurrent(sample: Sample | null, user: CurrentUser) {
-    if (!sample) return false
-
-    const currentLab = getUserLab(user)
-    const labs = parseExperimentLabs(sample.experiment_item)
-
-    if (!currentLab || labs.length === 0) return false
-
-    const currentIndex = labs.findIndex((lab) => lab === currentLab)
-
-    if (currentIndex === -1) return false
-
-    return currentIndex < labs.length - 1
-  }
 
   const outgoingTransfersBySampleId = useMemo(() => {
     const map = new Map<string, Transfer>()
@@ -295,26 +260,48 @@ export default function SamplePage() {
     return selectedWips.filter((wip) => wip.lab_name === currentLab)
   }, [selectedWips, currentUser])
 
-  const currentLabWipsCompleted =
-    currentLabWips.length > 0 && currentLabWips.every((wip) => wip.status === 'completed')
+  const sampleFlowState = useMemo(() => {
+    if (!selectedSample || !currentUser) {
+      return {
+        currentLabFlowReady: false,
+        hasNextExperiment: false,
+        nextLabDiffers: false,
+        nextLabSame: false,
+      }
+    }
 
-  const hasNextLab = currentUser ? hasNextLabAfterCurrent(selectedSample, currentUser) : false
+    const currentLab = getUserLab(currentUser)
+    const requestedExperiments = parseExperimentsFromSummary(selectedSample.experiment_item)
+    const completedBoundary = findCompletedTransferBoundaryIndex(
+      requestedExperiments,
+      selectedWips,
+      currentLab,
+    )
+    const nextExperiment = requestedExperiments[completedBoundary + 1] ?? null
+
+    return {
+      currentLabFlowReady: completedBoundary >= 0,
+      hasNextExperiment: Boolean(nextExperiment),
+      nextLabDiffers: Boolean(nextExperiment && nextExperiment.lab_name !== currentLab),
+      nextLabSame: Boolean(nextExperiment && nextExperiment.lab_name === currentLab),
+    }
+  }, [selectedSample, selectedWips, currentUser])
 
   const canNotifyPickup =
     Boolean(selectedSample) &&
     !isFactoryUser &&
     selectedSampleInCurrentLab &&
     (selectedSample?.status === 'split' || selectedSample?.status === 'pending_transfer') &&
-    currentLabWipsCompleted &&
-    !hasNextLab
+    sampleFlowState.currentLabFlowReady &&
+    !sampleFlowState.hasNextExperiment
 
   const shouldShowTransferAction =
     Boolean(selectedSample) &&
     !isFactoryUser &&
     selectedSampleInCurrentLab &&
     (selectedSample?.status === 'split' || selectedSample?.status === 'pending_transfer') &&
-    currentLabWipsCompleted &&
-    hasNextLab
+    sampleFlowState.currentLabFlowReady &&
+    sampleFlowState.nextLabDiffers
 
   const baseSamplesForCount = useMemo(() => {
     if (!currentUser) return []
@@ -503,13 +490,14 @@ export default function SamplePage() {
       setError('')
       setSuccessMessage('')
 
-      const body: Record<string, string> = {
+      const body: Record<string, string | boolean> = {
         action,
         operator_name: operatorName,
       }
 
       if (action === 'outbound') {
         body.note = '所有實驗已完成，已通知原使用者取件'
+        body.confirm_notify_pickup = true
       }
 
       if (action === 'pickup_confirmed') {
@@ -571,11 +559,15 @@ export default function SamplePage() {
       return '樣品已建立 WIP，但目前登入 Lab 沒有可處理的 WIP。'
     }
 
-    if (sample.status === 'split' && currentLabWips.length > 0 && !currentLabWipsCompleted) {
+    if (sample.status === 'split' && currentLabWips.length > 0 && !sampleFlowState.currentLabFlowReady) {
       return '此樣品仍有本 Lab 的 WIP 尚未完成，完成後才能進入下一步。'
     }
 
-    if (sample.status === 'split' && currentLabWipsCompleted && hasNextLab) {
+    if (sample.status === 'split' && sampleFlowState.nextLabSame) {
+      return '此樣品下一個實驗仍在本 Lab，請繼續完成本 Lab 的 WIP。'
+    }
+
+    if (sample.status === 'split' && sampleFlowState.nextLabDiffers) {
       return '本 Lab 的 WIP 已完成，但此樣品後面還有其他實驗室要處理。下一步請前往交接流轉，移交給下一個 Lab。'
     }
 
@@ -583,7 +575,7 @@ export default function SamplePage() {
       return '本 Lab 目前已建立的 WIP 都完成，樣品可前往交接流轉；若尚未送出，也可以回到 WIP / 分貨管理繼續補分貨。'
     }
 
-    if (sample.status === 'split' && currentLabWipsCompleted && !hasNextLab) {
+    if (sample.status === 'split' && sampleFlowState.currentLabFlowReady && !sampleFlowState.hasNextExperiment) {
       return '此樣品已完成最後一個 Lab 的實驗，可通知原使用者取件，並將樣品移至待取件區。'
     }
     if (sample.status === 'transferring') return '樣品正在跨實驗室交接中，等待下一個實驗室簽收。'

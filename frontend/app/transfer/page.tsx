@@ -323,6 +323,7 @@ export default function SampleTransferPage() {
       const sampleWips = wipsBySampleId[sample.id] ?? []
 
       if (sample.status === 'picked_up') return
+      if (sample.status === 'outbound') return
       if (sample.status === 'pending_receive') return
 
       const requestedExperiments = getRequestedExperiments(sample)
@@ -397,9 +398,34 @@ export default function SampleTransferPage() {
     return result
   }, [samples, wipsBySampleId, currentLab])
 
+  const pickupCandidates = useMemo<ReturnCandidate[]>(() => {
+    const result: ReturnCandidate[] = []
+
+    samples.forEach((sample) => {
+      const sampleWips = wipsBySampleId[sample.id] ?? []
+
+      if (sample.status !== 'outbound') return
+
+      const currentLabWips = sampleWips.filter(
+        (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab),
+      )
+
+      if (currentLabWips.length === 0) return
+
+      result.push({
+        kind: 'return',
+        sample,
+        currentLabCompletedWips: currentLabWips.filter((wip) => wip.status === 'completed'),
+        allWips: sampleWips,
+      })
+    })
+
+    return result
+  }, [samples, wipsBySampleId, currentLab])
+
   const candidates = useMemo<Candidate[]>(() => {
-    return [...transferCandidates, ...returnCandidates]
-  }, [transferCandidates, returnCandidates])
+    return [...transferCandidates, ...returnCandidates, ...pickupCandidates]
+  }, [transferCandidates, returnCandidates, pickupCandidates])
 
   const selectedCandidate = useMemo(() => {
     return (
@@ -533,6 +559,7 @@ export default function SampleTransferPage() {
         operator_name: operatorName,
         current_location: `${currentLab} 待取件區`,
         note: candidate.sample.note,
+        confirm_notify_pickup: true,
       })
 
       setSelectedTransferId(null)
@@ -570,6 +597,7 @@ export default function SampleTransferPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role, currentUser?.lab_name])
@@ -642,7 +670,8 @@ export default function SampleTransferPage() {
             ).length
           }
         />
-        <SummaryCard label="待通知 / 取件" value={returnCandidates.length} />
+        <SummaryCard label="待通知取件" value={returnCandidates.length} />
+        <SummaryCard label="待取件" value={pickupCandidates.length} />
       </section>
 
       <section style={twoColumnGridStyle}>
@@ -715,7 +744,7 @@ export default function SampleTransferPage() {
             <div>
               <div style={panelTitleStyle}>待通知使用者取件</div>
               <div style={hintStyle}>
-                條件：全部測驗都 completed，才可以通知原使用者取件。
+                條件：全部測驗都 completed，且尚未通知原使用者取件。
               </div>
             </div>
 
@@ -725,13 +754,12 @@ export default function SampleTransferPage() {
           {loading ? (
             <div style={emptyStyle}>載入中...</div>
           ) : returnCandidates.length === 0 ? (
-            <div style={emptyStyle}>目前沒有待通知或待取件的樣品。</div>
+            <div style={emptyStyle}>目前沒有待通知取件的樣品。</div>
           ) : (
             <div style={candidateListStyle}>
               {returnCandidates.map((candidate) => {
                 const candidateKey = getCandidateKey(candidate)
                 const selected = selectedCandidateKey === candidateKey
-                const isOutbound = candidate.sample.status === 'outbound'
 
                 return (
                   <button
@@ -749,11 +777,67 @@ export default function SampleTransferPage() {
                         </div>
                       </div>
 
-                      {isOutbound ? (
-                        <span style={warningBadgeStyle}>待取件</span>
-                      ) : (
-                        <span style={readyBadgeStyle}>可通知</span>
-                      )}
+                      <span style={readyBadgeStyle}>待通知</span>
+                    </div>
+
+                    <div style={candidateMetaGridStyle}>
+                      <InfoLine label="目前位置" value={candidate.sample.current_location ?? '-'} />
+                      <InfoLine
+                        label="樣品狀態"
+                        value={sampleStatusText[candidate.sample.status] ?? candidate.sample.status}
+                      />
+                      <InfoLine label="申請人" value={candidate.sample.applicant_name ?? '-'} />
+                      <InfoLine
+                        label="完成 WIP"
+                        value={`${candidate.allWips.filter((wip) => wip.status === 'completed').length} / ${candidate.allWips.length}`}
+                      />
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={panelStyle}>
+          <div style={panelHeaderStyle}>
+            <div>
+              <div style={panelTitleStyle}>待取件</div>
+              <div style={hintStyle}>
+                已通知使用者取件後，樣品才會出現在這裡。
+              </div>
+            </div>
+
+            <span style={countBadgeStyle}>{pickupCandidates.length} 筆</span>
+          </div>
+
+          {loading ? (
+            <div style={emptyStyle}>載入中...</div>
+          ) : pickupCandidates.length === 0 ? (
+            <div style={emptyStyle}>目前沒有待取件的樣品。</div>
+          ) : (
+            <div style={candidateListStyle}>
+              {pickupCandidates.map((candidate) => {
+                const candidateKey = getCandidateKey(candidate)
+                const selected = selectedCandidateKey === candidateKey
+
+                return (
+                  <button
+                    key={candidateKey}
+                    type="button"
+                    onClick={() => setSelectedCandidateKey(candidateKey)}
+                    style={selected ? selectedCandidateCardStyle : candidateCardStyle}
+                  >
+                    <div style={candidateTopRowStyle}>
+                      <div>
+                        <div style={candidateTitleStyle}>{candidate.sample.sample_no}</div>
+                        <div style={candidateSubtitleStyle}>
+                          {candidate.sample.sample_name ?? '未命名樣品'} ·{' '}
+                          {candidate.sample.order_no}
+                        </div>
+                      </div>
+
+                      <span style={warningBadgeStyle}>待取件</span>
                     </div>
 
                     <div style={candidateMetaGridStyle}>

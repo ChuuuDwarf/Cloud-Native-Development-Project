@@ -1,4 +1,4 @@
-import type { CurrentUser, WipForm } from './types'
+import type { CurrentUser } from './types'
 
 export const fallbackUser: CurrentUser = {
   id: 'USER001',

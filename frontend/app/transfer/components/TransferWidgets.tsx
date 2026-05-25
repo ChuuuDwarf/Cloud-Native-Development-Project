@@ -1,7 +1,7 @@
-import type { Candidate, Transfer, TransferCandidate, ReturnCandidate, Wip } from '../types'
+import type { Transfer, TransferCandidate, ReturnCandidate, Wip } from '../types'
 import { priorityText, sampleStatusText, transferStatusText, wipStatusText } from '../constants'
 import { formatDateTime } from '../utils/transferFlow'
-import { titleStyle, summaryCardStyle, summaryValueStyle, summaryLabelStyle, hintStyle, infoLineLabelStyle, infoLineValueStyle, statusBadgeStyle, readyBadgeStyle, warningBadgeStyle, detailBoxStyle, sectionTitleStyle, detailGridStyle, transferModalDetailGridStyle, infoBlockStyle, infoBlockLabelStyle, infoBlockValueStyle, wipListStyle, wipCardStyle, existingTransferBoxStyle, returnBoxStyle, existingTransferHeaderStyle, createTransferBoxStyle, warningNoticeStyle, actionBarStyle, primaryButtonStyle, secondaryButtonStyle, dangerButtonStyle, modalBackdropStyle, modalBackdropButtonStyle, modalCardStyle, modalHeaderStyle, modalHeaderActionsStyle, modalTitleStyle, modalSubtitleStyle, modalBodyStyle, iconButtonStyle, modalNoticeStyle } from '../styles'
+import { summaryCardStyle, summaryValueStyle, summaryLabelStyle, hintStyle, infoLineLabelStyle, infoLineValueStyle, statusBadgeStyle, readyBadgeStyle, warningBadgeStyle, detailBoxStyle, sectionTitleStyle, detailGridStyle, transferModalDetailGridStyle, infoBlockStyle, infoBlockLabelStyle, infoBlockValueStyle, wipListStyle, wipCardStyle, existingTransferBoxStyle, returnBoxStyle, existingTransferHeaderStyle, createTransferBoxStyle, warningNoticeStyle, actionBarStyle, primaryButtonStyle, secondaryButtonStyle, dangerButtonStyle, modalBackdropStyle, modalBackdropButtonStyle, modalCardStyle, modalHeaderStyle, modalHeaderActionsStyle, modalTitleStyle, modalSubtitleStyle, modalBodyStyle, iconButtonStyle, modalNoticeStyle } from '../styles'
 import type { CSSProperties } from 'react'
 
 export function TransferModal({

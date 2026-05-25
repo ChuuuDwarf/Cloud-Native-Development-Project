@@ -1,4 +1,4 @@
-import type { Candidate, RequestedExperiment, Sample, Transfer, Wip } from '../types'
+import type { Candidate, RequestedExperiment, Sample, Wip } from '../types'
 
 export function normalizeLab(value: string | null | undefined) {
   return (value ?? '').trim().toLowerCase()

@@ -614,12 +614,25 @@ def test_outbound_and_factory_pickup_complete_full_sample_lifecycle(
     assert complete_response.json()["status"] == "completed"
     assert complete_response.json()["progress"] == 100
 
+    implicit_outbound_response = client.post(
+        f"/api/samples/{SAMPLE_A_ID}/actions",
+        headers=LAB_A_HEADERS,
+        json={
+            "action": "outbound",
+            "note": "隱性流程不應通知取回",
+        },
+    )
+
+    assert implicit_outbound_response.status_code == 400
+    assert "通知取件必須由使用者明確確認" in implicit_outbound_response.json()["detail"]
+
     outbound_response = client.post(
         f"/api/samples/{SAMPLE_A_ID}/actions",
         headers=LAB_A_HEADERS,
         json={
             "action": "outbound",
             "note": "通知廠區取回",
+            "confirm_notify_pickup": True,
         },
     )
 

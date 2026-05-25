@@ -359,6 +359,35 @@ def find_first_incomplete_wip_slot(slots: list[dict]) -> dict | None:
     return None
 
 
+def get_completable_wip_slots_for_current_segment(slots: list[dict]) -> list[dict]:
+    completable_slots: list[dict] = []
+    segment_lab = None
+    segment_started = False
+
+    for slot in slots:
+        experiment = slot["experiment"]
+        slot_lab = normalize_flow_value(experiment.get("lab_name"))
+        slot_wip = slot.get("wip")
+
+        if not segment_started:
+            if slot_wip and slot_wip.get("status") == "completed":
+                continue
+
+            if slot_wip is None:
+                return []
+
+            segment_started = True
+            segment_lab = slot_lab
+
+        if slot_lab != segment_lab:
+            break
+
+        if slot_wip and slot_wip.get("status") != "completed":
+            completable_slots.append(slot)
+
+    return completable_slots
+
+
 def get_creatable_wip_slots_for_current_segment(slots: list[dict]) -> list[dict]:
     creatable_slots: list[dict] = []
     segment_lab = None
@@ -435,12 +464,13 @@ async def validate_wip_can_complete_in_order(
     if wip.get("status") == "completed":
         return current_index
 
-    first_incomplete_slot = find_first_incomplete_wip_slot(slots)
-    first_incomplete_wip = (
-        first_incomplete_slot.get("wip") if first_incomplete_slot else None
-    )
+    completable_wip_ids = {
+        str(slot["wip"]["id"])
+        for slot in get_completable_wip_slots_for_current_segment(slots)
+        if slot.get("wip")
+    }
 
-    if first_incomplete_wip and str(first_incomplete_wip.get("id")) != str(wip.get("id")):
+    if str(wip.get("id")) not in completable_wip_ids:
         raise HTTPException(
             status_code=400,
             detail=WIP_ORDER_GUARD_MESSAGE,

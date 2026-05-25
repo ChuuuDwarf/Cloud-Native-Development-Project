@@ -20,6 +20,8 @@ router = APIRouter(
 from app.services.sample_service import *  # noqa: F403 - route endpoint 會使用拆出的 helper
 from app.services.wip_service import (
     get_sample_wips_in_flow_order,
+    normalize_flow_value,
+    parse_requested_experiments,
     validate_wip_create_items_in_order,
 )
 
@@ -57,82 +59,6 @@ async def build_sample_current_user(current_user: CurrentUser, db: AsyncSession)
         "lab_name": lab_name,
         "email": current_user.email,
     }
-
-
-def parse_required_labs_from_experiment_item(experiment_item: str | None):
-    """
-    從 sample.experiment_item 解析需要流轉的 Lab 順序。
-
-    格式範例：
-    Lab A:SEM 觀察、Lab B:光學量測
-
-    回傳：
-    ["Lab A", "Lab B"]
-    """
-    if not experiment_item:
-        return []
-
-    required_labs = []
-
-    for part in experiment_item.split("、"):
-        part = part.strip()
-
-        if ":" not in part:
-            continue
-
-        lab_name = part.split(":", 1)[0].strip()
-
-        if lab_name and lab_name not in required_labs:
-            required_labs.append(lab_name)
-
-    return required_labs
-
-
-def get_next_lab_after_current(experiment_item: str | None, current_lab: str | None):
-    if not current_lab:
-        return None
-
-    required_labs = parse_required_labs_from_experiment_item(experiment_item)
-
-    if current_lab not in required_labs:
-        return None
-
-    current_index = required_labs.index(current_lab)
-
-    if current_index >= len(required_labs) - 1:
-        return None
-
-    return required_labs[current_index + 1]
-
-
-def parse_requested_experiments_from_summary(experiment_item: str | None):
-    if not experiment_item:
-        return []
-
-    experiments = []
-
-    for part in experiment_item.split("、"):
-        part = part.strip()
-        if ":" not in part:
-            continue
-
-        lab_name, experiment_name = part.split(":", 1)
-        lab_name = lab_name.strip()
-        experiment_name = experiment_name.strip()
-
-        if lab_name and experiment_name:
-            experiments.append(
-                {
-                    "lab_name": lab_name,
-                    "experiment_item": experiment_name,
-                }
-            )
-
-    return experiments
-
-
-def normalize_flow_value(value: str | None):
-    return (value or "").strip().lower()
 
 
 @router.get("")
@@ -704,7 +630,7 @@ async def sample_action(
         ]
 
         next_unfinished_experiment = None
-        for experiment in parse_requested_experiments_from_summary(sample.get("experiment_item")):
+        for experiment in parse_requested_experiments(sample.get("experiment_item")):
             completed = any(
                 normalize_flow_value(wip["lab_name"]) == normalize_flow_value(experiment["lab_name"])
                 and normalize_flow_value(wip["experiment_item"])
@@ -724,6 +650,12 @@ async def sample_action(
                     f"此樣品後續還有 {next_lab} 的實驗，"
                     f"不能由 {current_lab} 通知取件，請先交接流轉"
                 ),
+            )
+
+        if payload.get("confirm_notify_pickup") not in (True, "true", "1", 1):
+            raise HTTPException(
+                status_code=400,
+                detail="通知取件必須由使用者明確確認",
             )
 
         next_location = normalize_location_for_action(
