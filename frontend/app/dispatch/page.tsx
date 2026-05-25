@@ -96,7 +96,9 @@ export default function DispatchPage() {
 
   const experimentItems = useMemo(
     () =>
-      Array.from(new Set(machines.flatMap((machine) => machine.supportedItems))),
+      Array.from(
+        new Set(machines.flatMap((machine) => machine.supportedItems)),
+      ),
     [machines],
   );
 

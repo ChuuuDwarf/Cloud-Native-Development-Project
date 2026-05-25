@@ -1,6 +1,14 @@
 import { httpClient } from "@/api/httpClient";
 import type { ApiResponse } from "@/types/api";
-export type { DashboardData, DashboardDispatch, DashboardKpis, DashboardLab, DashboardMachine, MachineStatus, WipStatus } from "@/types/dashboard";
+export type {
+  DashboardData,
+  DashboardDispatch,
+  DashboardKpis,
+  DashboardLab,
+  DashboardMachine,
+  MachineStatus,
+  WipStatus,
+} from "@/types/dashboard";
 import type { DashboardData } from "@/types/dashboard";
 
 export const dashboardApi = {

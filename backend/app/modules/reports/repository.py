@@ -47,9 +47,7 @@ class ReportRepository:
 
     async def get_wip(self, wip_id: str) -> Wip | None:
         result = await self._session.execute(
-            select(Wip)
-            .options(selectinload(Wip.order))
-            .where(Wip.wip_id == wip_id)
+            select(Wip).options(selectinload(Wip.order)).where(Wip.wip_id == wip_id)
         )
         return result.scalar_one_or_none()
 

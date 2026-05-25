@@ -12,7 +12,13 @@ import {
 import MachineForm from "./MachineForm";
 import MachineTable from "./MachineTable";
 
-const STATUSES: MachineStatus[] = ["閒置", "使用中", "保養中", "故障中", "停用"];
+const STATUSES: MachineStatus[] = [
+  "閒置",
+  "使用中",
+  "保養中",
+  "故障中",
+  "停用",
+];
 const BLOCKED: MachineStatus[] = ["保養中", "故障中", "停用"];
 
 export default function MachinePage() {
@@ -26,7 +32,10 @@ export default function MachinePage() {
     queryKey: ["machines"],
     queryFn: machinesApi.list,
   });
-  const machines = useMemo(() => machinesQuery.data ?? [], [machinesQuery.data]);
+  const machines = useMemo(
+    () => machinesQuery.data ?? [],
+    [machinesQuery.data],
+  );
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["machines"] });
@@ -80,7 +89,8 @@ export default function MachinePage() {
               fontFamily: "monospace",
             }}
           >
-            ROLE C · {statusLine(machinesQuery, save.isError || applyStatus.isError)}
+            ROLE C ·{" "}
+            {statusLine(machinesQuery, save.isError || applyStatus.isError)}
           </p>
         </div>
         <select
@@ -102,13 +112,39 @@ export default function MachinePage() {
           marginBottom: 20,
         }}
       >
-        <KpiCard label="機台總數" value={machines.length} sub="來自 PostgreSQL" color="var(--blue)" icon="⚙️" />
-        <KpiCard label="可派工機台" value={summary.available} sub="狀態為閒置" color="var(--green)" icon="✅" />
-        <KpiCard label="不可派工" value={summary.blocked} sub="保養、故障或停用" color="var(--red)" icon="⚠️" />
-        <KpiCard label="平均稼動率" value={`${summary.avg}%`} sub="由機台資料計算" color="var(--cyan)" icon="📈" />
+        <KpiCard
+          label="機台總數"
+          value={machines.length}
+          sub="來自 PostgreSQL"
+          color="var(--blue)"
+          icon="⚙️"
+        />
+        <KpiCard
+          label="可派工機台"
+          value={summary.available}
+          sub="狀態為閒置"
+          color="var(--green)"
+          icon="✅"
+        />
+        <KpiCard
+          label="不可派工"
+          value={summary.blocked}
+          sub="保養、故障或停用"
+          color="var(--red)"
+          icon="⚠️"
+        />
+        <KpiCard
+          label="平均稼動率"
+          value={`${summary.avg}%`}
+          sub="由機台資料計算"
+          color="var(--cyan)"
+          icon="📈"
+        />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16 }}>
+      <div
+        style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16 }}
+      >
         <MachineForm
           key={`${editing?.machineId ?? "new"}-${formNonce}`}
           initial={editing}

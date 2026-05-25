@@ -174,4 +174,3 @@ async def machine_signal(
             data={"wipId": wip_id, "mode": "sync"},
             message="已接收機台完成訊號（同步處理，未連線 broker）",
         )
-

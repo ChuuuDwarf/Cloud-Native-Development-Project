@@ -2,7 +2,6 @@ from datetime import datetime
 
 import pytest
 from fastapi import HTTPException
-
 from routers import health, machines, recipes
 from schemas import MachineCreate, MachineStatusUpdate, RecipeCreate, User
 

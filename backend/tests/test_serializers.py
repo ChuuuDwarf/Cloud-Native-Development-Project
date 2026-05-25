@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from serializers import (
     dispatch_from_row,
@@ -67,7 +67,7 @@ def test_recipe_from_row_formats_updated_at():
             "method": "EDS mapping",
             "parameters": {"voltage": "200kV"},
             "updated_by": "林育誠",
-            "updated_at": datetime(2026, 5, 23, 9, 30, tzinfo=timezone.utc),
+            "updated_at": datetime(2026, 5, 23, 9, 30, tzinfo=UTC),
         }
     )
 

@@ -16,7 +16,15 @@ const STATUS_CHIP: Record<MachineStatus, ChipType> = {
   停用: "rejected",
 };
 
-const HEADERS = ["機台", "實驗室", "狀態", "支援項目", "稼動率", "保養日", "操作"];
+const HEADERS = [
+  "機台",
+  "實驗室",
+  "狀態",
+  "支援項目",
+  "稼動率",
+  "保養日",
+  "操作",
+];
 
 export default function MachineTable({
   machines,
@@ -60,7 +68,10 @@ export default function MachineTable({
               </td>
               <td style={tdStyle}>{formatLab(machine.lab)}</td>
               <td style={tdStyle}>
-                <Chip type={STATUS_CHIP[machine.status]} label={machine.status} />
+                <Chip
+                  type={STATUS_CHIP[machine.status]}
+                  label={machine.status}
+                />
               </td>
               <td style={tdStyle}>{machine.supportedItems.join("、")}</td>
               <td style={tdStyle}>{machine.utilization}%</td>

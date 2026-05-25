@@ -12,15 +12,7 @@ const STATUS_CHIP: Record<WipStatus, "pending" | "review" | "approved"> = {
   待上機: "approved",
 };
 
-const HEADERS = [
-  "WIP",
-  "LAB",
-  "實驗項目",
-  "優先",
-  "狀態",
-  "機台",
-  "預估時間",
-];
+const HEADERS = ["WIP", "LAB", "實驗項目", "優先", "狀態", "機台", "預估時間"];
 
 export default function DispatchPanel({
   dispatches,

@@ -109,10 +109,7 @@ export default function Dashboard() {
   );
 }
 
-function statusLine(query: {
-  isLoading: boolean;
-  isError: boolean;
-}): string {
+function statusLine(query: { isLoading: boolean; isError: boolean }): string {
   if (query.isLoading) return "讀取資料庫中";
   if (query.isError) return "後端或 PostgreSQL 尚未啟動";
   return "已連線 PostgreSQL";

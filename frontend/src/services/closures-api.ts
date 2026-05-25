@@ -38,7 +38,10 @@ export const closuresApi = {
   },
 
   /** 樣品入庫. */
-  async inbound(orderId: string, payload: CloseStepPayload): Promise<StorageItem> {
+  async inbound(
+    orderId: string,
+    payload: CloseStepPayload,
+  ): Promise<StorageItem> {
     const res = await httpClient.post<ApiResponse<StorageItem>>(
       `/closures/${orderId}/inbound`,
       payload,
@@ -47,7 +50,10 @@ export const closuresApi = {
   },
 
   /** 樣品出庫取件. */
-  async outbound(orderId: string, payload: CloseStepPayload): Promise<StorageItem> {
+  async outbound(
+    orderId: string,
+    payload: CloseStepPayload,
+  ): Promise<StorageItem> {
     const res = await httpClient.post<ApiResponse<StorageItem>>(
       `/closures/${orderId}/outbound`,
       payload,
@@ -56,7 +62,10 @@ export const closuresApi = {
   },
 
   /** 委託單結案 (使用者取件後). */
-  async close(orderId: string, payload: CloseStepPayload): Promise<ClosureCheck> {
+  async close(
+    orderId: string,
+    payload: CloseStepPayload,
+  ): Promise<ClosureCheck> {
     const res = await httpClient.post<ApiResponse<ClosureCheck>>(
       `/closures/${orderId}/close`,
       payload,

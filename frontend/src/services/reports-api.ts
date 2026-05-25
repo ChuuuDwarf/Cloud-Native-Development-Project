@@ -29,7 +29,9 @@ export const reportsApi = {
 
   /** 從實驗結果建立報告草稿. */
   async create(wipId: string): Promise<Report> {
-    const res = await httpClient.post<ApiResponse<Report>>("/reports", { wipId });
+    const res = await httpClient.post<ApiResponse<Report>>("/reports", {
+      wipId,
+    });
     return res.data.data;
   },
 
@@ -50,7 +52,10 @@ export const reportsApi = {
   },
 
   /** 主管審核 (確認 / 退回). */
-  async review(reportId: string, payload: ReportReviewPayload): Promise<Report> {
+  async review(
+    reportId: string,
+    payload: ReportReviewPayload,
+  ): Promise<Report> {
     const res = await httpClient.post<ApiResponse<Report>>(
       `/reports/${reportId}/review`,
       payload,

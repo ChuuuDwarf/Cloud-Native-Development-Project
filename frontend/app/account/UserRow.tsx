@@ -29,7 +29,12 @@ export default function UserRow({ user, canUpdate, onToggle }: UserRowProps) {
         <StatusPill status={user.status} />
       </td>
       <td
-        style={{ ...cellStyle, color: "var(--text3)", fontFamily: "monospace", fontSize: 11 }}
+        style={{
+          ...cellStyle,
+          color: "var(--text3)",
+          fontFamily: "monospace",
+          fontSize: 11,
+        }}
       >
         {new Date(user.createdAt).toLocaleString("zh-TW")}
       </td>

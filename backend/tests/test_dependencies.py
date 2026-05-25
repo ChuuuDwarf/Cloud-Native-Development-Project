@@ -1,6 +1,4 @@
 import pytest
-from fastapi import HTTPException
-
 from dependencies import (
     can_view_all_labs,
     ensure_same_lab,
@@ -9,6 +7,7 @@ from dependencies import (
     require_lab_scope,
     require_role,
 )
+from fastapi import HTTPException
 from schemas import User
 
 

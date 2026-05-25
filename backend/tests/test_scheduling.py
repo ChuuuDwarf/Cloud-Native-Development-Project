@@ -54,9 +54,7 @@ def test_sorted_dispatches_priority_first_uses_priority_then_due_date():
         dispatch("DSP-003", priority="特急", due_at="2026-05-21 12:00"),
     ]
 
-    assert [
-        row["dispatch_id"] for row in sorted_dispatches(rows, "Priority First")
-    ] == [
+    assert [row["dispatch_id"] for row in sorted_dispatches(rows, "Priority First")] == [
         "DSP-003",
         "DSP-002",
         "DSP-001",
@@ -70,9 +68,7 @@ def test_sorted_dispatches_earliest_due_date_uses_due_date_then_priority():
         dispatch("DSP-003", priority="高", due_at="2026-05-23 12:00"),
     ]
 
-    assert [
-        row["dispatch_id"] for row in sorted_dispatches(rows, "Earliest Due Date")
-    ] == [
+    assert [row["dispatch_id"] for row in sorted_dispatches(rows, "Earliest Due Date")] == [
         "DSP-003",
         "DSP-002",
         "DSP-001",
@@ -86,9 +82,7 @@ def test_sorted_dispatches_least_setup_change_groups_experiment_items():
         dispatch("DSP-003", item="材料成份分析"),
     ]
 
-    assert [
-        row["dispatch_id"] for row in sorted_dispatches(rows, "Least Setup Change")
-    ] == [
+    assert [row["dispatch_id"] for row in sorted_dispatches(rows, "Least Setup Change")] == [
         "DSP-001",
         "DSP-003",
         "DSP-002",
@@ -114,15 +108,11 @@ class _Conn:
     def __init__(self):
         self.dispatches = [
             {
-                **dispatch(
-                    "DSP-002", priority="一般", item="薄膜應力分析", lab="LAB B"
-                ),
+                **dispatch("DSP-002", priority="一般", item="薄膜應力分析", lab="LAB B"),
                 "status": "待派工",
             },
             {
-                **dispatch(
-                    "DSP-001", priority="特急", item="材料成份分析", lab="LAB A"
-                ),
+                **dispatch("DSP-001", priority="特急", item="材料成份分析", lab="LAB A"),
                 "status": "待派工",
             },
         ]

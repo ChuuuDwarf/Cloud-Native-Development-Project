@@ -107,4 +107,3 @@ async def publish_report(
         data=await service.publish_report(report_id, user.name),
         message="報告已發布並回傳使用者",
     )
-

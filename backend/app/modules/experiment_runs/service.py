@@ -54,9 +54,12 @@ def _refresh_order_after_result(order) -> None:
         WIP_ZH[WipStatus.COMPLETED],
         WIP_ZH[WipStatus.TERMINATED],
     }
-    if order.wips and all(w.status in ended for w in order.wips):
-        if order.status == ORDER_ZH[OrderStatus.IN_PROGRESS]:
-            order.status = ORDER_ZH[OrderStatus.WAITING_RESULT_CONFIRM]
+    if (
+        order.wips
+        and all(w.status in ended for w in order.wips)
+        and order.status == ORDER_ZH[OrderStatus.IN_PROGRESS]
+    ):
+        order.status = ORDER_ZH[OrderStatus.WAITING_RESULT_CONFIRM]
 
 
 def _refresh_order_after_confirm(order) -> None:

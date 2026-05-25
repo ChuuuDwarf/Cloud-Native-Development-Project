@@ -38,7 +38,9 @@ class ResultRequest(BaseModel):
 
     note: str = Field(..., description="結果備註")
     raw_data_url: str | None = Field(default=None, alias="rawDataUrl", description="原始數據連結")
-    data_verified: bool = Field(default=False, alias="dataVerified", description="數據完整性是否已驗證")
+    data_verified: bool = Field(
+        default=False, alias="dataVerified", description="數據完整性是否已驗證"
+    )
 
     model_config = {"populate_by_name": True}
 

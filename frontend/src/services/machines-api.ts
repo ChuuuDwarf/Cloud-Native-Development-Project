@@ -10,7 +10,10 @@ export const machinesApi = {
   },
 
   async create(payload: MachinePayload): Promise<Machine> {
-    const res = await httpClient.post<ApiResponse<Machine>>("/machines", payload);
+    const res = await httpClient.post<ApiResponse<Machine>>(
+      "/machines",
+      payload,
+    );
     return res.data.data;
   },
 
@@ -22,7 +25,10 @@ export const machinesApi = {
     return res.data.data;
   },
 
-  async updateStatus(machineId: string, status: MachineStatus): Promise<Machine> {
+  async updateStatus(
+    machineId: string,
+    status: MachineStatus,
+  ): Promise<Machine> {
     const res = await httpClient.patch<ApiResponse<Machine>>(
       `/machines/${machineId}/status`,
       { status },
