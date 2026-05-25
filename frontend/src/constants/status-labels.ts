@@ -136,3 +136,10 @@ export const SeverityLabel: Record<Severity, string> = {
   high: "高",
   critical: "嚴重",
 };
+
+export const RoleLabel: Record<string, string> = {
+  system_admin: "系統管理員",
+  lab_supervisor: "實驗室主管",
+  lab_enginner: "實驗室人員",
+  requester: "廠區使用者",
+};

@@ -276,13 +276,6 @@ jobs:
       - name: Prepare backend env
         run: cp backend/.env.example backend/.env
 
-      - name: Create lims_devnet (devcontainer-shared network)
-        # postgres + redis attach to this external network so the
-        # .devcontainer workspace can reach them by service name. CI
-        # doesn't use the devcontainer but compose still requires the
-        # network to exist before `up`.
-        run: docker network inspect lims_devnet >/dev/null 2>&1 || docker network create lims_devnet
-
       - name: Boot the stack
         run: |
           docker compose \
