@@ -1,16 +1,10 @@
-"""WIPs helper/service layer.
-
-這個檔案集中放置 WIP 權限判斷、位置轉換、ID 驗證、資料查詢等輔助邏輯。
-重點：
-- WIP 的可見範圍用 w.lab_name 判斷，不能用 current_location。
-- current_location 只代表樣品 / WIP 目前所在位置，不代表 WIP 原本歸屬哪個 Lab。
-"""
-
 from uuid import UUID
 
 from fastapi import HTTPException, Request
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.repos import wip_repo
+
 
 fallback_user = {
     "id": "system",
@@ -30,7 +24,6 @@ async def get_active_user(
     db: AsyncSession,
     request: Request | None = None,
 ):
-    """讀正式目前使用者；不再依賴 mock user。"""
     try:
         from app.services.temporary_others_service import resolve_current_user
 
@@ -70,6 +63,16 @@ def is_factory_role(role: str | None) -> bool:
 
 def is_lab_role(role: str | None) -> bool:
     return role in ("lab_engineer", "lab_supervisor")
+
+
+def validate_uuid(value: str | None, field_name: str) -> None:
+    try:
+        UUID(str(value))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} must be a valid UUID",
+        )
 
 
 def build_wip_visibility_filter(current_user: dict):
@@ -114,6 +117,76 @@ def build_wip_visibility_filter(current_user: dict):
     where_clauses.append("1 = 0")
     return where_clauses, params
 
+
+def build_wip_flow_visibility_filter(current_user: dict):
+    """給 transfer flow 使用的 WIP 查詢範圍。
+
+    一般 WIP 管理頁只看自己 Lab 的 WIP。
+    但 transfer flow 需要判斷同一個 sample 底下所有 Lab 的 WIP 是否完成。
+    """
+
+    role = current_user.get("role")
+    where_clauses = []
+    params = {}
+
+    if role == "system_admin":
+        return where_clauses, params
+
+    if is_factory_role(role):
+        where_clauses.append("s.applicant_name = :applicant_name")
+        params["applicant_name"] = current_user.get("name")
+        return where_clauses, params
+
+    if is_lab_role(role):
+        current_lab = get_user_lab(current_user)
+
+        if not current_lab:
+            where_clauses.append("1 = 0")
+            return where_clauses, params
+
+        params["current_lab"] = current_lab
+        params["current_lab_prefix"] = f"{current_lab}%"
+
+        where_clauses.append(
+            """
+            (
+                s.current_location LIKE :current_lab_prefix
+                OR EXISTS (
+                    SELECT 1
+                    FROM wips related_wips
+                    WHERE related_wips.sample_id = w.sample_id
+                      AND related_wips.lab_name = :current_lab
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM transfers sample_transfers
+                    WHERE sample_transfers.target_type = 'sample'
+                      AND sample_transfers.target_id = s.id
+                      AND (
+                          sample_transfers.from_lab = :current_lab
+                          OR sample_transfers.to_lab = :current_lab
+                      )
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM transfers wip_transfers
+                    WHERE wip_transfers.target_type = 'wip'
+                      AND wip_transfers.target_id = w.id
+                      AND (
+                          wip_transfers.from_lab = :current_lab
+                          OR wip_transfers.to_lab = :current_lab
+                      )
+                )
+            )
+            """
+        )
+
+        return where_clauses, params
+
+    where_clauses.append("1 = 0")
+    return where_clauses, params
+
+
 async def can_view_wip(
     current_user: dict,
     wip: dict,
@@ -140,27 +213,14 @@ async def can_view_wip(
         if db is None:
             return False
 
-        related_result = await db.execute(
-            text(
-                """
-                SELECT 1
-                FROM transfers t
-                WHERE t.target_type = 'sample'
-                  AND t.target_id = :sample_id
-                  AND t.to_lab = :current_lab
-                LIMIT 1
-                """
-            ),
-            {
-                "sample_id": wip.get("sample_id"),
-                "current_lab": current_lab,
-            },
+        return await wip_repo.has_transfer_to_lab_for_sample(
+            db,
+            sample_id=wip.get("sample_id"),
+            current_lab=current_lab,
         )
-        related = related_result.fetchone()
-
-        return related is not None
 
     return False
+
 
 def can_manage_wip(current_user: dict, wip: dict) -> bool:
     role = current_user.get("role")
@@ -173,63 +233,25 @@ def can_manage_wip(current_user: dict, wip: dict) -> bool:
 
     current_lab = get_user_lab(current_user)
 
-    # 操作 WIP 也以 WIP 歸屬 Lab 為準，避免 current_location 被更新成
-    # 「已由使用者取回」後，原 Lab 連自己的 WIP 都不能操作 / 補資料。
+    # 操作 WIP 以 WIP 歸屬 Lab 為準，不用 current_location。
     return bool(current_lab and wip.get("lab_name") == current_lab)
-
-
-def validate_uuid(value: str | None, field_name: str) -> None:
-    try:
-        UUID(str(value))
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status_code=400,
-            detail=f"{field_name} must be a valid UUID",
-        )
 
 
 async def get_wip_or_404(wip_id: str, db: AsyncSession):
     validate_uuid(wip_id, "wip_id")
 
-    result = await db.execute(
-        text(
-            """
-            SELECT *
-            FROM wips
-            WHERE id = :wip_id
-            """
-        ),
-        {"wip_id": wip_id},
-    )
-
-    wip = result.fetchone()
+    wip = await wip_repo.get_wip_by_id(db, wip_id=wip_id)
 
     if wip is None:
         raise HTTPException(status_code=404, detail="WIP not found")
 
-    return dict(wip._mapping)
+    return wip
 
 
 async def get_sample_by_id(sample_id: str, db: AsyncSession):
     validate_uuid(sample_id, "sample_id")
 
-    result = await db.execute(
-        text(
-            """
-            SELECT *
-            FROM samples
-            WHERE id = :sample_id
-            """
-        ),
-        {"sample_id": sample_id},
-    )
-
-    sample = result.fetchone()
-
-    if sample is None:
-        return None
-
-    return dict(sample._mapping)
+    return await wip_repo.get_sample_by_id(db, sample_id=sample_id)
 
 
 def parse_requested_experiments(experiment_item: str | None) -> list[dict[str, str]]:
@@ -288,13 +310,6 @@ def build_ordered_wip_slots(
     experiments: list[dict[str, str]],
     wips: list[dict],
 ) -> list[dict]:
-    """Pair requested experiment occurrences with WIPs in sample flow order.
-
-    同一個 Lab 可能在 flow 中出現多次，例如 A -> B -> A 或 A -> A -> B。
-    因此不能只用 lab_name 找目前位置；要依 samples.experiment_item 的每一個
-    occurrence 逐一配對尚未使用過的 WIP。
-    """
-
     unused_wips = list(wips)
     slots: list[dict] = []
 
@@ -318,19 +333,10 @@ def build_ordered_wip_slots(
 
 
 async def get_sample_wips_in_flow_order(sample_id: str, db: AsyncSession) -> list[dict]:
-    result = await db.execute(
-        text(
-            """
-            SELECT *
-            FROM wips
-            WHERE sample_id = :sample_id
-            ORDER BY created_at ASC, wip_no ASC, id ASC
-            """
-        ),
-        {"sample_id": sample_id},
+    return await wip_repo.list_sample_wips_in_flow_order(
+        db,
+        sample_id=sample_id,
     )
-
-    return [dict(row._mapping) for row in result.fetchall()]
 
 
 def find_wip_experiment_index_from_slots(
@@ -426,7 +432,7 @@ def validate_wip_create_items_in_order(
 
     slots = build_ordered_wip_slots(experiments, existing_wips)
     creatable_slots = get_creatable_wip_slots_for_current_segment(slots)
-    creatable_experiments = list(slot["experiment"] for slot in creatable_slots)
+    creatable_experiments = [slot["experiment"] for slot in creatable_slots]
 
     if len(requested_items) > len(creatable_experiments):
         raise HTTPException(
@@ -505,21 +511,11 @@ async def complete_wip_sample_flow(
     current_lab_temp_location = experiment_temp_location(current_lab)
 
     if current_index is None:
-        await db.execute(
-            text(
-                """
-                UPDATE samples
-                SET
-                    status = 'split',
-                    current_location = :current_location,
-                    updated_at = NOW()
-                WHERE id = :sample_id
-                """
-            ),
-            {
-                "sample_id": sample["id"],
-                "current_location": current_lab_temp_location,
-            },
+        await wip_repo.update_sample_status_and_location(
+            db,
+            sample_id=sample["id"],
+            status="split",
+            current_location=current_lab_temp_location,
         )
         return
 
@@ -530,124 +526,53 @@ async def complete_wip_sample_flow(
     )
 
     if next_experiment is None:
-        await db.execute(
-            text(
-                """
-                UPDATE samples
-                SET
-                    status = 'split',
-                    current_location = :current_location,
-                    updated_at = NOW()
-                WHERE id = :sample_id
-                """
-            ),
-            {
-                "sample_id": sample["id"],
-                "current_location": current_lab_temp_location,
-            },
+        await wip_repo.update_sample_status_and_location(
+            db,
+            sample_id=sample["id"],
+            status="split",
+            current_location=current_lab_temp_location,
         )
-        await db.execute(
-            text(
-                """
-                INSERT INTO sample_histories (
-                    sample_id,
-                    action,
-                    from_status,
-                    to_status,
-                    description,
-                    operator_name,
-                    lab_name
-                )
-                VALUES (
-                    :sample_id,
-                    'wip_completed_ready_to_notify_pickup',
-                    :from_status,
-                    'split',
-                    :description,
-                    :operator_name,
-                    :lab_name
-                )
-                """
-            ),
-            {
-                "sample_id": sample["id"],
-                "from_status": sample.get("status"),
-                "description": f"{current_lab} 完成 {wip.get('experiment_item')}，可通知使用者取件",
-                "operator_name": operator_name,
-                "lab_name": current_lab,
-            },
+
+        await wip_repo.create_sample_history(
+            db,
+            sample_id=sample["id"],
+            action="wip_completed_ready_to_notify_pickup",
+            from_status=sample.get("status"),
+            to_status="split",
+            description=f"{current_lab} 完成 {wip.get('experiment_item')}，可通知使用者取件",
+            operator_name=operator_name,
+            lab_name=current_lab,
         )
         return
 
     next_lab = next_experiment["lab_name"]
     if normalize_flow_value(next_lab) == normalize_flow_value(current_lab):
-        await db.execute(
-            text(
-                """
-                UPDATE samples
-                SET
-                    status = 'split',
-                    current_location = :current_location,
-                    updated_at = NOW()
-                WHERE id = :sample_id
-                """
-            ),
-            {
-                "sample_id": sample["id"],
-                "current_location": current_lab_temp_location,
-            },
+        await wip_repo.update_sample_status_and_location(
+            db,
+            sample_id=sample["id"],
+            status="split",
+            current_location=current_lab_temp_location,
         )
         return
 
-    await db.execute(
-        text(
-            """
-            UPDATE samples
-            SET
-                status = 'pending_transfer',
-                current_location = :current_location,
-                updated_at = NOW()
-            WHERE id = :sample_id
-            """
-        ),
-        {
-            "sample_id": sample["id"],
-            "current_location": current_lab_temp_location,
-        },
+    await wip_repo.update_sample_status_and_location(
+        db,
+        sample_id=sample["id"],
+        status="pending_transfer",
+        current_location=current_lab_temp_location,
     )
 
     note = f"{current_lab} 完成 {wip.get('experiment_item')}，可交接至 {next_lab}"
 
-    await db.execute(
-        text(
-            """
-            INSERT INTO sample_histories (
-                sample_id,
-                action,
-                from_status,
-                to_status,
-                description,
-                operator_name,
-                lab_name
-            )
-            VALUES (
-                :sample_id,
-                'wip_completed_pending_transfer',
-                :from_status,
-                'pending_transfer',
-                :description,
-                :operator_name,
-                :lab_name
-            )
-            """
-        ),
-        {
-            "sample_id": sample["id"],
-            "from_status": sample.get("status"),
-            "description": note,
-            "operator_name": operator_name,
-            "lab_name": current_lab,
-        },
+    await wip_repo.create_sample_history(
+        db,
+        sample_id=sample["id"],
+        action="wip_completed_pending_transfer",
+        from_status=sample.get("status"),
+        to_status="pending_transfer",
+        description=note,
+        operator_name=operator_name,
+        lab_name=current_lab,
     )
 
 
@@ -670,25 +595,269 @@ async def update_sample_to_pending_transfer_if_ready(
         )
         return
 
-    wips_result = await db.execute(
-        text(
-            """
-            SELECT *
-            FROM wips
-            WHERE sample_id = :sample_id
-              AND lab_name = :current_lab
-              AND status = 'completed'
-            ORDER BY completed_at IS NULL ASC, completed_at DESC, updated_at DESC
-            LIMIT 1
-            """
-        ),
-        {"sample_id": sample_id, "current_lab": current_lab},
+    completed_wip = await wip_repo.get_latest_completed_wip_for_lab(
+        db,
+        sample_id=sample_id,
+        current_lab=current_lab,
     )
-    completed_wip = wips_result.fetchone()
+
     if completed_wip is not None:
         await complete_wip_sample_flow(
             db=db,
-            wip=dict(completed_wip._mapping),
+            wip=completed_wip,
             current_lab=current_lab,
             operator_name=operator_name,
         )
+
+
+async def list_wips(
+    db: AsyncSession,
+    current_user: dict,
+    status: str | None = None,
+    include_all_for_flow: bool = False,
+):
+    if include_all_for_flow:
+        where_clauses, params = build_wip_flow_visibility_filter(current_user)
+    else:
+        where_clauses, params = build_wip_visibility_filter(current_user)
+
+    if status:
+        where_clauses.append("w.status = :status")
+        params["status"] = status
+
+    return await wip_repo.list_wips(
+        db,
+        where_clauses=where_clauses,
+        params=params,
+    )
+
+
+async def get_wip_detail(
+    db: AsyncSession,
+    current_user: dict,
+    wip_id: str,
+):
+    wip = await get_wip_or_404(wip_id, db)
+    sample = await get_sample_by_id(wip["sample_id"], db)
+
+    if not await can_view_wip(current_user, wip, sample, db):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to view this WIP",
+        )
+
+    return wip
+
+
+async def list_wip_history(
+    db: AsyncSession,
+    current_user: dict,
+    wip_id: str,
+):
+    wip = await get_wip_or_404(wip_id, db)
+    sample = await get_sample_by_id(wip["sample_id"], db)
+
+    if not await can_view_wip(current_user, wip, sample, db):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to view this WIP",
+        )
+
+    return await wip_repo.list_wip_history(db, wip_id=wip_id)
+
+
+async def update_wip(
+    db: AsyncSession,
+    current_user: dict,
+    wip_id: str,
+    payload: dict,
+):
+    wip = await get_wip_or_404(wip_id, db)
+
+    if not can_manage_wip(current_user, wip):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to update this WIP",
+        )
+
+    updated_wip = await wip_repo.update_wip_fields(
+        db,
+        wip_id=wip_id,
+        lab_name=payload.get("lab_name"),
+        experiment_item=payload.get("experiment_item"),
+        priority=payload.get("priority"),
+        current_location=payload.get("current_location"),
+        note=payload.get("note"),
+    )
+
+    await db.commit()
+    return updated_wip
+
+
+def _get_wip_action_maps():
+    status_map = {
+        "send_to_schedule": "waiting_schedule",
+        "mark_scheduled": "scheduled",
+        "mark_dispatched": "dispatched",
+        "start": "running",
+        "pause": "paused",
+        "resume": "running",
+        "complete": "completed",
+        "terminate": "terminated",
+    }
+
+    description_map = {
+        "send_to_schedule": "WIP 送入待排程",
+        "mark_scheduled": "WIP 標記為已排程",
+        "mark_dispatched": "WIP 標記為已派工",
+        "start": "WIP 開始執行，樣品移至機台區",
+        "pause": "WIP 暫停",
+        "resume": "WIP 恢復執行",
+        "complete": "WIP 完成，樣品回到實驗暫存區",
+        "terminate": "WIP 終止",
+    }
+
+    return status_map, description_map
+
+
+def _build_wip_action_update_options(
+    action: str,
+    payload: dict,
+    current_lab: str | None,
+) -> dict:
+    options = {
+        "scheduled_at": False,
+        "dispatched_at": False,
+        "started_at": False,
+        "completed_at": False,
+        "terminated_at": False,
+        "progress": None,
+        "next_location": None,
+    }
+
+    if action == "mark_scheduled":
+        options["scheduled_at"] = True
+
+    if action == "mark_dispatched":
+        options["dispatched_at"] = True
+
+    if action == "start":
+        options["started_at"] = True
+        options["next_location"] = payload.get("current_location") or machine_location(current_lab)
+
+    if action == "resume":
+        options["next_location"] = payload.get("current_location") or machine_location(current_lab)
+
+    if action == "complete":
+        options["completed_at"] = True
+        options["progress"] = 100
+        options["next_location"] = payload.get("current_location") or experiment_temp_location(current_lab)
+
+    if action == "terminate":
+        options["terminated_at"] = True
+
+    return options
+
+
+async def handle_wip_action(
+    db: AsyncSession,
+    current_user: dict,
+    wip_id: str,
+    payload: dict,
+):
+    wip = await get_wip_or_404(wip_id, db)
+
+    if not can_manage_wip(current_user, wip):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to operate this WIP",
+        )
+
+    current_lab = get_user_lab(current_user)
+    action = payload.get("action")
+
+    status_map, description_map = _get_wip_action_maps()
+
+    if action not in status_map:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "action must be one of: send_to_schedule, mark_scheduled, "
+                "mark_dispatched, start, pause, resume, complete, terminate"
+            ),
+        )
+
+    operator_name = payload.get("operator_name") or current_user.get("name")
+
+    if not operator_name:
+        raise HTTPException(
+            status_code=400,
+            detail="operator_name is required",
+        )
+
+    new_status = status_map[action]
+    description = payload.get("description") or description_map[action]
+    wip_flow_index = None
+
+    if action == "complete":
+        wip_flow_index = await validate_wip_can_complete_in_order(db, wip)
+
+    update_options = _build_wip_action_update_options(
+        action=action,
+        payload=payload,
+        current_lab=current_lab,
+    )
+
+    updated_wip = await wip_repo.update_wip_status(
+        db,
+        wip_id=wip_id,
+        new_status=new_status,
+        scheduled_at=update_options["scheduled_at"],
+        dispatched_at=update_options["dispatched_at"],
+        started_at=update_options["started_at"],
+        completed_at=update_options["completed_at"],
+        terminated_at=update_options["terminated_at"],
+        progress=update_options["progress"],
+        next_location=update_options["next_location"],
+    )
+
+    if action in ("start", "resume", "complete"):
+        next_location = update_options["next_location"]
+
+        if next_location:
+            await wip_repo.update_sample_location(
+                db,
+                sample_id=wip["sample_id"],
+                next_location=next_location,
+            )
+
+            await wip_repo.update_current_lab_wips_location(
+                db,
+                sample_id=wip["sample_id"],
+                current_lab=current_lab,
+                next_location=next_location,
+            )
+
+            if action == "complete":
+                await update_sample_to_pending_transfer_if_ready(
+                    db=db,
+                    sample_id=wip["sample_id"],
+                    current_lab=current_lab,
+                    next_location=next_location,
+                    operator_name=operator_name,
+                    completed_wip=updated_wip,
+                    completed_wip_index=wip_flow_index,
+                )
+
+    await wip_repo.create_wip_history(
+        db,
+        wip_id=wip_id,
+        action=action,
+        from_status=wip["status"],
+        to_status=new_status,
+        description=description,
+        operator_name=operator_name,
+    )
+
+    await db.commit()
+    return updated_wip
