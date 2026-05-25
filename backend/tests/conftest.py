@@ -20,11 +20,12 @@ import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
 from urllib.parse import urlparse
-from sqlalchemy import text
+
 import asyncpg
 import pytest
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
