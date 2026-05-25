@@ -49,9 +49,4 @@ h11==0.16.0
 idna==3.13
 typing-inspection==0.4.2
 typing_extensions==4.15.0
-uvicorn==0.39.0
 psycopg[binary]==3.3.2
-pytest==8.4.2
-pytest-cov==6.2.1
-ruff==0.14.9
-mypy==1.17.1
