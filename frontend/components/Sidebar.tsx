@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -57,11 +58,8 @@ const nav: NavSection[] = [
         href: "/sample",
         icon: "🧪",
         label: "收樣管理",
-        // Engineer's workflow page (mark samples as received, bind to WIPs).
-        // plant_user still has `samples:read` so they can see sample status
-        // inside their own order detail page, but shouldn't see this top-
-        // level nav entry — gate by `samples:create` which only engineers
-        // and supervisors hold.
+        // Lab users receive samples here; plant users track samples created
+        // after confirming delivery from orders.
         roles: ["system_admin", "lab_engineer", "lab_supervisor", "plant_user"],
       },
       {
@@ -150,6 +148,13 @@ const nav: NavSection[] = [
         label: "系統設定",
         roles: ["system_admin"],
       },
+      {
+        id: "others",
+        href: "/others",
+        icon: "",
+        label: "替代",
+        roles: ["system_admin"],
+      },
     ],
   },
 ];
@@ -194,6 +199,11 @@ export default function Sidebar() {
   async function handleLogout() {
     await logout();
     router.replace("/");
+  }
+
+  function isActive(href: string) {
+    if (href === "/") return pathname === "/";
+    return pathname === href || pathname.startsWith(`${href}/`);
   }
 
   return (
@@ -264,11 +274,16 @@ export default function Sidebar() {
                 {group.section}
               </div>
             )}
+
             {group.items.map((item) => {
-              const active = pathname === item.href;
+              const active = isActive(item.href);
+              const itemLabel =
+                item.id === "sample" && user?.role === "plant_user" ? "樣品追蹤" : item.label;
+
               return (
                 <Link key={item.id} href={item.href} style={{ textDecoration: "none" }}>
                   <div
+                    title={!open ? itemLabel : undefined}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -292,6 +307,7 @@ export default function Sidebar() {
                     >
                       {item.icon}
                     </span>
+
                     {open && (
                       <span
                         style={{
@@ -301,9 +317,10 @@ export default function Sidebar() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {item.label}
+                        {itemLabel}
                       </span>
                     )}
+
                     {open && item.badge && (
                       <span
                         style={{
@@ -370,6 +387,7 @@ export default function Sidebar() {
         >
           {initial}
         </div>
+
         {open && (
           <div style={{ flex: 1, overflow: "hidden" }}>
             <div
@@ -388,6 +406,7 @@ export default function Sidebar() {
                 fontSize: 10,
                 color: "var(--text3)",
                 fontFamily: "monospace",
+                whiteSpace: "nowrap",
               }}
             >
               {userPositionLabel}

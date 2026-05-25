@@ -15,8 +15,8 @@ from app.services.order_service import OrderService
 router = APIRouter(prefix="/api/quotas", tags=["Quotas"])
 
 
-def quota_to_dict(quota: QuotaSettingModel, service: OrderService) -> dict[str, Any]:
-    check = service.check_quota(
+async def quota_to_dict(quota: QuotaSettingModel, service: OrderService) -> dict[str, Any]:
+    check = await service.check_quota(
         applicant_id=quota.scope_id if quota.scope_type == "user" else "__not_applicable__",
         department_id=quota.scope_id if quota.scope_type == "department" else "__not_applicable__",
         item_count=0,
@@ -49,36 +49,36 @@ def quota_to_dict(quota: QuotaSettingModel, service: OrderService) -> dict[str, 
 
 
 @router.get("")
-def list_quotas(service: OrderService = Depends(get_order_service)) -> ApiResponse:
-    quotas = [quota_to_dict(quota, service) for quota in service.list_quota_settings()]
+async def list_quotas(service: OrderService = Depends(get_order_service)) -> ApiResponse:
+    quotas = [await quota_to_dict(quota, service) for quota in await service.list_quota_settings()]
     return ApiResponse(data=quotas)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_quota(
+async def create_quota(
     payload: QuotaPayload,
     current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
     require_role(current_user, {"admin"})
-    quota = service.create_quota_setting(payload)
-    return ApiResponse(data=quota_to_dict(quota, service), message="配額設定已建立")
+    quota = await service.create_quota_setting(payload)
+    return ApiResponse(data=await quota_to_dict(quota, service), message="配額設定已建立")
 
 
 @router.patch("/{quota_id}")
-def update_quota(
+async def update_quota(
     quota_id: int,
     payload: QuotaPatchPayload,
     current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
     require_role(current_user, {"admin"})
-    quota = service.update_quota_setting(quota_id, payload)
-    return ApiResponse(data=quota_to_dict(quota, service), message="配額設定已更新")
+    quota = await service.update_quota_setting(quota_id, payload)
+    return ApiResponse(data=await quota_to_dict(quota, service), message="配額設定已更新")
 
 
 @router.get("/check")
-def check_quota(
+async def check_quota(
     applicant_id: str | None = Query(default=None, alias="applicantId"),
     department_id: str = Query(alias="departmentId"),
     item_count: int = Query(default=1, ge=1, alias="itemCount"),
@@ -86,7 +86,7 @@ def check_quota(
     current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
-    quota_result = service.check_quota(
+    quota_result = await service.check_quota(
         applicant_id or user_id(current_user),
         department_id,
         item_count,

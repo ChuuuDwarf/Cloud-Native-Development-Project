@@ -90,6 +90,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("order_id", sa.Integer(), nullable=False),
         sa.Column("sample_id", sa.String(length=50), nullable=False),
+        sa.Column("sample_name", sa.String(length=100), nullable=True),
         sa.Column("lab_id", sa.String(length=50), nullable=False),
         sa.Column("experiment_id", sa.String(length=50), nullable=False),
         sa.Column(

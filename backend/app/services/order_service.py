@@ -28,55 +28,59 @@ class OrderService:
     def __init__(self, repo: OrderRepository) -> None:
         self.repo = repo
 
-    def create_order(self, payload: OrderCreate, current_user: CurrentUser) -> Order:
-        return self.repo.create_order(payload, current_user)
+    async def create_order(self, payload: OrderCreate, current_user: CurrentUser) -> Order:
+        return await self.repo.create_order(payload, current_user)
 
-    def list_orders(
+    async def list_orders(
         self,
         status_filter: OrderStatus | None = None,
         applicant_id: str | None = None,
         current_user: CurrentUser | None = None,
     ) -> list[Order]:
-        return self.repo.list_orders(
+        return await self.repo.list_orders(
             status_filter=status_filter,
             applicant_id=applicant_id,
             current_user=current_user,
         )
 
-    def get_order(self, order_id: int) -> Order:
-        return self.repo.get_order(order_id)
+    async def get_order(self, order_id: int) -> Order:
+        return await self.repo.get_order(order_id)
 
-    def update_order(self, order_id: int, payload: OrderUpdate, current_user: CurrentUser) -> Order:
-        return self.repo.update_order(order_id, payload, current_user)
+    async def update_order(
+        self, order_id: int, payload: OrderUpdate, current_user: CurrentUser
+    ) -> Order:
+        return await self.repo.update_order(order_id, payload, current_user)
 
-    def delete_order(self, order_id: int, current_user: CurrentUser) -> None:
-        self.repo.delete_order(order_id, current_user)
+    async def delete_order(self, order_id: int, current_user: CurrentUser) -> None:
+        await self.repo.delete_order(order_id, current_user)
 
-    def apply_action(
+    async def apply_action(
         self,
         order_id: int,
         payload: OrderActionRequest,
         current_user: CurrentUser,
     ) -> Order:
-        return self.repo.apply_action(order_id, payload, current_user)
+        return await self.repo.apply_action(order_id, payload, current_user)
 
-    def get_history(self, order_id: int) -> list[OrderHistory]:
-        return self.repo.get_history(order_id)
+    async def get_history(self, order_id: int) -> list[OrderHistory]:
+        return await self.repo.get_history(order_id)
 
-    def list_quota_settings(self) -> list[QuotaSettingModel]:
-        return self.repo.list_quota_settings()
+    async def list_quota_settings(self) -> list[QuotaSettingModel]:
+        return await self.repo.list_quota_settings()
 
-    def create_quota_setting(self, payload: QuotaPayload) -> QuotaSettingModel:
-        return self.repo.create_quota_setting(payload)
+    async def create_quota_setting(self, payload: QuotaPayload) -> QuotaSettingModel:
+        return await self.repo.create_quota_setting(payload)
 
-    def update_quota_setting(self, quota_id: int, payload: QuotaPatchPayload) -> QuotaSettingModel:
-        return self.repo.update_quota_setting(quota_id, payload)
+    async def update_quota_setting(
+        self, quota_id: int, payload: QuotaPatchPayload
+    ) -> QuotaSettingModel:
+        return await self.repo.update_quota_setting(quota_id, payload)
 
-    def check_quota(
+    async def check_quota(
         self,
         applicant_id: str,
         department_id: str,
         item_count: int,
         priority: str = "normal",
     ) -> dict[str, Any]:
-        return self.repo.check_quota(applicant_id, department_id, item_count, priority)
+        return await self.repo.check_quota(applicant_id, department_id, item_count, priority)

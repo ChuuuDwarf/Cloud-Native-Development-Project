@@ -12,6 +12,7 @@ export function groupItemsBySample(formItems: FormItem[]): SampleFormGroup[] {
 
     groups.push({
       sampleId: item.sampleId,
+      sampleName: item.sampleName ?? "",
       startIndex: index,
       endIndex: index,
       items: [{ item, index }],
@@ -77,6 +78,7 @@ export function createDefaultItem(
   const firstLab = masterData.labs[0]?.id || "";
   return {
     sampleId,
+    sampleName: "",
     labId: firstLab,
     experimentId: firstLab ? getDefaultExperimentForLab(masterData, firstLab) : "",
   };
@@ -99,6 +101,7 @@ export function toggleExperimentInGroup(
     const next = [...current];
     next.splice(group.endIndex + 1, 0, {
       sampleId: group.sampleId,
+      sampleName: group.sampleName,
       labId: experiment.labId,
       experimentId: experiment.id,
     });

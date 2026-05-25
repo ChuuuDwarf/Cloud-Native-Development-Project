@@ -207,7 +207,7 @@ describe("Sidebar", () => {
     expect(screen.getByText("委託流程")).toBeInTheDocument();
 
     expect(screen.queryByText("簽核管理")).not.toBeInTheDocument();
-    expect(screen.getByText("收樣管理")).toBeInTheDocument();
+    expect(screen.getByText("樣品追蹤")).toBeInTheDocument();
     expect(screen.queryByText("分貨 / WIP")).not.toBeInTheDocument();
 
     expect(screen.queryByText("執行與機台")).not.toBeInTheDocument();

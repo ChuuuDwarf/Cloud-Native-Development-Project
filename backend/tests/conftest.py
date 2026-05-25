@@ -25,6 +25,7 @@ import asyncpg
 import pytest
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -130,7 +131,10 @@ def _prepare_database() -> None:
         )
 
         async with ddl_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+            await conn.execute(text("DROP SCHEMA public CASCADE"))
+            await conn.execute(text("CREATE SCHEMA public"))
+            await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
+            await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "pgcrypto"'))
             await conn.run_sync(Base.metadata.create_all)
 
         await ddl_engine.dispose()

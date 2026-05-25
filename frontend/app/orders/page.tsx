@@ -85,6 +85,7 @@ export default function OrdersPage() {
             onApplyTemplate={page.applyTemplate}
             onAddSample={page.addSample}
             onSampleChange={page.updateSampleGroup}
+            onSampleNameChange={page.updateSampleNameGroup}
             onToggleExperiment={page.toggleExperimentForSample}
             onMoveExperiment={page.moveExperiment}
             onRemoveItem={page.removeItem}

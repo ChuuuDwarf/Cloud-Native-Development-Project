@@ -121,6 +121,7 @@ export default function OrderTemplatesPage() {
             items={page.items}
             masterData={page.masterData}
             onSampleChange={page.updateSampleGroup}
+            onSampleNameChange={page.updateSampleNameGroup}
             onToggleExperiment={page.toggleExperimentForSample}
             onMoveExperiment={page.moveExperiment}
             onRemoveItem={page.removeItem}

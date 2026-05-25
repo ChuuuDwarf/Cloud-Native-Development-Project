@@ -45,6 +45,7 @@ export function OrderForm({
   onApplyTemplate,
   onAddSample,
   onSampleChange,
+  onSampleNameChange,
   onToggleExperiment,
   onMoveExperiment,
   onRemoveItem,
@@ -75,6 +76,7 @@ export function OrderForm({
   onApplyTemplate: (templateId: string) => void;
   onAddSample: () => void;
   onSampleChange: (group: SampleFormGroup, sampleId: string) => void;
+  onSampleNameChange: (group: SampleFormGroup, sampleName: string) => void;
   onToggleExperiment: (group: SampleFormGroup, experiment: Experiment, checked: boolean) => void;
   onMoveExperiment: (index: number, direction: -1 | 1) => void;
   onRemoveItem: (index: number) => void;
@@ -217,6 +219,7 @@ export function OrderForm({
         items={items}
         masterData={masterData}
         onSampleChange={onSampleChange}
+        onSampleNameChange={onSampleNameChange}
         onToggleExperiment={onToggleExperiment}
         onMoveExperiment={onMoveExperiment}
         onRemoveItem={onRemoveItem}

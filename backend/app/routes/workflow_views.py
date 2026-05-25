@@ -13,16 +13,16 @@ from app.services.order_service import OrderService
 router = APIRouter(prefix="/api", tags=["Workflow Views"])
 
 
-def _order_items_for(order_id: int, service: OrderService) -> list[OrderItem]:
-    return service.get_order(order_id).items
+async def _order_items_for(order_id: int, service: OrderService) -> list[OrderItem]:
+    return (await service.get_order(order_id)).items
 
 
 @router.get("/orders/{order_id}/wips")
-def get_order_wips(
+async def get_order_wips(
     order_id: int,
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
-    items = _order_items_for(order_id, service)
+    items = await _order_items_for(order_id, service)
     return ApiResponse(
         data=[
             {
@@ -41,15 +41,15 @@ def get_order_wips(
 
 
 @router.get("/wips")
-def list_wips(
+async def list_wips(
     order_id: int | None = Query(default=None, alias="orderId"),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
     if order_id is not None:
-        return get_order_wips(order_id, service)
+        return await get_order_wips(order_id, service)
 
     data: list[dict[str, Any]] = []
-    for order in service.list_orders():
+    for order in await service.list_orders():
         for item in order.items:
             data.append(
                 {
@@ -67,11 +67,11 @@ def list_wips(
 
 
 @router.get("/orders/{order_id}/reports")
-def get_order_reports(
+async def get_order_reports(
     order_id: int,
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
-    order = service.get_order(order_id)
+    order = await service.get_order(order_id)
     data = []
     for index, item in enumerate(order.items):
         data.append(
@@ -90,24 +90,24 @@ def get_order_reports(
 
 
 @router.get("/reports")
-def list_reports(
+async def list_reports(
     order_id: int | None = Query(default=None, alias="orderId"),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
     if order_id is not None:
-        return get_order_reports(order_id, service)
+        return await get_order_reports(order_id, service)
     data: list[dict[str, Any]] = []
-    for order in service.list_orders():
-        data.extend(get_order_reports(order.id, service).data or [])
+    for order in await service.list_orders():
+        data.extend((await get_order_reports(order.id, service)).data or [])
     return ApiResponse(data=data)
 
 
 @router.get("/orders/{order_id}/issues")
-def get_order_issues(
+async def get_order_issues(
     order_id: int,
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
-    order = service.get_order(order_id)
+    order = await service.get_order(order_id)
     data = []
     if order.status == OrderStatus.RETURNED and order.last_reason:
         data.append(
@@ -125,13 +125,13 @@ def get_order_issues(
 
 
 @router.get("/issues")
-def list_issues(
+async def list_issues(
     order_id: int | None = Query(default=None, alias="orderId"),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
     if order_id is not None:
-        return get_order_issues(order_id, service)
+        return await get_order_issues(order_id, service)
     data: list[dict[str, Any]] = []
-    for order in service.list_orders():
-        data.extend(get_order_issues(order.id, service).data or [])
+    for order in await service.list_orders():
+        data.extend((await get_order_issues(order.id, service)).data or [])
     return ApiResponse(data=data)
