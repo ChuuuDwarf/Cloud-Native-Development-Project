@@ -1,11 +1,11 @@
-'use client'
+"use client";
 
-import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useAuth } from '@/contexts/AuthContext'
-import { apiGet, apiPost } from '@/lib/api'
-import { getErrorMessage, logClientError } from '@/lib/error'
-import { masterDataApi } from '@/services/master-data-api'
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { apiGet, apiPost } from "@/lib/api";
+import { getErrorMessage, logClientError } from "@/lib/error";
+import { masterDataApi } from "@/services/master-data-api";
 import type {
   CurrentUser,
   Sample,
@@ -14,8 +14,8 @@ import type {
   TransferCandidate,
   ReturnCandidate,
   Candidate,
-} from './types'
-import { sampleStatusText, blockingTransferStatuses } from './constants'
+} from "./types";
+import { sampleStatusText, blockingTransferStatuses } from "./constants";
 import {
   normalizeLab,
   getRequestedExperiments,
@@ -23,7 +23,7 @@ import {
   isExperimentCompleted,
   findCompletedTransferBoundaryIndex,
   getCandidateKey,
-} from './utils/transferFlow'
+} from "./utils/transferFlow";
 import {
   TransferModal,
   TransferDetail,
@@ -31,7 +31,7 @@ import {
   SummaryCard,
   InfoLine,
   StatusBadge,
-} from './components/TransferWidgets'
+} from "./components/TransferWidgets";
 import {
   headerStyle,
   headerActionsStyle,
@@ -69,202 +69,193 @@ import {
   smallSecondaryButtonStyle,
   smallDangerButtonStyle,
   statusBadgeStyle,
-} from './styles'
+} from "./styles";
 
 export default function SampleTransferPage() {
-  const { user: authUser, isLoading: authLoading } = useAuth()
+  const { user: authUser, isLoading: authLoading } = useAuth();
   const masterQuery = useQuery({
-    queryKey: ['master-data'],
+    queryKey: ["master-data"],
     queryFn: masterDataApi.fetch,
-  })
-  const [samples, setSamples] = useState<Sample[]>([])
-  const [wips, setWips] = useState<Wip[]>([])
-  const [transfers, setTransfers] = useState<Transfer[]>([])
-  const [selectedCandidateKey, setSelectedCandidateKey] = useState('')
-  const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
+  });
+  const [samples, setSamples] = useState<Sample[]>([]);
+  const [wips, setWips] = useState<Wip[]>([]);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [selectedCandidateKey, setSelectedCandidateKey] = useState("");
+  const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-  const currentLabData = masterQuery.data?.labs.find((lab) => lab.id === authUser?.labId)
+  const currentLabData = masterQuery.data?.labs.find((lab) => lab.id === authUser?.labId);
   const currentDepartment = masterQuery.data?.departments.find(
-    (department) => department.id === authUser?.departmentId,
-  )
+    (department) => department.id === authUser?.departmentId
+  );
 
   const currentUser = useMemo<CurrentUser | null>(() => {
-    if (!authUser) return null
+    if (!authUser) return null;
 
     const roleLabelMap: Record<string, string> = {
-      system_admin: '系統管理者',
-      lab_supervisor: '實驗室主管',
-      lab_engineer: '實驗室人員',
-      plant_user: '廠區使用者',
-    }
+      system_admin: "系統管理者",
+      lab_supervisor: "實驗室主管",
+      lab_engineer: "實驗室人員",
+      plant_user: "廠區使用者",
+    };
 
     return {
       id: authUser.id,
       name: authUser.name,
       role: authUser.role,
       role_name: roleLabelMap[authUser.role] ?? authUser.role,
-      department: currentDepartment?.name ?? currentDepartment?.code ?? '',
+      department: currentDepartment?.name ?? currentDepartment?.code ?? "",
       lab_name: currentLabData?.name ?? currentLabData?.code ?? null,
       email: authUser.email,
-    }
-  }, [authUser, currentDepartment, currentLabData])
+    };
+  }, [authUser, currentDepartment, currentLabData]);
 
-  const currentLab = currentUser?.lab_name || currentUser?.department || ''
-  const operatorName = currentUser?.name ?? ''
+  const currentLab = currentUser?.lab_name || currentUser?.department || "";
+  const operatorName = currentUser?.name ?? "";
 
   const isOutgoingTransfer = (transfer: Transfer) =>
-    normalizeLab(transfer.from_lab) === normalizeLab(currentLab)
+    normalizeLab(transfer.from_lab) === normalizeLab(currentLab);
 
   const isIncomingTransfer = (transfer: Transfer) =>
-    normalizeLab(transfer.to_lab) === normalizeLab(currentLab)
+    normalizeLab(transfer.to_lab) === normalizeLab(currentLab);
 
   function getTransferStatusText(transfer: Transfer) {
-    if (transfer.status === 'pending') {
-      return isOutgoingTransfer(transfer) ? '待我方送出' : '等待對方送出'
+    if (transfer.status === "pending") {
+      return isOutgoingTransfer(transfer) ? "待我方送出" : "等待對方送出";
     }
 
-    if (transfer.status === 'transferring') {
-      return isIncomingTransfer(transfer) ? '待我方收樣' : '待對方收樣'
+    if (transfer.status === "transferring") {
+      return isIncomingTransfer(transfer) ? "待我方收樣" : "待對方收樣";
     }
 
-    if (transfer.status === 'received') {
-      return isIncomingTransfer(transfer) ? '我方已收樣' : '對方已收樣'
+    if (transfer.status === "received") {
+      return isIncomingTransfer(transfer) ? "我方已收樣" : "對方已收樣";
     }
 
-    if (transfer.status === 'cancelled') {
-      return '已取消'
+    if (transfer.status === "cancelled") {
+      return "已取消";
     }
 
-    return transfer.status
+    return transfer.status;
   }
 
   function getTransferActionHint(transfer: Transfer) {
-    if (transfer.status === 'pending') {
-      return isOutgoingTransfer(transfer) ? '尚未送出' : '等待對方送出'
+    if (transfer.status === "pending") {
+      return isOutgoingTransfer(transfer) ? "尚未送出" : "等待對方送出";
     }
 
-    if (transfer.status === 'transferring') {
-      return isIncomingTransfer(transfer) ? '等待我方確認收樣' : '已送至對方待收樣區'
+    if (transfer.status === "transferring") {
+      return isIncomingTransfer(transfer) ? "等待我方確認收樣" : "已送至對方待收樣區";
     }
 
-    if (transfer.status === 'received') {
-      return isIncomingTransfer(transfer) ? '我方已收樣' : '對方已收樣'
+    if (transfer.status === "received") {
+      return isIncomingTransfer(transfer) ? "我方已收樣" : "對方已收樣";
     }
 
-    if (transfer.status === 'cancelled') {
-      return '已取消'
+    if (transfer.status === "cancelled") {
+      return "已取消";
     }
 
-    return ''
+    return "";
   }
 
   const selectedTransfer = useMemo(() => {
-    if (!selectedTransferId) return null
+    if (!selectedTransferId) return null;
 
-    return transfers.find((transfer) => transfer.id === selectedTransferId) ?? null
-  }, [transfers, selectedTransferId])
+    return transfers.find((transfer) => transfer.id === selectedTransferId) ?? null;
+  }, [transfers, selectedTransferId]);
 
   const wipsBySampleId = useMemo(() => {
-    return (Array.isArray(wips) ? wips : []).reduce<Record<string, Wip[]>>(
-      (groups, wip) => {
-        if (!groups[wip.sample_id]) {
-          groups[wip.sample_id] = []
-        }
+    return (Array.isArray(wips) ? wips : []).reduce<Record<string, Wip[]>>((groups, wip) => {
+      if (!groups[wip.sample_id]) {
+        groups[wip.sample_id] = [];
+      }
 
-        groups[wip.sample_id].push(wip)
-        return groups
-      },
-      {}
-    )
-  }, [wips])
+      groups[wip.sample_id].push(wip);
+      return groups;
+    }, {});
+  }, [wips]);
 
   const transfersByTargetId = useMemo(() => {
     return transfers.reduce<Record<string, Transfer[]>>((groups, transfer) => {
       if (!groups[transfer.target_id]) {
-        groups[transfer.target_id] = []
+        groups[transfer.target_id] = [];
       }
 
-      groups[transfer.target_id].push(transfer)
-      return groups
-    }, {})
-  }, [transfers])
+      groups[transfer.target_id].push(transfer);
+      return groups;
+    }, {});
+  }, [transfers]);
 
   const transferCandidates = useMemo<TransferCandidate[]>(() => {
-    const result: TransferCandidate[] = []
+    const result: TransferCandidate[] = [];
 
     samples.forEach((sample) => {
-      const sampleWips = wipsBySampleId[sample.id] ?? []
+      const sampleWips = wipsBySampleId[sample.id] ?? [];
 
-      if (sample.status === 'picked_up') return
-      if (sample.status === 'outbound') return
-      if (sample.status === 'pending_receive') return
+      if (sample.status === "picked_up") return;
+      if (sample.status === "outbound") return;
+      if (sample.status === "pending_receive") return;
 
-      const requestedExperiments = getRequestedExperiments(sample)
+      const requestedExperiments = getRequestedExperiments(sample);
 
       const currentLabWips = sampleWips.filter(
-        (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab),
-      )
+        (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab)
+      );
 
-      if (currentLabWips.length === 0) return
+      if (currentLabWips.length === 0) return;
 
-      const currentLabCompletedWips = currentLabWips.filter(
-        (wip) => wip.status === 'completed',
-      )
+      const currentLabCompletedWips = currentLabWips.filter((wip) => wip.status === "completed");
 
       const remainingWips = sampleWips.filter(
         (wip) =>
-          normalizeLab(wip.lab_name) !== normalizeLab(currentLab) &&
-          wip.status !== 'completed',
-      )
+          normalizeLab(wip.lab_name) !== normalizeLab(currentLab) && wip.status !== "completed"
+      );
 
       if (requestedExperiments.length > 0) {
         const currentLabCompletedBoundary = findCompletedTransferBoundaryIndex(
           requestedExperiments,
           sampleWips,
-          currentLab,
-        )
+          currentLab
+        );
 
-        if (currentLabCompletedBoundary < 0) return
+        if (currentLabCompletedBoundary < 0) return;
 
         const nextExperimentInSequence =
-          requestedExperiments[currentLabCompletedBoundary + 1] ?? null
+          requestedExperiments[currentLabCompletedBoundary + 1] ?? null;
 
-        if (!nextExperimentInSequence) return
-        if (isExperimentCompleted(sampleWips, nextExperimentInSequence)) return
+        if (!nextExperimentInSequence) return;
+        if (isExperimentCompleted(sampleWips, nextExperimentInSequence)) return;
 
         if (normalizeLab(nextExperimentInSequence.lab_name) === normalizeLab(currentLab)) {
-          return
+          return;
         }
 
-        const downstreamExperiments = requestedExperiments.slice(
-          currentLabCompletedBoundary + 1,
-        )
+        const downstreamExperiments = requestedExperiments.slice(currentLabCompletedBoundary + 1);
 
         const remainingExperiments = downstreamExperiments.filter(
-          (experiment) => !isExperimentCompleted(sampleWips, experiment),
-        )
+          (experiment) => !isExperimentCompleted(sampleWips, experiment)
+        );
 
-        if (remainingExperiments.length === 0) return
+        if (remainingExperiments.length === 0) return;
 
-        const nextExperiment = nextExperimentInSequence
-        const nextWip = findMatchingWipForExperiment(sampleWips, nextExperiment)
+        const nextExperiment = nextExperimentInSequence;
+        const nextWip = findMatchingWipForExperiment(sampleWips, nextExperiment);
 
         const relatedTransfers = [
           ...(transfersByTargetId[sample.id] ?? []),
-          ...(nextWip ? transfersByTargetId[nextWip.id] ?? [] : []),
-        ]
+          ...(nextWip ? (transfersByTargetId[nextWip.id] ?? []) : []),
+        ];
 
         const existingTransfer =
-          relatedTransfers.find((transfer) =>
-            blockingTransferStatuses.includes(transfer.status),
-          ) ?? null
+          relatedTransfers.find((transfer) => blockingTransferStatuses.includes(transfer.status)) ??
+          null;
 
         result.push({
-          kind: 'transfer',
+          kind: "transfer",
           sample,
           currentLabCompletedWips,
           remainingWips,
@@ -273,35 +264,34 @@ export default function SampleTransferPage() {
           nextExperiment,
           nextWip,
           existingTransfer,
-        })
+        });
 
-        return
+        return;
       }
 
-      if (sampleWips.length === 0) return
-      if (remainingWips.length === 0) return
+      if (sampleWips.length === 0) return;
+      if (remainingWips.length === 0) return;
 
-      const nextWip = remainingWips[0]
+      const nextWip = remainingWips[0];
 
-      if (!nextWip.lab_name) return
+      if (!nextWip.lab_name) return;
 
       const nextExperiment = {
         lab_name: nextWip.lab_name,
-        experiment_item: nextWip.experiment_item ?? '未命名實驗',
-      }
+        experiment_item: nextWip.experiment_item ?? "未命名實驗",
+      };
 
       const relatedTransfers = [
         ...(transfersByTargetId[sample.id] ?? []),
         ...(transfersByTargetId[nextWip.id] ?? []),
-      ]
+      ];
 
       const existingTransfer =
-        relatedTransfers.find((transfer) =>
-          blockingTransferStatuses.includes(transfer.status),
-        ) ?? null
+        relatedTransfers.find((transfer) => blockingTransferStatuses.includes(transfer.status)) ??
+        null;
 
       result.push({
-        kind: 'transfer',
+        kind: "transfer",
         sample,
         currentLabCompletedWips,
         remainingWips,
@@ -310,178 +300,165 @@ export default function SampleTransferPage() {
         nextExperiment,
         nextWip,
         existingTransfer,
-      })
-    })
+      });
+    });
 
-    return result
-  }, [samples, wipsBySampleId, transfersByTargetId, currentLab])
+    return result;
+  }, [samples, wipsBySampleId, transfersByTargetId, currentLab]);
 
   const returnCandidates = useMemo<ReturnCandidate[]>(() => {
-    const result: ReturnCandidate[] = []
+    const result: ReturnCandidate[] = [];
 
     samples.forEach((sample) => {
-      const sampleWips = wipsBySampleId[sample.id] ?? []
+      const sampleWips = wipsBySampleId[sample.id] ?? [];
 
-      if (sample.status === 'picked_up') return
-      if (sample.status === 'outbound') return
-      if (sample.status === 'pending_receive') return
+      if (sample.status === "picked_up") return;
+      if (sample.status === "outbound") return;
+      if (sample.status === "pending_receive") return;
 
-      const requestedExperiments = getRequestedExperiments(sample)
+      const requestedExperiments = getRequestedExperiments(sample);
 
       const currentLabWips = sampleWips.filter(
-        (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab),
-      )
+        (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab)
+      );
 
-      if (currentLabWips.length === 0) return
+      if (currentLabWips.length === 0) return;
 
-      const currentLabIncompleteWips = currentLabWips.filter(
-        (wip) => wip.status !== 'completed',
-      )
+      const currentLabIncompleteWips = currentLabWips.filter((wip) => wip.status !== "completed");
 
-      if (currentLabIncompleteWips.length > 0) return
+      if (currentLabIncompleteWips.length > 0) return;
 
-      const currentLabCompletedWips = currentLabWips.filter(
-        (wip) => wip.status === 'completed',
-      )
+      const currentLabCompletedWips = currentLabWips.filter((wip) => wip.status === "completed");
 
-      const unfinishedAnyWips = sampleWips.filter(
-        (wip) => wip.status !== 'completed',
-      )
+      const unfinishedAnyWips = sampleWips.filter((wip) => wip.status !== "completed");
 
-      if (unfinishedAnyWips.length > 0) return
+      if (unfinishedAnyWips.length > 0) return;
 
       if (requestedExperiments.length > 0) {
         const unfinishedExperiments = requestedExperiments.filter(
-          (experiment) => !isExperimentCompleted(sampleWips, experiment),
-        )
+          (experiment) => !isExperimentCompleted(sampleWips, experiment)
+        );
 
-        if (unfinishedExperiments.length > 0) return
+        if (unfinishedExperiments.length > 0) return;
 
-        const currentLabLastIndex = requestedExperiments.reduce(
-          (lastIndex, experiment, index) => {
-            if (normalizeLab(experiment.lab_name) === normalizeLab(currentLab)) {
-              return index
-            }
+        const currentLabLastIndex = requestedExperiments.reduce((lastIndex, experiment, index) => {
+          if (normalizeLab(experiment.lab_name) === normalizeLab(currentLab)) {
+            return index;
+          }
 
-            return lastIndex
-          },
-          -1,
-        )
+          return lastIndex;
+        }, -1);
 
-        if (
-          currentLabLastIndex >= 0 &&
-          currentLabLastIndex !== requestedExperiments.length - 1
-        ) {
-          return
+        if (currentLabLastIndex >= 0 && currentLabLastIndex !== requestedExperiments.length - 1) {
+          return;
         }
 
         result.push({
-          kind: 'return',
+          kind: "return",
           sample,
           currentLabCompletedWips,
           allWips: sampleWips,
-        })
+        });
 
-        return
+        return;
       }
 
-      if (sampleWips.length === 0) return
+      if (sampleWips.length === 0) return;
 
       result.push({
-        kind: 'return',
+        kind: "return",
         sample,
         currentLabCompletedWips,
         allWips: sampleWips,
-      })
-    })
+      });
+    });
 
-    return result
-  }, [samples, wipsBySampleId, currentLab])
+    return result;
+  }, [samples, wipsBySampleId, currentLab]);
 
   const pickupCandidates = useMemo<ReturnCandidate[]>(() => {
-    const result: ReturnCandidate[] = []
+    const result: ReturnCandidate[] = [];
 
     samples.forEach((sample) => {
-      const sampleWips = wipsBySampleId[sample.id] ?? []
+      const sampleWips = wipsBySampleId[sample.id] ?? [];
 
-      if (sample.status !== 'outbound') return
+      if (sample.status !== "outbound") return;
 
       const currentLabWips = sampleWips.filter(
-        (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab),
-      )
+        (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab)
+      );
 
-      if (currentLabWips.length === 0) return
+      if (currentLabWips.length === 0) return;
 
       result.push({
-        kind: 'return',
+        kind: "return",
         sample,
-        currentLabCompletedWips: currentLabWips.filter((wip) => wip.status === 'completed'),
+        currentLabCompletedWips: currentLabWips.filter((wip) => wip.status === "completed"),
         allWips: sampleWips,
-      })
-    })
+      });
+    });
 
-    return result
-  }, [samples, wipsBySampleId, currentLab])
+    return result;
+  }, [samples, wipsBySampleId, currentLab]);
 
   const candidates = useMemo<Candidate[]>(() => {
-    return [...transferCandidates, ...returnCandidates, ...pickupCandidates]
-  }, [transferCandidates, returnCandidates, pickupCandidates])
+    return [...transferCandidates, ...returnCandidates, ...pickupCandidates];
+  }, [transferCandidates, returnCandidates, pickupCandidates]);
 
   const selectedCandidate = useMemo(() => {
     return (
-      candidates.find((candidate) => getCandidateKey(candidate) === selectedCandidateKey) ??
-      null
-    )
-  }, [candidates, selectedCandidateKey])
+      candidates.find((candidate) => getCandidateKey(candidate) === selectedCandidateKey) ?? null
+    );
+  }, [candidates, selectedCandidateKey]);
 
   async function loadData(options?: { resetCandidate?: boolean }) {
     if (!currentUser) {
-      setLoading(false)
-      return
+      setLoading(false);
+      return;
     }
 
-    const resetCandidate = options?.resetCandidate ?? true
+    const resetCandidate = options?.resetCandidate ?? true;
 
     try {
-      setLoading(true)
-      setError('')
-      setSuccessMessage('')
+      setLoading(true);
+      setError("");
+      setSuccessMessage("");
 
       const [sampleData, wipData, transferData] = await Promise.all([
-        apiGet<Sample[]>('/api/samples'),
-        apiGet<Wip[]>('/api/wips?include_all_for_flow=true'),
-        apiGet<Transfer[]>('/api/transfers'),
-      ])
+        apiGet<Sample[]>("/api/samples"),
+        apiGet<Wip[]>("/api/wips?include_all_for_flow=true"),
+        apiGet<Transfer[]>("/api/transfers"),
+      ]);
 
-      setSamples(sampleData)
-      setWips(wipData)
-      setTransfers(transferData)
+      setSamples(sampleData);
+      setWips(wipData);
+      setTransfers(transferData);
 
       if (resetCandidate) {
-        setSelectedCandidateKey('')
+        setSelectedCandidateKey("");
       }
 
       if (
         selectedTransferId &&
         !transferData.some((transfer) => transfer.id === selectedTransferId)
       ) {
-        setSelectedTransferId(null)
+        setSelectedTransferId(null);
       }
     } catch (err) {
-      setError(getErrorMessage(err, '載入樣品流轉資料失敗'))
+      setError(getErrorMessage(err, "載入樣品流轉資料失敗"));
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   async function createTransfer(candidate: TransferCandidate) {
     try {
-      setSubmitting(true)
-      setError('')
-      setSuccessMessage('')
+      setSubmitting(true);
+      setError("");
+      setSuccessMessage("");
 
-      await apiPost('/api/transfers', {
-        target_type: 'sample',
+      await apiPost("/api/transfers", {
+        target_type: "sample",
         target_id: candidate.sample.id,
         order_no: candidate.sample.order_no,
         sample_no: candidate.sample.sample_no,
@@ -492,122 +469,122 @@ export default function SampleTransferPage() {
         note: candidate.nextWip
           ? `目前 ${currentLab} 的 WIP 已完成，交接至 ${candidate.nextLab} 收樣區。下一個 WIP：${candidate.nextWip.wip_no}`
           : `目前 ${currentLab} 的 WIP 已完成，交接至 ${candidate.nextLab} 收樣區。下一個測驗：${candidate.nextExperiment.experiment_item}。`,
-      })
+      });
 
-      setSuccessMessage('交接申請已建立')
-      await loadData()
+      setSuccessMessage("交接申請已建立");
+      await loadData();
     } catch (err) {
-      logClientError('createTransfer failed', err)
-      setError(getErrorMessage(err, '建立交接申請失敗'))
+      logClientError("createTransfer failed", err);
+      setError(getErrorMessage(err, "建立交接申請失敗"));
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   async function sendTransfer(transfer: Transfer) {
     try {
-      setSubmitting(true)
-      setError('')
-      setSuccessMessage('')
+      setSubmitting(true);
+      setError("");
+      setSuccessMessage("");
 
       await apiPost(`/api/transfers/${transfer.id}/actions`, {
-        action: 'send',
+        action: "send",
         operator_name: operatorName,
-      })
+      });
 
-      setSelectedTransferId(null)
-      setSuccessMessage('已送出交接，樣品已移至下一個 Lab 的待收樣區')
-      await loadData()
+      setSelectedTransferId(null);
+      setSuccessMessage("已送出交接，樣品已移至下一個 Lab 的待收樣區");
+      await loadData();
     } catch (err) {
-      logClientError('sendTransfer failed', err)
-      setError(getErrorMessage(err, '送出交接單失敗'))
+      logClientError("sendTransfer failed", err);
+      setError(getErrorMessage(err, "送出交接單失敗"));
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   async function cancelTransfer(transfer: Transfer) {
     try {
-      setSubmitting(true)
-      setError('')
-      setSuccessMessage('')
+      setSubmitting(true);
+      setError("");
+      setSuccessMessage("");
 
       await apiPost(`/api/transfers/${transfer.id}/actions`, {
-        action: 'cancel',
+        action: "cancel",
         operator_name: operatorName,
-      })
+      });
 
-      setSelectedTransferId(null)
-      setSuccessMessage('交接單已取消')
-      await loadData()
+      setSelectedTransferId(null);
+      setSuccessMessage("交接單已取消");
+      await loadData();
     } catch (err) {
-      logClientError('cancelTransfer failed', err)
-      setError(getErrorMessage(err, '取消交接單失敗'))
+      logClientError("cancelTransfer failed", err);
+      setError(getErrorMessage(err, "取消交接單失敗"));
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   async function notifyPickup(candidate: ReturnCandidate) {
     try {
-      setSubmitting(true)
-      setError('')
-      setSuccessMessage('')
+      setSubmitting(true);
+      setError("");
+      setSuccessMessage("");
 
       await apiPost(`/api/samples/${candidate.sample.id}/actions`, {
-        action: 'outbound',
+        action: "outbound",
         operator_name: operatorName,
         current_location: `${currentLab} 待取件區`,
         note: candidate.sample.note,
         confirm_notify_pickup: true,
-      })
+      });
 
-      setSelectedTransferId(null)
-      setSuccessMessage('已通知原使用者取件，樣品已移至待取件區')
-      await loadData()
+      setSelectedTransferId(null);
+      setSuccessMessage("已通知原使用者取件，樣品已移至待取件區");
+      await loadData();
     } catch (err) {
-      logClientError('notifyPickup failed', err)
-      setError(getErrorMessage(err, '通知取件失敗'))
+      logClientError("notifyPickup failed", err);
+      setError(getErrorMessage(err, "通知取件失敗"));
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   async function confirmPickup(candidate: ReturnCandidate) {
     try {
-      setSubmitting(true)
-      setError('')
-      setSuccessMessage('')
+      setSubmitting(true);
+      setError("");
+      setSuccessMessage("");
 
       await apiPost(`/api/samples/${candidate.sample.id}/actions`, {
-        action: 'pickup_confirmed',
+        action: "pickup_confirmed",
         operator_name: operatorName,
-        current_location: '已由使用者取回',
-      })
+        current_location: "已由使用者取回",
+      });
 
-      setSelectedTransferId(null)
-      setSuccessMessage('已確認使用者取件，樣品流程完成')
-      await loadData()
+      setSelectedTransferId(null);
+      setSuccessMessage("已確認使用者取件，樣品流程完成");
+      await loadData();
     } catch (err) {
-      logClientError('confirmPickup failed', err)
-      setError(getErrorMessage(err, '確認取件失敗'))
+      logClientError("confirmPickup failed", err);
+      setError(getErrorMessage(err, "確認取件失敗"));
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData()
+    loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id, currentUser?.role, currentUser?.lab_name])
+  }, [currentUser?.id, currentUser?.role, currentUser?.lab_name]);
 
   if (authLoading || masterQuery.isLoading) {
     return (
       <section style={panelStyle}>
         <div style={emptyStyle}>載入中...</div>
       </section>
-    )
+    );
   }
 
   if (!currentUser) {
@@ -615,7 +592,7 @@ export default function SampleTransferPage() {
       <section style={panelStyle}>
         <div style={emptyStyle}>尚未取得登入身分</div>
       </section>
-    )
+    );
   }
 
   return (
@@ -624,12 +601,13 @@ export default function SampleTransferPage() {
         <div>
           <h1 style={titleStyle}>樣品交接管理</h1>
           <p style={subtitleStyle}>
-            TRANSFER OUT · 目前 Lab：{currentLab} · 這裡負責建立交接、送出交接，以及查看我方相關交接狀態。
+            TRANSFER OUT · 目前 Lab：{currentLab} ·
+            這裡負責建立交接、送出交接，以及查看我方相關交接狀態。
           </p>
         </div>
 
         <div style={headerActionsStyle}>
-          <button onClick={() => (window.location.href = '/sample')} style={secondaryButtonStyle}>
+          <button onClick={() => (window.location.href = "/sample")} style={secondaryButtonStyle}>
             回樣品管理
           </button>
           <button onClick={() => loadData()} style={secondaryButtonStyle}>
@@ -656,7 +634,7 @@ export default function SampleTransferPage() {
             transfers.filter(
               (transfer) =>
                 normalizeLab(transfer.from_lab) === normalizeLab(currentLab) &&
-                transfer.status === 'pending',
+                transfer.status === "pending"
             ).length
           }
         />
@@ -666,7 +644,7 @@ export default function SampleTransferPage() {
             transfers.filter(
               (transfer) =>
                 normalizeLab(transfer.to_lab) === normalizeLab(currentLab) &&
-                transfer.status === 'transferring',
+                transfer.status === "transferring"
             ).length
           }
         />
@@ -694,8 +672,8 @@ export default function SampleTransferPage() {
           ) : (
             <div style={candidateListStyle}>
               {transferCandidates.map((candidate) => {
-                const candidateKey = getCandidateKey(candidate)
-                const selected = selectedCandidateKey === candidateKey
+                const candidateKey = getCandidateKey(candidate);
+                const selected = selectedCandidateKey === candidateKey;
 
                 return (
                   <button
@@ -708,7 +686,7 @@ export default function SampleTransferPage() {
                       <div>
                         <div style={candidateTitleStyle}>{candidate.sample.sample_no}</div>
                         <div style={candidateSubtitleStyle}>
-                          {candidate.sample.sample_name ?? '未命名樣品'} ·{' '}
+                          {candidate.sample.sample_name ?? "未命名樣品"} ·{" "}
                           {candidate.sample.order_no}
                         </div>
                       </div>
@@ -721,7 +699,7 @@ export default function SampleTransferPage() {
                     </div>
 
                     <div style={candidateMetaGridStyle}>
-                      <InfoLine label="目前位置" value={candidate.sample.current_location ?? '-'} />
+                      <InfoLine label="目前位置" value={candidate.sample.current_location ?? "-"} />
                       <InfoLine
                         label="目前完成"
                         value={`${currentLab} · ${candidate.currentLabCompletedWips.length} 個 WIP`}
@@ -729,11 +707,11 @@ export default function SampleTransferPage() {
                       <InfoLine label="送往" value={`${candidate.nextLab} 收樣區`} />
                       <InfoLine
                         label="下一 WIP"
-                        value={candidate.nextWip?.wip_no ?? '尚未建立 WIP'}
+                        value={candidate.nextWip?.wip_no ?? "尚未建立 WIP"}
                       />
                     </div>
                   </button>
-                )
+                );
               })}
             </div>
           )}
@@ -743,9 +721,7 @@ export default function SampleTransferPage() {
           <div style={panelHeaderStyle}>
             <div>
               <div style={panelTitleStyle}>待通知使用者取件</div>
-              <div style={hintStyle}>
-                條件：全部測驗都 completed，且尚未通知原使用者取件。
-              </div>
+              <div style={hintStyle}>條件：全部測驗都 completed，且尚未通知原使用者取件。</div>
             </div>
 
             <span style={countBadgeStyle}>{returnCandidates.length} 筆</span>
@@ -758,8 +734,8 @@ export default function SampleTransferPage() {
           ) : (
             <div style={candidateListStyle}>
               {returnCandidates.map((candidate) => {
-                const candidateKey = getCandidateKey(candidate)
-                const selected = selectedCandidateKey === candidateKey
+                const candidateKey = getCandidateKey(candidate);
+                const selected = selectedCandidateKey === candidateKey;
 
                 return (
                   <button
@@ -772,7 +748,7 @@ export default function SampleTransferPage() {
                       <div>
                         <div style={candidateTitleStyle}>{candidate.sample.sample_no}</div>
                         <div style={candidateSubtitleStyle}>
-                          {candidate.sample.sample_name ?? '未命名樣品'} ·{' '}
+                          {candidate.sample.sample_name ?? "未命名樣品"} ·{" "}
                           {candidate.sample.order_no}
                         </div>
                       </div>
@@ -781,19 +757,19 @@ export default function SampleTransferPage() {
                     </div>
 
                     <div style={candidateMetaGridStyle}>
-                      <InfoLine label="目前位置" value={candidate.sample.current_location ?? '-'} />
+                      <InfoLine label="目前位置" value={candidate.sample.current_location ?? "-"} />
                       <InfoLine
                         label="樣品狀態"
                         value={sampleStatusText[candidate.sample.status] ?? candidate.sample.status}
                       />
-                      <InfoLine label="申請人" value={candidate.sample.applicant_name ?? '-'} />
+                      <InfoLine label="申請人" value={candidate.sample.applicant_name ?? "-"} />
                       <InfoLine
                         label="完成 WIP"
-                        value={`${candidate.allWips.filter((wip) => wip.status === 'completed').length} / ${candidate.allWips.length}`}
+                        value={`${candidate.allWips.filter((wip) => wip.status === "completed").length} / ${candidate.allWips.length}`}
                       />
                     </div>
                   </button>
-                )
+                );
               })}
             </div>
           )}
@@ -803,9 +779,7 @@ export default function SampleTransferPage() {
           <div style={panelHeaderStyle}>
             <div>
               <div style={panelTitleStyle}>待取件</div>
-              <div style={hintStyle}>
-                已通知使用者取件後，樣品才會出現在這裡。
-              </div>
+              <div style={hintStyle}>已通知使用者取件後，樣品才會出現在這裡。</div>
             </div>
 
             <span style={countBadgeStyle}>{pickupCandidates.length} 筆</span>
@@ -818,8 +792,8 @@ export default function SampleTransferPage() {
           ) : (
             <div style={candidateListStyle}>
               {pickupCandidates.map((candidate) => {
-                const candidateKey = getCandidateKey(candidate)
-                const selected = selectedCandidateKey === candidateKey
+                const candidateKey = getCandidateKey(candidate);
+                const selected = selectedCandidateKey === candidateKey;
 
                 return (
                   <button
@@ -832,7 +806,7 @@ export default function SampleTransferPage() {
                       <div>
                         <div style={candidateTitleStyle}>{candidate.sample.sample_no}</div>
                         <div style={candidateSubtitleStyle}>
-                          {candidate.sample.sample_name ?? '未命名樣品'} ·{' '}
+                          {candidate.sample.sample_name ?? "未命名樣品"} ·{" "}
                           {candidate.sample.order_no}
                         </div>
                       </div>
@@ -841,19 +815,19 @@ export default function SampleTransferPage() {
                     </div>
 
                     <div style={candidateMetaGridStyle}>
-                      <InfoLine label="目前位置" value={candidate.sample.current_location ?? '-'} />
+                      <InfoLine label="目前位置" value={candidate.sample.current_location ?? "-"} />
                       <InfoLine
                         label="樣品狀態"
                         value={sampleStatusText[candidate.sample.status] ?? candidate.sample.status}
                       />
-                      <InfoLine label="申請人" value={candidate.sample.applicant_name ?? '-'} />
+                      <InfoLine label="申請人" value={candidate.sample.applicant_name ?? "-"} />
                       <InfoLine
                         label="完成 WIP"
-                        value={`${candidate.allWips.filter((wip) => wip.status === 'completed').length} / ${candidate.allWips.length}`}
+                        value={`${candidate.allWips.filter((wip) => wip.status === "completed").length} / ${candidate.allWips.length}`}
                       />
                     </div>
                   </button>
-                )
+                );
               })}
             </div>
           )}
@@ -872,7 +846,7 @@ export default function SampleTransferPage() {
 
         {!selectedCandidate ? (
           <div style={emptyStyle}>請先選擇上方任一樣品。</div>
-        ) : selectedCandidate.kind === 'transfer' ? (
+        ) : selectedCandidate.kind === "transfer" ? (
           <TransferDetail
             candidate={selectedCandidate}
             currentLab={currentLab}
@@ -906,39 +880,32 @@ export default function SampleTransferPage() {
         {transfers.length === 0 ? (
           <div style={emptyStyle}>目前沒有交接單。</div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: "auto" }}>
             <table style={tableStyle}>
               <thead>
-                <tr style={{ background: 'var(--s2)' }}>
-                  {[
-                    '交接單',
-                    '樣品',
-                    'From',
-                    'To',
-                    '狀態',
-                    '交接人',
-                    '簽收人',
-                    '操作',
-                  ].map((header) => (
-                    <th key={header} style={thStyle}>
-                      {header}
-                    </th>
-                  ))}
+                <tr style={{ background: "var(--s2)" }}>
+                  {["交接單", "樣品", "From", "To", "狀態", "交接人", "簽收人", "操作"].map(
+                    (header) => (
+                      <th key={header} style={thStyle}>
+                        {header}
+                      </th>
+                    )
+                  )}
                 </tr>
               </thead>
 
               <tbody>
                 {transfers.map((transfer) => (
-                  <tr key={transfer.id} style={{ borderBottom: '1px solid var(--border2)' }}>
+                  <tr key={transfer.id} style={{ borderBottom: "1px solid var(--border2)" }}>
                     <td style={monoTdStyle}>{transfer.transfer_no ?? transfer.id.slice(0, 8)}</td>
-                    <td style={monoTdStyle}>{transfer.sample_no ?? '-'}</td>
-                    <td style={tdStyle}>{transfer.from_lab ?? '-'}</td>
-                    <td style={tdStyle}>{transfer.to_lab ?? '-'}</td>
+                    <td style={monoTdStyle}>{transfer.sample_no ?? "-"}</td>
+                    <td style={tdStyle}>{transfer.from_lab ?? "-"}</td>
+                    <td style={tdStyle}>{transfer.to_lab ?? "-"}</td>
                     <td style={tdStyle}>
                       <span style={statusBadgeStyle}>{getTransferStatusText(transfer)}</span>
                     </td>
-                    <td style={tdStyle}>{transfer.handed_by ?? '-'}</td>
-                    <td style={tdStyle}>{transfer.received_by ?? '-'}</td>
+                    <td style={tdStyle}>{transfer.handed_by ?? "-"}</td>
+                    <td style={tdStyle}>{transfer.received_by ?? "-"}</td>
                     <td style={tdStyle}>
                       <div style={smallActionGroupStyle}>
                         <button
@@ -949,7 +916,7 @@ export default function SampleTransferPage() {
                           查看
                         </button>
 
-                        {isOutgoingTransfer(transfer) && transfer.status === 'pending' && (
+                        {isOutgoingTransfer(transfer) && transfer.status === "pending" && (
                           <button
                             type="button"
                             onClick={() => sendTransfer(transfer)}
@@ -960,7 +927,7 @@ export default function SampleTransferPage() {
                           </button>
                         )}
 
-                        {isOutgoingTransfer(transfer) && transfer.status === 'pending' && (
+                        {isOutgoingTransfer(transfer) && transfer.status === "pending" && (
                           <button
                             type="button"
                             onClick={() => cancelTransfer(transfer)}
@@ -995,5 +962,5 @@ export default function SampleTransferPage() {
         />
       )}
     </div>
-  )
+  );
 }

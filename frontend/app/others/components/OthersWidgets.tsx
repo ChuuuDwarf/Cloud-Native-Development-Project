@@ -1,13 +1,21 @@
-import { tableTitleStyle, tableWrapStyle, tableStyle, thStyle, tdStyle, emptyTdStyle, trStyle } from '../styles'
+import {
+  tableTitleStyle,
+  tableWrapStyle,
+  tableStyle,
+  thStyle,
+  tdStyle,
+  emptyTdStyle,
+  trStyle,
+} from "../styles";
 
 export function SimpleTable({
   title,
   headers,
   rows,
 }: {
-  title?: string
-  headers: string[]
-  rows: Array<Array<string | number | null | undefined>>
+  title?: string;
+  headers: string[];
+  rows: Array<Array<string | number | null | undefined>>;
 }) {
   return (
     <div style={{ marginTop: 14 }}>
@@ -37,7 +45,7 @@ export function SimpleTable({
                 <tr key={rowIndex} style={trStyle}>
                   {row.map((cell, cellIndex) => (
                     <td key={`${rowIndex}-${cellIndex}`} style={tdStyle}>
-                      {cell ?? '-'}
+                      {cell ?? "-"}
                     </td>
                   ))}
                 </tr>
@@ -47,5 +55,5 @@ export function SimpleTable({
         </table>
       </div>
     </div>
-  )
+  );
 }

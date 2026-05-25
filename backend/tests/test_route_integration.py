@@ -15,6 +15,7 @@ import pytest
 sqlalchemy = pytest.importorskip("sqlalchemy")
 pytest.importorskip("fastapi.testclient")
 
+from fastapi import Request  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
@@ -26,8 +27,12 @@ if str(ROOT_DIR) not in sys.path:
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
-import app.core.database  # noqa: E402
+import app.core.database as db_module  # noqa: E402
 import app.main  # noqa: E402
+import app.routes.samples as samples_route  # noqa: E402
+import app.routes.transfers as transfers_route  # noqa: E402
+import app.routes.wips as wips_route  # noqa: E402
+from app.common.dependencies import CurrentUser, get_current_user  # noqa: E402
 
 app = app.main.app
 
@@ -35,6 +40,52 @@ LAB_A_HEADERS = {"x-user-id": "user-laba-001"}
 LAB_B_HEADERS = {"x-user-id": "user-labb-001"}
 FACTORY_HEADERS = {"x-user-id": "user-factory-001"}
 ADMIN_HEADERS = {"x-user-id": "user-admin-001"}
+
+USER_UUIDS = {
+    "user-laba-001": "11111111-aaaa-aaaa-aaaa-111111111111",
+    "user-labb-001": "22222222-bbbb-bbbb-bbbb-222222222222",
+    "user-factory-001": "33333333-ffff-ffff-ffff-333333333333",
+    "user-admin-001": "44444444-adad-adad-adad-444444444444",
+}
+
+USER_CONTEXTS = {
+    USER_UUIDS["user-laba-001"]: {
+        "id": USER_UUIDS["user-laba-001"],
+        "name": "張志明",
+        "role": "lab_engineer",
+        "role_name": "實驗室人員",
+        "department": "Lab A",
+        "lab_name": "Lab A",
+        "email": "laba@example.com",
+    },
+    USER_UUIDS["user-labb-001"]: {
+        "id": USER_UUIDS["user-labb-001"],
+        "name": "林雅婷",
+        "role": "lab_engineer",
+        "role_name": "實驗室人員",
+        "department": "Lab B",
+        "lab_name": "Lab B",
+        "email": "labb@example.com",
+    },
+    USER_UUIDS["user-factory-001"]: {
+        "id": USER_UUIDS["user-factory-001"],
+        "name": "王建國",
+        "role": "plant_user",
+        "role_name": "廠區使用者",
+        "department": "F12 廠",
+        "lab_name": None,
+        "email": "factory@example.com",
+    },
+    USER_UUIDS["user-admin-001"]: {
+        "id": USER_UUIDS["user-admin-001"],
+        "name": "系統管理員",
+        "role": "system_admin",
+        "role_name": "系統管理者",
+        "department": "",
+        "lab_name": None,
+        "email": "admin@example.com",
+    },
+}
 
 SAMPLE_A_ID = "11111111-1111-1111-1111-111111111111"
 SAMPLE_B_ID = "22222222-2222-2222-2222-222222222222"
@@ -71,6 +122,34 @@ class SQLiteReturningSafeSession(sqlalchemy.orm.Session):
         return result
 
 
+class AsyncSQLiteSessionAdapter:
+    """Minimal async facade over the sync SQLite session used by route tests."""
+
+    def __init__(self, session):
+        self.session = session
+
+    async def execute(self, *args, **kwargs):
+        return self.session.execute(*args, **kwargs)
+
+    async def scalar(self, *args, **kwargs):
+        return self.session.scalar(*args, **kwargs)
+
+    async def commit(self):
+        self.session.commit()
+
+    async def rollback(self):
+        self.session.rollback()
+
+    async def flush(self):
+        self.session.flush()
+
+    async def refresh(self, instance):
+        self.session.refresh(instance)
+
+    def add(self, instance):
+        self.session.add(instance)
+
+
 def create_schema(db):
     """建立測試用 schema。
 
@@ -79,6 +158,27 @@ def create_schema(db):
     """
 
     statements = [
+        """
+        CREATE TABLE departments (
+            id TEXT PRIMARY KEY,
+            code TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE labs (
+            id TEXT PRIMARY KEY,
+            code TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            capacity INTEGER NOT NULL DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
         """
         CREATE TABLE storage_locations (
             id TEXT PRIMARY KEY,
@@ -194,6 +294,29 @@ def seed_data(db):
     db.execute(
         text(
             """
+            INSERT INTO departments (id, code, name)
+            VALUES
+                ('dddddddd-aaaa-aaaa-aaaa-dddddddddddd', 'F12', 'F12 廠'),
+                ('dddddddd-laba-aaaa-aaaa-dddddddddddd', 'LABA-DEPT', 'Lab A'),
+                ('dddddddd-labb-bbbb-bbbb-dddddddddddd', 'LABB-DEPT', 'Lab B')
+            """
+        )
+    )
+
+    db.execute(
+        text(
+            """
+            INSERT INTO labs (id, code, name, capacity)
+            VALUES
+                ('aaaaaaaa-0000-0000-0000-000000000001', 'A', 'Lab A', 10),
+                ('bbbbbbbb-0000-0000-0000-000000000002', 'B', 'Lab B', 10)
+            """
+        )
+    )
+
+    db.execute(
+        text(
+            """
             INSERT INTO storage_locations (id, code, name, lab_name)
             VALUES (:id, 'A-R01-S01', 'Lab A 暫存架 1', 'Lab A')
             """
@@ -277,18 +400,49 @@ def integration_db():
 
 @pytest.fixture
 def client(integration_db):
-    def override_get_db():
-        try:
-            yield integration_db
-        finally:
-            pass
+    async_db = AsyncSQLiteSessionAdapter(integration_db)
 
-    app.dependency_overrides[app.core.database.get_db] = override_get_db
+    async def override_get_db():
+        yield async_db
 
-    with TestClient(app) as test_client:
-        yield test_client
+    async def override_get_current_user(request: Request):
+        header_user_id = request.headers.get("x-user-id", "user-admin-001")
+        user_uuid = USER_UUIDS[header_user_id]
+        user = USER_CONTEXTS[user_uuid]
+        return CurrentUser(
+            id=user_uuid,
+            name=user["name"],
+            email=user["email"],
+            role=user["role"],
+            permissions=["*"],
+        )
 
-    app.dependency_overrides.clear()
+    async def fake_build_current_user(current_user: CurrentUser, db):
+        return USER_CONTEXTS[str(current_user.id)]
+
+    original_builders = (
+        samples_route.build_current_user,
+        wips_route.build_current_user,
+        transfers_route.build_current_user,
+    )
+
+    samples_route.build_current_user = fake_build_current_user
+    wips_route.build_current_user = fake_build_current_user
+    transfers_route.build_current_user = fake_build_current_user
+
+    app.dependency_overrides[db_module.get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
+
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.clear()
+        (
+            samples_route.build_current_user,
+            wips_route.build_current_user,
+            transfers_route.build_current_user,
+        ) = original_builders
 
 
 def test_samples_route_filters_visibility_and_status(client):
@@ -330,7 +484,6 @@ def test_sample_receive_split_and_wip_creation_persist_to_db(client, integration
             "action": "split",
             "wips": [
                 {"lab_name": "Lab A", "experiment_item": "SEM 觀察"},
-                {"lab_name": "Lab B", "experiment_item": "光學量測"},
             ],
         },
     )
@@ -339,9 +492,8 @@ def test_sample_receive_split_and_wip_creation_persist_to_db(client, integration
     split_payload = split_response.json()
     assert split_payload["message"] == "Sample split successfully"
     assert split_payload["current_location"] == "Lab A 實驗暫存區"
-    assert len(split_payload["created_wips"]) == 2
+    assert len(split_payload["created_wips"]) == 1
     assert split_payload["created_wips"][0]["wip_no"] == "WIP-2026-0001-A-01"
-    assert split_payload["created_wips"][1]["wip_no"] == "WIP-2026-0001-B-01"
     assert all(
         wip["current_location"] == "Lab A 實驗暫存區" for wip in split_payload["created_wips"]
     )
@@ -372,10 +524,7 @@ def test_sample_receive_split_and_wip_creation_persist_to_db(client, integration
         integration_db,
         "SELECT action, to_status FROM wip_histories ORDER BY created_at",
     )
-    assert [history["action"] for history in wip_histories] == [
-        "created_from_split",
-        "created_from_split",
-    ]
+    assert [history["action"] for history in wip_histories] == ["created_from_split"]
 
 
 def test_wip_actions_update_wip_sample_location_and_history(client, integration_db):
@@ -460,7 +609,6 @@ def test_transfer_create_send_and_receive_moves_sample_to_next_lab(
             "action": "split",
             "wips": [
                 {"lab_name": "Lab A", "experiment_item": "SEM 觀察"},
-                {"lab_name": "Lab B", "experiment_item": "光學量測"},
             ],
         },
     )
@@ -490,16 +638,6 @@ def test_transfer_create_send_and_receive_moves_sample_to_next_lab(
     )
     assert sample_waiting["current_location"] == "Lab A 交接待送區"
 
-    lab_b_wip_waiting = fetch_one(
-        integration_db,
-        """
-        SELECT current_location
-        FROM wips
-        WHERE sample_id = :id AND lab_name = 'Lab B'
-        """,
-        {"id": SAMPLE_A_ID},
-    )
-    assert lab_b_wip_waiting["current_location"] == "Lab A 交接待送區"
 
     send_response = client.post(
         f"/api/transfers/{transfer['id']}/actions",
@@ -529,16 +667,6 @@ def test_transfer_create_send_and_receive_moves_sample_to_next_lab(
         "received_by": "林雅婷",
     }
 
-    lab_b_wip_after_receive = fetch_one(
-        integration_db,
-        """
-        SELECT current_location
-        FROM wips
-        WHERE sample_id = :id AND lab_name = 'Lab B'
-        """,
-        {"id": SAMPLE_A_ID},
-    )
-    assert lab_b_wip_after_receive["current_location"] == "Lab B 實驗暫存區"
 
     histories = fetch_all(
         integration_db,
@@ -832,11 +960,6 @@ def test_wip_list_detail_patch_history_and_all_actions(client, integration_db):
                     "experiment_item": "SEM 觀察",
                     "priority": "high",
                 },
-                {
-                    "lab_name": "Lab B",
-                    "experiment_item": "光學量測",
-                    "priority": "normal",
-                },
             ],
         },
     )
@@ -844,8 +967,28 @@ def test_wip_list_detail_patch_history_and_all_actions(client, integration_db):
 
     created_wips = split_response.json()["created_wips"]
     lab_a_wip = created_wips[0]
-    lab_b_wip = created_wips[1]
     lab_a_wip_id = lab_a_wip["id"]
+
+    # 目前 API 會依流程順序只建立當前 Lab segment 的 WIP。
+    # 這裡手動塞一筆 Lab B WIP，讓 list/detail/permission route 可以測跨 Lab 可視性。
+    lab_b_wip_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    integration_db.execute(
+        text(
+            """
+            INSERT INTO wips (
+                id, wip_no, sample_id, order_no, lab_name, experiment_item,
+                priority, status, progress, current_location
+            )
+            VALUES (
+                :id, 'WIP-2026-0001-B-01', :sample_id, 'ORD-2026-0001',
+                'Lab B', '光學量測', 'normal', 'created', 0, 'Lab B 實驗暫存區'
+            )
+            """
+        ),
+        {"id": lab_b_wip_id, "sample_id": SAMPLE_A_ID},
+    )
+    integration_db.commit()
+    lab_b_wip = {"id": lab_b_wip_id, "wip_no": "WIP-2026-0001-B-01"}
 
     lab_a_list_response = client.get(
         "/api/wips",

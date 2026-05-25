@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def read_schema() -> str:
-    return Path("db/schema.sql").read_text(encoding="utf-8")
+    return Path("sql/schema.sql").read_text(encoding="utf-8")
 
 
 def extract_create_table_block(schema: str, table: str) -> str:

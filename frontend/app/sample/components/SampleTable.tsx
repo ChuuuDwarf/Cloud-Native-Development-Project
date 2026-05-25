@@ -1,5 +1,5 @@
-import type { CurrentUser, Sample, Transfer } from '../types'
-import { StatusBadge } from './StatusBadge'
+import type { CurrentUser, Sample, Transfer } from "../types";
+import { StatusBadge } from "./StatusBadge";
 import {
   emptyStyle,
   monoTdStyle,
@@ -8,23 +8,23 @@ import {
   tableStyle,
   tdStyle,
   thStyle,
-} from '../styles'
+} from "../styles";
 import {
   getDisplaySampleLocation,
   getDisplaySampleStatus,
   isFactoryUser as checkIsFactoryUser,
   isSampleInCurrentLab,
-} from '../utils/sampleDisplay'
+} from "../utils/sampleDisplay";
 
 type SampleTableProps = {
-  loading: boolean
-  samples: Sample[]
-  selectedSampleId: string | null
-  detailOpen: boolean
-  currentUser: CurrentUser
-  outgoingTransfersBySampleId: Map<string, Transfer>
-  onOpenDetail: (sampleId: string) => void
-}
+  loading: boolean;
+  samples: Sample[];
+  selectedSampleId: string | null;
+  detailOpen: boolean;
+  currentUser: CurrentUser;
+  outgoingTransfersBySampleId: Map<string, Transfer>;
+  onOpenDetail: (sampleId: string) => void;
+};
 
 export function SampleTable({
   loading,
@@ -35,53 +35,47 @@ export function SampleTable({
   outgoingTransfersBySampleId,
   onOpenDetail,
 }: SampleTableProps) {
-  const isFactoryUser = checkIsFactoryUser(currentUser)
+  const isFactoryUser = checkIsFactoryUser(currentUser);
 
   if (loading) {
-    return <div style={emptyStyle}>載入中...</div>
+    return <div style={emptyStyle}>載入中...</div>;
   }
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: "auto" }}>
       <table style={tableStyle}>
         <thead>
-          <tr style={{ background: 'var(--s2)' }}>
-            {[
-              '樣品編號',
-              '委託單號',
-              '樣品名稱',
-              '實驗需求',
-              '狀態',
-              '目前位置',
-              '操作',
-            ].map((header) => (
-              <th key={header} style={thStyle}>
-                {header}
-              </th>
-            ))}
+          <tr style={{ background: "var(--s2)" }}>
+            {["樣品編號", "委託單號", "樣品名稱", "實驗需求", "狀態", "目前位置", "操作"].map(
+              (header) => (
+                <th key={header} style={thStyle}>
+                  {header}
+                </th>
+              )
+            )}
           </tr>
         </thead>
 
         <tbody>
           {samples.map((sample) => {
-            const active = sample.id === selectedSampleId && detailOpen
-            const canCurrentUserOperateThisSample = isSampleInCurrentLab(sample, currentUser)
-            const outgoingTransfer = outgoingTransfersBySampleId.get(sample.id)
-            const displayStatus = getDisplaySampleStatus(sample, currentUser, outgoingTransfer)
-            const displayLocation = getDisplaySampleLocation(sample, currentUser, outgoingTransfer)
+            const active = sample.id === selectedSampleId && detailOpen;
+            const canCurrentUserOperateThisSample = isSampleInCurrentLab(sample, currentUser);
+            const outgoingTransfer = outgoingTransfersBySampleId.get(sample.id);
+            const displayStatus = getDisplaySampleStatus(sample, currentUser, outgoingTransfer);
+            const displayLocation = getDisplaySampleLocation(sample, currentUser, outgoingTransfer);
 
             return (
               <tr
                 key={sample.id}
                 style={{
-                  borderBottom: '1px solid rgba(56,139,253,0.08)',
-                  background: active ? 'rgba(56,139,253,0.08)' : 'transparent',
+                  borderBottom: "1px solid rgba(56,139,253,0.08)",
+                  background: active ? "rgba(56,139,253,0.08)" : "transparent",
                 }}
               >
                 <td style={monoTdStyle}>{sample.sample_no}</td>
                 <td style={monoTdStyle}>{sample.order_no}</td>
-                <td style={tdStyle}>{sample.sample_name ?? '-'}</td>
-                <td style={tdStyle}>{sample.experiment_item ?? '-'}</td>
+                <td style={tdStyle}>{sample.sample_name ?? "-"}</td>
+                <td style={tdStyle}>{sample.experiment_item ?? "-"}</td>
                 <td style={tdStyle}>
                   <StatusBadge status={displayStatus} />
                 </td>
@@ -97,7 +91,7 @@ export function SampleTable({
                   </button>
                 </td>
               </tr>
-            )
+            );
           })}
 
           {samples.length === 0 && (
@@ -110,5 +104,5 @@ export function SampleTable({
         </tbody>
       </table>
     </div>
-  )
+  );
 }

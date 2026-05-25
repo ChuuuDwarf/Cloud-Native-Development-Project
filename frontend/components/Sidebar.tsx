@@ -153,8 +153,8 @@ const nav: NavSection[] = [
         href: "/others",
         icon: "",
         label: "替代",
-        roles: ["system_admin"]
-      }
+        roles: ["system_admin"],
+      },
     ],
   },
 ];

@@ -1,5 +1,5 @@
-import type { KeyboardEvent, ReactNode } from 'react'
-import { sampleStatusText, wipStatusText } from '../constants'
+import type { KeyboardEvent, ReactNode } from "react";
+import { sampleStatusText, wipStatusText } from "../constants";
 import {
   panelStyle,
   panelHintStyle,
@@ -12,7 +12,7 @@ import {
   fieldStyle,
   fieldLabelStyle,
   statusBadgeStyle,
-} from '../styles'
+} from "../styles";
 
 export function CollapsibleSection({
   title,
@@ -22,17 +22,17 @@ export function CollapsibleSection({
   onToggle,
   children,
 }: {
-  title: string
-  hint?: string
-  right?: ReactNode
-  open: boolean
-  onToggle: () => void
-  children: ReactNode
+  title: string;
+  hint?: string;
+  right?: ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
 }) {
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      onToggle()
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onToggle();
     }
   }
 
@@ -52,22 +52,22 @@ export function CollapsibleSection({
 
         <div style={sectionHeaderRightStyle}>
           {right}
-          <span style={collapseIconStyle}>{open ? '⌃' : '⌄'}</span>
+          <span style={collapseIconStyle}>{open ? "⌃" : "⌄"}</span>
         </div>
       </div>
 
       {open && <div>{children}</div>}
     </section>
-  )
+  );
 }
 
 export function InfoItem({ label, value }: { label: string; value: string | number | null }) {
   return (
     <div style={infoItemStyle}>
       <div style={infoLabelStyle}>{label}</div>
-      <div style={infoValueStyle}>{value ?? '-'}</div>
+      <div style={infoValueStyle}>{value ?? "-"}</div>
     </div>
-  )
+  );
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -76,11 +76,11 @@ export function Field({ label, children }: { label: string; children: ReactNode 
       <span style={fieldLabelStyle}>{label}</span>
       {children}
     </label>
-  )
+  );
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const text = sampleStatusText[status] ?? wipStatusText[status] ?? status
+  const text = sampleStatusText[status] ?? wipStatusText[status] ?? status;
 
-  return <span style={statusBadgeStyle}>{text}</span>
+  return <span style={statusBadgeStyle}>{text}</span>;
 }

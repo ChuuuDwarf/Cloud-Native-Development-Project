@@ -66,7 +66,8 @@ def test_sample_scope_all_keeps_related_transferred_samples_visible():
     assert params["current_lab"] == "Lab A"
 
 
-def test_sample_permissions_match_factory_and_lab_rules():
+@pytest.mark.asyncio
+async def test_sample_permissions_match_factory_and_lab_rules():
     sample_in_lab_a = {
         "id": "sample-1",
         "applicant_name": "王小明",
@@ -78,12 +79,12 @@ def test_sample_permissions_match_factory_and_lab_rules():
     owner = {"role": "plant_user", "name": "王小明"}
     other_factory = {"role": "plant_user", "name": "陳大華"}
 
-    assert can_view_sample(lab_a, sample_in_lab_a) is True
+    assert await can_view_sample(lab_a, sample_in_lab_a) is True
     assert can_manage_sample(lab_a, sample_in_lab_a) is True
-    assert can_view_sample(lab_b, sample_in_lab_a) is False
+    assert await can_view_sample(lab_b, sample_in_lab_a) is False
     assert can_manage_sample(lab_b, sample_in_lab_a) is False
-    assert can_view_sample(owner, sample_in_lab_a) is True
-    assert can_view_sample(other_factory, sample_in_lab_a) is False
+    assert await can_view_sample(owner, sample_in_lab_a) is True
+    assert await can_view_sample(other_factory, sample_in_lab_a) is False
     assert can_confirm_pickup(owner, sample_in_lab_a) is True
     assert can_confirm_pickup(other_factory, sample_in_lab_a) is False
 

@@ -28,7 +28,10 @@ def test_wip_visibility_filter_uses_wip_owner_lab_not_current_location():
     lab_user = {"role": "lab_engineer", "lab_name": "Lab A", "department": "Lab A"}
     clauses, params = build_wip_visibility_filter(lab_user)
 
-    assert clauses == ["w.lab_name = :current_lab"]
+    joined = " ".join(clauses)
+    assert "w.lab_name = :current_lab" in joined
+    assert "FROM transfers t" in joined
+    assert "t.to_lab = :current_lab" in joined
     assert params == {"current_lab": "Lab A"}
 
 
@@ -41,23 +44,25 @@ def test_wip_visibility_filter_for_factory_and_admin():
     assert build_wip_visibility_filter({"role": "system_admin"}) == ([], {})
 
 
-def test_lab_user_can_manage_own_lab_wip_even_after_location_changes():
+@pytest.mark.asyncio
+async def test_lab_user_can_manage_own_lab_wip_even_after_location_changes():
     wip = {"lab_name": "Lab A", "current_location": "已由使用者取回"}
     lab_a = {"role": "lab_engineer", "lab_name": "Lab A", "department": "Lab A"}
     lab_b = {"role": "lab_engineer", "lab_name": "Lab B", "department": "Lab B"}
 
-    assert can_view_wip(lab_a, wip) is True
+    assert await can_view_wip(lab_a, wip) is True
     assert can_manage_wip(lab_a, wip) is True
-    assert can_view_wip(lab_b, wip) is False
+    assert await can_view_wip(lab_b, wip) is False
     assert can_manage_wip(lab_b, wip) is False
 
 
-def test_plant_user_can_only_view_own_sample_wips():
+@pytest.mark.asyncio
+async def test_plant_user_can_only_view_own_sample_wips():
     wip = {"lab_name": "Lab A"}
     factory = {"role": "plant_user", "name": "王小明"}
 
-    assert can_view_wip(factory, wip, {"applicant_name": "王小明"}) is True
-    assert can_view_wip(factory, wip, {"applicant_name": "陳大華"}) is False
+    assert await can_view_wip(factory, wip, {"applicant_name": "王小明"}) is True
+    assert await can_view_wip(factory, wip, {"applicant_name": "陳大華"}) is False
     assert can_manage_wip(factory, wip) is False
 
 

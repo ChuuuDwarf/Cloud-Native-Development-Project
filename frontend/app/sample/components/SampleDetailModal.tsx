@@ -1,8 +1,8 @@
-import type { CurrentUser, Sample, SampleAction, SampleHistory, Transfer, Wip } from '../types'
-import { priorityText, wipStatusText } from '../constants'
-import { InfoItem } from './InfoItem'
-import { Modal } from './Modal'
-import { StatusBadge } from './StatusBadge'
+import type { CurrentUser, Sample, SampleAction, SampleHistory, Transfer, Wip } from "../types";
+import { priorityText, wipStatusText } from "../constants";
+import { InfoItem } from "./InfoItem";
+import { Modal } from "./Modal";
+import { StatusBadge } from "./StatusBadge";
 import {
   actionBarStyle,
   countBadgeStyle,
@@ -29,7 +29,7 @@ import {
   timelineTopRowStyle,
   wipCardStyle,
   wipListStyle,
-} from '../styles'
+} from "../styles";
 import {
   formatDateTime,
   formatStatusChange,
@@ -38,52 +38,52 @@ import {
   getUserLab,
   isLabUser as checkIsLabUser,
   shouldMaskSampleForLab,
-} from '../utils/sampleDisplay'
+} from "../utils/sampleDisplay";
 
 function formatExperimentRequirement(experimentItem: string | null) {
-  if (!experimentItem) return '-'
+  if (!experimentItem) return "-";
 
   const items = experimentItem
-    .split('、')
+    .split("、")
     .map((item) => item.trim())
-    .filter(Boolean)
+    .filter(Boolean);
 
-  if (items.length <= 1) return experimentItem
+  if (items.length <= 1) return experimentItem;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       {items.map((item, index) => (
         <div key={`${item}-${index}`}>{item}</div>
       ))}
     </div>
-  )
+  );
 }
 
 type SampleDetailModalProps = {
-  sample: Sample
-  currentUser: CurrentUser
-  selectedSampleOutgoingTransfer?: Transfer
-  visibleSelectedWips: Wip[]
-  wipsByLab: Record<string, Wip[]>
-  sampleHistories: SampleHistory[]
-  visibleHistories: SampleHistory[]
-  historyLoading: boolean
-  historyVisibleCount: number
-  submitting: boolean
-  canFactoryConfirmPickup: boolean
-  selectedSampleInCurrentLab: boolean
-  allWipsCompleted: boolean
-  shouldShowTransferAction: boolean
-  shouldShowActionSection: boolean
-  isFactoryUser: boolean
-  nextStepText: string
-  onClose: () => void
-  onShowMoreHistory: () => void
-  onCollapseHistory: () => void
-  onRunSampleAction: (sampleId: string, action: SampleAction) => void
-  onGoToWipPage: (sampleId: string) => void
-  onGoToTransferPage: () => void
-}
+  sample: Sample;
+  currentUser: CurrentUser;
+  selectedSampleOutgoingTransfer?: Transfer;
+  visibleSelectedWips: Wip[];
+  wipsByLab: Record<string, Wip[]>;
+  sampleHistories: SampleHistory[];
+  visibleHistories: SampleHistory[];
+  historyLoading: boolean;
+  historyVisibleCount: number;
+  submitting: boolean;
+  canFactoryConfirmPickup: boolean;
+  selectedSampleInCurrentLab: boolean;
+  allWipsCompleted: boolean;
+  shouldShowTransferAction: boolean;
+  shouldShowActionSection: boolean;
+  isFactoryUser: boolean;
+  nextStepText: string;
+  onClose: () => void;
+  onShowMoreHistory: () => void;
+  onCollapseHistory: () => void;
+  onRunSampleAction: (sampleId: string, action: SampleAction) => void;
+  onGoToWipPage: (sampleId: string) => void;
+  onGoToTransferPage: () => void;
+};
 
 export function SampleDetailModal({
   sample,
@@ -110,65 +110,65 @@ export function SampleDetailModal({
   onGoToWipPage,
   onGoToTransferPage,
 }: SampleDetailModalProps) {
-  const currentLab = getUserLab(currentUser)
-  const shouldMaskForCurrentLab = shouldMaskSampleForLab(sample, currentUser)
-  const isLabUser = checkIsLabUser(currentUser)
+  const currentLab = getUserLab(currentUser);
+  const shouldMaskForCurrentLab = shouldMaskSampleForLab(sample, currentUser);
+  const isLabUser = checkIsLabUser(currentUser);
 
   const ownLabReceiveHistory = sampleHistories.find((history) => {
-    if (history.action !== 'receive') return false
-    if (!isLabUser) return true
-    return history.lab_name === currentLab
-  })
+    if (history.action !== "receive") return false;
+    if (!isLabUser) return true;
+    return history.lab_name === currentLab;
+  });
 
   const isIncomingTransferWaitingReceive = Boolean(
     isLabUser &&
-      selectedSampleInCurrentLab &&
-      selectedSampleOutgoingTransfer &&
-      selectedSampleOutgoingTransfer.to_lab === currentLab &&
-      selectedSampleOutgoingTransfer.status === 'transferring' &&
-      sample.status === 'pending_receive',
-  )
+    selectedSampleInCurrentLab &&
+    selectedSampleOutgoingTransfer &&
+    selectedSampleOutgoingTransfer.to_lab === currentLab &&
+    selectedSampleOutgoingTransfer.status === "transferring" &&
+    sample.status === "pending_receive"
+  );
 
   const displayReceivedBy =
     ownLabReceiveHistory?.operator_name ??
     (shouldMaskForCurrentLab
-      ? selectedSampleOutgoingTransfer?.handed_by ?? sample.received_by ?? '尚未收樣'
-      : sample.received_by ?? '尚未收樣')
+      ? (selectedSampleOutgoingTransfer?.handed_by ?? sample.received_by ?? "尚未收樣")
+      : (sample.received_by ?? "尚未收樣"));
 
-  const displayReceivedAt = ownLabReceiveHistory?.created_at ?? sample.received_at
+  const displayReceivedAt = ownLabReceiveHistory?.created_at ?? sample.received_at;
 
   const transferReceiverText =
     selectedSampleOutgoingTransfer?.received_by ??
     (selectedSampleOutgoingTransfer?.to_lab
       ? `${selectedSampleOutgoingTransfer.to_lab} 尚未確認接收`
-      : '接收實驗室尚未確認接收')
+      : "接收實驗室尚未確認接收");
 
   const transferredOutStatusText = (() => {
-    if (!selectedSampleOutgoingTransfer) return '已離開本實驗室'
+    if (!selectedSampleOutgoingTransfer) return "已離開本實驗室";
 
-    if (selectedSampleOutgoingTransfer.status === 'pending') {
-      return `交接單已建立，尚未送出至 ${selectedSampleOutgoingTransfer.to_lab ?? '接收實驗室'}`
+    if (selectedSampleOutgoingTransfer.status === "pending") {
+      return `交接單已建立，尚未送出至 ${selectedSampleOutgoingTransfer.to_lab ?? "接收實驗室"}`;
     }
 
-    if (selectedSampleOutgoingTransfer.status === 'transferring') {
-      return `等待 ${selectedSampleOutgoingTransfer.to_lab ?? '接收實驗室'} 確認接收`
+    if (selectedSampleOutgoingTransfer.status === "transferring") {
+      return `等待 ${selectedSampleOutgoingTransfer.to_lab ?? "接收實驗室"} 確認接收`;
     }
 
-    if (selectedSampleOutgoingTransfer.status === 'received') {
-      return '接收實驗室已確認接收'
+    if (selectedSampleOutgoingTransfer.status === "received") {
+      return "接收實驗室已確認接收";
     }
 
-    if (selectedSampleOutgoingTransfer.status === 'cancelled') {
-      return '交接已取消'
+    if (selectedSampleOutgoingTransfer.status === "cancelled") {
+      return "交接已取消";
     }
 
-    return selectedSampleOutgoingTransfer.status
-  })()
+    return selectedSampleOutgoingTransfer.status;
+  })();
 
   const shouldShowPickupInfo =
     !shouldMaskForCurrentLab &&
     !isIncomingTransferWaitingReceive &&
-    (sample.status === 'outbound' || sample.status === 'picked_up')
+    (sample.status === "outbound" || sample.status === "picked_up");
 
   return (
     <Modal onClose={onClose}>
@@ -178,7 +178,7 @@ export function SampleDetailModal({
           <div style={modalSubtitleStyle}>委託單編號 {sample.order_no}</div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <StatusBadge
             status={getDisplaySampleStatus(sample, currentUser, selectedSampleOutgoingTransfer)}
           />
@@ -191,7 +191,7 @@ export function SampleDetailModal({
       <div style={modalBodyStyle}>
         <div style={nextStepBoxStyle}>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>下一步判斷</div>
-          <div style={{ color: 'var(--text2)', fontSize: 13 }}>{nextStepText}</div>
+          <div style={{ color: "var(--text2)", fontSize: 13 }}>{nextStepText}</div>
         </div>
 
         <div style={sectionTitleStyle}>樣品詳細資料</div>
@@ -199,10 +199,10 @@ export function SampleDetailModal({
         <div style={detailGridStyle}>
           <InfoItem label="樣品編號" value={sample.sample_no} />
           <InfoItem label="委託單編號" value={sample.order_no} />
-          <InfoItem label="樣品名稱" value={sample.sample_name ?? '-'} />
+          <InfoItem label="樣品名稱" value={sample.sample_name ?? "-"} />
           <InfoItem label="實驗需求" value={formatExperimentRequirement(sample.experiment_item)} />
-          <InfoItem label="申請人" value={sample.applicant_name ?? '-'} />
-          <InfoItem label="申請部門" value={sample.applicant_department ?? '-'} />
+          <InfoItem label="申請人" value={sample.applicant_name ?? "-"} />
+          <InfoItem label="申請部門" value={sample.applicant_department ?? "-"} />
           <InfoItem
             label="目前位置"
             value={getDisplaySampleLocation(sample, currentUser, selectedSampleOutgoingTransfer)}
@@ -210,8 +210,11 @@ export function SampleDetailModal({
 
           {isIncomingTransferWaitingReceive ? (
             <>
-              <InfoItem label="來源實驗室" value={selectedSampleOutgoingTransfer?.from_lab ?? '-'} />
-              <InfoItem label="交接人" value={selectedSampleOutgoingTransfer?.handed_by ?? '-'} />
+              <InfoItem
+                label="來源實驗室"
+                value={selectedSampleOutgoingTransfer?.from_lab ?? "-"}
+              />
+              <InfoItem label="交接人" value={selectedSampleOutgoingTransfer?.handed_by ?? "-"} />
               <InfoItem
                 label="交接時間"
                 value={formatDateTime(selectedSampleOutgoingTransfer?.transferred_at ?? null)}
@@ -226,7 +229,7 @@ export function SampleDetailModal({
 
               {shouldMaskForCurrentLab && selectedSampleOutgoingTransfer && (
                 <>
-                  {selectedSampleOutgoingTransfer.status === 'received' ? (
+                  {selectedSampleOutgoingTransfer.status === "received" ? (
                     <>
                       <InfoItem label="取走人" value={transferReceiverText} />
                       <InfoItem
@@ -239,14 +242,14 @@ export function SampleDetailModal({
                       <InfoItem label="接收狀態" value={transferredOutStatusText} />
                       <InfoItem
                         label={
-                          selectedSampleOutgoingTransfer.status === 'pending'
-                            ? '建立交接時間'
-                            : '交接時間'
+                          selectedSampleOutgoingTransfer.status === "pending"
+                            ? "建立交接時間"
+                            : "交接時間"
                         }
                         value={formatDateTime(
-                          selectedSampleOutgoingTransfer.status === 'pending'
+                          selectedSampleOutgoingTransfer.status === "pending"
                             ? selectedSampleOutgoingTransfer.created_at
-                            : selectedSampleOutgoingTransfer.transferred_at,
+                            : selectedSampleOutgoingTransfer.transferred_at
                         )}
                       />
                     </>
@@ -256,13 +259,12 @@ export function SampleDetailModal({
 
               {shouldShowPickupInfo && (
                 <>
-                  <InfoItem label="取件人" value={sample.picked_up_by ?? '尚未取件'} />
+                  <InfoItem label="取件人" value={sample.picked_up_by ?? "尚未取件"} />
                   <InfoItem label="取件時間" value={formatDateTime(sample.picked_up_at)} />
                 </>
               )}
             </>
           )}
-
         </div>
 
         <div style={sectionTitleStyle}>此樣品的 WIP / 實驗子單</div>
@@ -270,8 +272,8 @@ export function SampleDetailModal({
         {visibleSelectedWips.length === 0 ? (
           <div style={miniEmptyStyle}>
             {shouldMaskSampleForLab(sample, currentUser)
-              ? '此樣品已轉出，本畫面不顯示接收實驗室的 WIP / 實驗子單細節。'
-              : '目前尚未建立 WIP / 實驗子單。'}
+              ? "此樣品已轉出，本畫面不顯示接收實驗室的 WIP / 實驗子單細節。"
+              : "目前尚未建立 WIP / 實驗子單。"}
           </div>
         ) : (
           <div style={labListStyle}>
@@ -287,19 +289,19 @@ export function SampleDetailModal({
                     <div key={wip.id} style={wipCardStyle}>
                       <div>
                         <div style={{ fontWeight: 800, fontSize: 13 }}>
-                          {wip.experiment_item ?? '未命名實驗'}
+                          {wip.experiment_item ?? "未命名實驗"}
                         </div>
-                        <div style={{ color: 'var(--text3)', fontSize: 11, marginTop: 4 }}>
+                        <div style={{ color: "var(--text3)", fontSize: 11, marginTop: 4 }}>
                           {wip.wip_no} · 優先級：{priorityText[wip.priority] ?? wip.priority}
                         </div>
                       </div>
 
-                      <div style={{ textAlign: 'right' }}>
+                      <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: 12, fontWeight: 700 }}>
                           {wipStatusText[wip.status] ?? wip.status}
                         </div>
-                        <div style={{ color: 'var(--text3)', fontSize: 11, marginTop: 4 }}>
-                          進度 {wip.progress}% · {wip.current_location ?? '-'}
+                        <div style={{ color: "var(--text3)", fontSize: 11, marginTop: 4 }}>
+                          進度 {wip.progress}% · {wip.current_location ?? "-"}
                         </div>
                       </div>
                     </div>
@@ -334,9 +336,9 @@ export function SampleDetailModal({
 
                     <div style={timelineMetaStyle}>
                       {formatStatusChange(history.from_status, history.to_status)}
-                      {' · '}
-                      {history.operator_name ?? '系統'}
-                      {history.lab_name ? ` · ${history.lab_name}` : ''}
+                      {" · "}
+                      {history.operator_name ?? "系統"}
+                      {history.lab_name ? ` · ${history.lab_name}` : ""}
                     </div>
                   </div>
                 </div>
@@ -361,12 +363,12 @@ export function SampleDetailModal({
 
         {shouldShowActionSection && (
           <>
-            <div style={sectionTitleStyle}>{isFactoryUser ? '確認取件' : '可執行動作'}</div>
+            <div style={sectionTitleStyle}>{isFactoryUser ? "確認取件" : "可執行動作"}</div>
 
             <div style={actionBarStyle}>
               {canFactoryConfirmPickup && (
                 <button
-                  onClick={() => onRunSampleAction(sample.id, 'pickup_confirmed')}
+                  onClick={() => onRunSampleAction(sample.id, "pickup_confirmed")}
                   disabled={submitting}
                   style={primaryButtonStyle}
                 >
@@ -374,17 +376,19 @@ export function SampleDetailModal({
                 </button>
               )}
 
-              {!isFactoryUser && selectedSampleInCurrentLab && sample.status === 'pending_receive' && (
-                <button
-                  onClick={() => onRunSampleAction(sample.id, 'receive')}
-                  disabled={submitting}
-                  style={primaryButtonStyle}
-                >
-                  確認收樣
-                </button>
-              )}
+              {!isFactoryUser &&
+                selectedSampleInCurrentLab &&
+                sample.status === "pending_receive" && (
+                  <button
+                    onClick={() => onRunSampleAction(sample.id, "receive")}
+                    disabled={submitting}
+                    style={primaryButtonStyle}
+                  >
+                    確認收樣
+                  </button>
+                )}
 
-              {!isFactoryUser && selectedSampleInCurrentLab && sample.status === 'received' && (
+              {!isFactoryUser && selectedSampleInCurrentLab && sample.status === "received" && (
                 <button
                   onClick={() => onGoToWipPage(sample.id)}
                   disabled={submitting}
@@ -396,7 +400,7 @@ export function SampleDetailModal({
 
               {!isFactoryUser &&
                 selectedSampleInCurrentLab &&
-                (sample.status === 'split' || sample.status === 'pending_transfer') && (
+                (sample.status === "split" || sample.status === "pending_transfer") && (
                   <button
                     onClick={() => onGoToWipPage(sample.id)}
                     disabled={submitting}
@@ -408,10 +412,10 @@ export function SampleDetailModal({
 
               {!isFactoryUser &&
                 selectedSampleInCurrentLab &&
-                (sample.status === 'split' || sample.status === 'pending_transfer') &&
+                (sample.status === "split" || sample.status === "pending_transfer") &&
                 allWipsCompleted && (
                   <button
-                    onClick={() => onRunSampleAction(sample.id, 'outbound')}
+                    onClick={() => onRunSampleAction(sample.id, "outbound")}
                     disabled={submitting}
                     style={primaryButtonStyle}
                   >
@@ -421,7 +425,7 @@ export function SampleDetailModal({
 
               {!isFactoryUser &&
                 selectedSampleInCurrentLab &&
-                (sample.status === 'split' || sample.status === 'pending_transfer') &&
+                (sample.status === "split" || sample.status === "pending_transfer") &&
                 shouldShowTransferAction && (
                   <button
                     onClick={onGoToTransferPage}
@@ -432,8 +436,12 @@ export function SampleDetailModal({
                   </button>
                 )}
 
-              {!isFactoryUser && selectedSampleInCurrentLab && sample.status === 'transferring' && (
-                <button onClick={onGoToTransferPage} disabled={submitting} style={secondaryButtonStyle}>
+              {!isFactoryUser && selectedSampleInCurrentLab && sample.status === "transferring" && (
+                <button
+                  onClick={onGoToTransferPage}
+                  disabled={submitting}
+                  style={secondaryButtonStyle}
+                >
                   前往交接流轉
                 </button>
               )}
@@ -442,5 +450,5 @@ export function SampleDetailModal({
         )}
       </div>
     </Modal>
-  )
+  );
 }

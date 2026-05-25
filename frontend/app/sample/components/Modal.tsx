@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { modalBackdropButtonStyle, modalBackdropStyle, modalCardStyle } from '../styles'
+import type { ReactNode } from "react";
+import { modalBackdropButtonStyle, modalBackdropStyle, modalCardStyle } from "../styles";
 
 export function Modal({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   return (
@@ -7,5 +7,5 @@ export function Modal({ children, onClose }: { children: ReactNode; onClose: () 
       <div style={modalCardStyle}>{children}</div>
       <button style={modalBackdropButtonStyle} onClick={onClose} aria-label="close" />
     </div>
-  )
+  );
 }
