@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import type { UserStatus } from "@/constants/enums";
 import { inputStyle, primaryBtn } from "@/constants/styles";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,6 +12,14 @@ import CreateUserModal from "./CreateUserModal";
 import UserRow from "./UserRow";
 
 export default function AccountPage() {
+  return (
+    <PermissionGuard requiredPermission="users:read">
+      <AccountPageContent />
+    </PermissionGuard>
+  );
+}
+
+function AccountPageContent() {
   const { hasPermission } = useAuth();
   const queryClient = useQueryClient();
 
