@@ -23,6 +23,9 @@ fallback_user = {
 }
 
 
+WIP_ORDER_GUARD_MESSAGE = "目前尚未輪到此 WIP，請先完成前一站實驗或交接流程"
+
+
 async def get_active_user(
     db: AsyncSession,
     request: Request | None = None,
@@ -272,11 +275,186 @@ def find_current_experiment_index(
     return None
 
 
+def is_same_experiment_wip(experiment: dict, wip: dict) -> bool:
+    return (
+        normalize_flow_value(experiment.get("lab_name"))
+        == normalize_flow_value(wip.get("lab_name"))
+        and normalize_flow_value(experiment.get("experiment_item"))
+        == normalize_flow_value(wip.get("experiment_item"))
+    )
+
+
+def build_ordered_wip_slots(
+    experiments: list[dict[str, str]],
+    wips: list[dict],
+) -> list[dict]:
+    """Pair requested experiment occurrences with WIPs in sample flow order.
+
+    同一個 Lab 可能在 flow 中出現多次，例如 A -> B -> A 或 A -> A -> B。
+    因此不能只用 lab_name 找目前位置；要依 samples.experiment_item 的每一個
+    occurrence 逐一配對尚未使用過的 WIP。
+    """
+
+    unused_wips = list(wips)
+    slots: list[dict] = []
+
+    for experiment in experiments:
+        matched_wip = None
+
+        for index, candidate in enumerate(unused_wips):
+            if is_same_experiment_wip(experiment, candidate):
+                matched_wip = candidate
+                unused_wips.pop(index)
+                break
+
+        slots.append(
+            {
+                "experiment": experiment,
+                "wip": matched_wip,
+            }
+        )
+
+    return slots
+
+
+async def get_sample_wips_in_flow_order(sample_id: str, db: AsyncSession) -> list[dict]:
+    result = await db.execute(
+        text(
+            """
+            SELECT *
+            FROM wips
+            WHERE sample_id = :sample_id
+            ORDER BY created_at ASC, wip_no ASC, id ASC
+            """
+        ),
+        {"sample_id": sample_id},
+    )
+
+    return [dict(row._mapping) for row in result.fetchall()]
+
+
+def find_wip_experiment_index_from_slots(
+    slots: list[dict],
+    wip_id: str | None,
+) -> int | None:
+    if not wip_id:
+        return None
+
+    for index, slot in enumerate(slots):
+        slot_wip = slot.get("wip")
+
+        if slot_wip and str(slot_wip.get("id")) == str(wip_id):
+            return index
+
+    return None
+
+
+def find_first_incomplete_wip_slot(slots: list[dict]) -> dict | None:
+    for slot in slots:
+        slot_wip = slot.get("wip")
+
+        if slot_wip and slot_wip.get("status") != "completed":
+            return slot
+
+    return None
+
+
+def get_creatable_wip_slots_for_current_segment(slots: list[dict]) -> list[dict]:
+    creatable_slots: list[dict] = []
+    segment_lab = None
+    segment_started = False
+
+    for slot in slots:
+        experiment = slot["experiment"]
+        slot_lab = normalize_flow_value(experiment.get("lab_name"))
+        slot_wip = slot.get("wip")
+
+        if not segment_started:
+            if slot_wip and slot_wip.get("status") == "completed":
+                continue
+
+            segment_started = True
+            segment_lab = slot_lab
+
+        if slot_lab != segment_lab:
+            break
+
+        if slot_wip is None:
+            creatable_slots.append(slot)
+
+    return creatable_slots
+
+
+def validate_wip_create_items_in_order(
+    sample: dict,
+    existing_wips: list[dict],
+    requested_items: list[dict],
+) -> None:
+    experiments = parse_requested_experiments(sample.get("experiment_item"))
+
+    if not experiments:
+        return
+
+    slots = build_ordered_wip_slots(experiments, existing_wips)
+    creatable_slots = get_creatable_wip_slots_for_current_segment(slots)
+    creatable_experiments = list(slot["experiment"] for slot in creatable_slots)
+
+    if len(requested_items) > len(creatable_experiments):
+        raise HTTPException(
+            status_code=400,
+            detail=WIP_ORDER_GUARD_MESSAGE,
+        )
+
+    for index, item in enumerate(requested_items):
+        if not is_same_experiment_wip(creatable_experiments[index], item):
+            raise HTTPException(
+                status_code=400,
+                detail=WIP_ORDER_GUARD_MESSAGE,
+            )
+
+
+async def validate_wip_can_complete_in_order(
+    db: AsyncSession,
+    wip: dict,
+) -> int | None:
+    sample = await get_sample_by_id(wip.get("sample_id"), db)
+    if sample is None:
+        return None
+
+    experiments = parse_requested_experiments(sample.get("experiment_item"))
+    if not experiments:
+        return None
+
+    sample_wips = await get_sample_wips_in_flow_order(sample["id"], db)
+    slots = build_ordered_wip_slots(experiments, sample_wips)
+    current_index = find_wip_experiment_index_from_slots(slots, wip.get("id"))
+
+    if current_index is None:
+        return find_current_experiment_index(experiments, wip)
+
+    if wip.get("status") == "completed":
+        return current_index
+
+    first_incomplete_slot = find_first_incomplete_wip_slot(slots)
+    first_incomplete_wip = (
+        first_incomplete_slot.get("wip") if first_incomplete_slot else None
+    )
+
+    if first_incomplete_wip and str(first_incomplete_wip.get("id")) != str(wip.get("id")):
+        raise HTTPException(
+            status_code=400,
+            detail=WIP_ORDER_GUARD_MESSAGE,
+        )
+
+    return current_index
+
+
 async def complete_wip_sample_flow(
     db: AsyncSession,
     wip: dict,
     current_lab: str | None,
     operator_name: str,
+    current_index: int | None = None,
 ) -> None:
     if not current_lab:
         return
@@ -286,7 +464,14 @@ async def complete_wip_sample_flow(
         return
 
     experiments = parse_requested_experiments(sample.get("experiment_item"))
-    current_index = find_current_experiment_index(experiments, wip)
+    if current_index is None:
+        sample_wips = await get_sample_wips_in_flow_order(sample["id"], db)
+        slots = build_ordered_wip_slots(experiments, sample_wips)
+        current_index = find_wip_experiment_index_from_slots(slots, wip.get("id"))
+
+    if current_index is None:
+        current_index = find_current_experiment_index(experiments, wip)
+
     current_lab_temp_location = experiment_temp_location(current_lab)
 
     if current_index is None:
@@ -442,7 +627,19 @@ async def update_sample_to_pending_transfer_if_ready(
     current_lab: str | None,
     next_location: str | None,
     operator_name: str,
+    completed_wip: dict | None = None,
+    completed_wip_index: int | None = None,
 ) -> None:
+    if completed_wip is not None:
+        await complete_wip_sample_flow(
+            db=db,
+            wip=completed_wip,
+            current_lab=current_lab,
+            operator_name=operator_name,
+            current_index=completed_wip_index,
+        )
+        return
+
     wips_result = await db.execute(
         text(
             """

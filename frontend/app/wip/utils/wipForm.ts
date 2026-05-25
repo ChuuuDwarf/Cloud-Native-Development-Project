@@ -59,20 +59,45 @@ export function makeAutoFormsForSample(
   const requestedExperiments = getRequestedExperiments(sample)
   const defaultPriority = getSampleDefaultPriority()
 
-  const currentLabExperiments = requestedExperiments.filter((item) => item.lab_name === currentLab)
+  const sampleWips = existingWips
+    .filter((wip) => wip.sample_id === sample.id)
+    .sort((first, second) => {
+      const firstTime = new Date(first.created_at ?? '').getTime()
+      const secondTime = new Date(second.created_at ?? '').getTime()
 
-  const existingItems = new Set(
-    existingWips
-      .filter((wip) => wip.sample_id === sample.id && wip.lab_name === currentLab)
-      .map((wip) => wip.experiment_item)
-      .filter(Boolean),
-  )
+      if (Number.isFinite(firstTime) && Number.isFinite(secondTime) && firstTime !== secondTime) {
+        return firstTime - secondTime
+      }
 
-  const notYetCreated = currentLabExperiments.filter(
-    (item) => !existingItems.has(item.experiment_item),
-  )
+      return String(first.wip_no ?? first.id).localeCompare(String(second.wip_no ?? second.id))
+    })
 
-  if (notYetCreated.length === 0) {
+  const unusedWips = [...sampleWips]
+  let segmentLab = ''
+  let segmentStarted = false
+  const notYetCreated: RequestedExperiment[] = []
+
+  for (const item of requestedExperiments) {
+    const existingIndex = unusedWips.findIndex(
+      (wip) => wip.lab_name === item.lab_name && wip.experiment_item === item.experiment_item,
+    )
+    const existingWip = existingIndex === -1 ? null : unusedWips.splice(existingIndex, 1)[0]
+
+    if (!segmentStarted) {
+      if (existingWip?.status === 'completed') continue
+
+      segmentStarted = true
+      segmentLab = item.lab_name
+    }
+
+    if (item.lab_name !== segmentLab) break
+
+    if (!existingWip) {
+      notYetCreated.push(item)
+    }
+  }
+
+  if (segmentLab !== currentLab || notYetCreated.length === 0) {
     return [createEmptyWipForm(currentLab)]
   }
 

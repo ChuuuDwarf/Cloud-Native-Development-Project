@@ -351,6 +351,10 @@ async def wip_action(
 
     new_status = status_map[action]
     description = payload.get("description") or description_map[action]
+    wip_flow_index = None
+
+    if action == "complete":
+        wip_flow_index = await validate_wip_can_complete_in_order(db, wip)
 
     extra_sql = ""
     extra_params = {}
@@ -444,6 +448,8 @@ async def wip_action(
                     current_lab=current_lab,
                     next_location=next_location,
                     operator_name=operator_name,
+                    completed_wip=updated_wip,
+                    completed_wip_index=wip_flow_index,
                 )
 
     await db.execute(

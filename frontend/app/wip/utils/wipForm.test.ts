@@ -93,10 +93,28 @@ describe('wipForm 功能測試', () => {
     expect(formatRequestedExperiments(baseSample)).toBe('Lab A:SEM 觀察、Lab B:光學量測、Lab A:EDS 分析')
   })
 
-  it('依委託單實驗需求自動產生目前 Lab 尚未建立的 WIP 表單', () => {
+  it('A -> B -> A 時不會跨過 B 自動產生最後一個 A', () => {
     const forms = makeAutoFormsForSample(baseSample, 'Lab A', [baseWip])
 
+    expect(forms).toEqual([createEmptyWipForm('Lab A')])
+  })
+
+  it('A -> A -> B 時可以一次自動產生兩個連續 A WIP 表單', () => {
+    const aabSample = {
+      ...baseSample,
+      experiment_item: 'Lab A:SEM 觀察、Lab A:EDS 分析、Lab B:光學量測',
+    }
+
+    const forms = makeAutoFormsForSample(aabSample, 'Lab A', [])
+
     expect(forms).toEqual([
+      {
+        lab_name: 'Lab A',
+        experiment_item: 'SEM 觀察',
+        priority: 'normal',
+        note: '由委託單實驗需求自動帶入',
+        auto_generated: true,
+      },
       {
         lab_name: 'Lab A',
         experiment_item: 'EDS 分析',

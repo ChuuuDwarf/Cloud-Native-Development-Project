@@ -3,7 +3,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.services.wip_service import update_sample_to_pending_transfer_if_ready
+from app.services.wip_service import (
+    build_ordered_wip_slots,
+    get_creatable_wip_slots_for_current_segment,
+    get_sample_wips_in_flow_order,
+    update_sample_to_pending_transfer_if_ready,
+    validate_wip_can_complete_in_order,
+)
 from app.services.temporary_others_service import (
     experiment_temp_location,
     get_generated_storage_locations,
@@ -215,6 +221,40 @@ async def generate_missing_wips_for_sample(
                 "找不到 requested_experiments，請確認 samples.experiment_item 格式是否正確，"
                 "例如：材料分析實驗室:SEM 觀察、電性測試實驗室:光學量測"
             ),
+        )
+
+    normalized_requested_experiments = []
+
+    for item in requested_experiments:
+        lab_name = await resolve_real_lab_name(db, item["lab_name"])
+
+        if not lab_name:
+            raise HTTPException(
+                status_code=400,
+                detail=f"無法解析實驗室名稱：{item['lab_name']}",
+            )
+
+        normalized_requested_experiments.append(
+            {
+                "lab_name": lab_name,
+                "experiment_item": item["experiment_item"],
+            }
+        )
+
+    existing_sample_wips = await get_sample_wips_in_flow_order(sample_id, db)
+    ordered_slots = build_ordered_wip_slots(
+        normalized_requested_experiments,
+        existing_sample_wips,
+    )
+    requested_experiments = [
+        slot["experiment"]
+        for slot in get_creatable_wip_slots_for_current_segment(ordered_slots)
+    ]
+
+    if len(requested_experiments) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="目前尚未輪到此 WIP，請先完成前一站實驗或交接流程",
         )
 
     created_wips = []
@@ -449,6 +489,7 @@ async def complete_wip_by_others_test(
         )
 
     next_location = experiment_temp_location(current_lab)
+    wip_flow_index = await validate_wip_can_complete_in_order(db, wip)
 
     result = await db.execute(
         text(
@@ -496,6 +537,8 @@ async def complete_wip_by_others_test(
         current_lab=current_lab,
         next_location=next_location,
         operator_name=operator_name,
+        completed_wip=updated_wip,
+        completed_wip_index=wip_flow_index,
     )
 
     await db.execute(

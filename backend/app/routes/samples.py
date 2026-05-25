@@ -18,6 +18,10 @@ router = APIRouter(
 # 這個 route 檔現在只保留 API endpoint 與 request/response 組裝。
 # 權限、位置、ID、狀態流轉等 helper 已拆到 service 檔，方便後續維護與測試。
 from app.services.sample_service import *  # noqa: F403 - route endpoint 會使用拆出的 helper
+from app.services.wip_service import (
+    get_sample_wips_in_flow_order,
+    validate_wip_create_items_in_order,
+)
 
 
 ROLE_LABELS = {
@@ -871,6 +875,38 @@ async def sample_action(
                 detail="wips must be a non-empty list when action is split",
             )
 
+        validated_wip_items = []
+
+        for item in wips:
+            lab_name = item.get("lab_name")
+            experiment_item = item.get("experiment_item")
+
+            if not lab_name:
+                raise HTTPException(
+                    status_code=400,
+                    detail="lab_name is required for each WIP",
+                )
+
+            if not experiment_item:
+                raise HTTPException(
+                    status_code=400,
+                    detail="experiment_item is required for each WIP",
+                )
+
+            validated_wip_items.append(
+                {
+                    "lab_name": lab_name,
+                    "experiment_item": experiment_item,
+                }
+            )
+
+        existing_sample_wips = await get_sample_wips_in_flow_order(sample_id, db)
+        validate_wip_create_items_in_order(
+            sample=sample,
+            existing_wips=existing_sample_wips,
+            requested_items=validated_wip_items,
+        )
+
         next_location = normalize_location_for_action(
             payload.get("current_location"),
             current_lab,
@@ -931,18 +967,6 @@ async def sample_action(
         for item in wips:
             lab_name = item.get("lab_name")
             experiment_item = item.get("experiment_item")
-
-            if not lab_name:
-                raise HTTPException(
-                    status_code=400,
-                    detail="lab_name is required for each WIP",
-                )
-
-            if not experiment_item:
-                raise HTTPException(
-                    status_code=400,
-                    detail="experiment_item is required for each WIP",
-                )
 
             existing_wip_result = await db.execute(
                 text(
