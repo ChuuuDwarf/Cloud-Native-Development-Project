@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class MachineStatus(str, Enum):
+class MachineStatus(StrEnum):
     IDLE = "idle"
     IN_USE = "in_use"
     MAINTENANCE = "maintenance"

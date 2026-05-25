@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class NotificationStatus(str, Enum):
+class NotificationStatus(StrEnum):
     UNREAD = "unread"
     READ = "read"

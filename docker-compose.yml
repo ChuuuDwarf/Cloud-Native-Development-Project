@@ -41,9 +41,12 @@ services:
     build: ./backend
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     depends_on:
-      - db
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       ENV: ${ENV:-development}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
@@ -62,6 +65,9 @@ services:
     volumes:
       - ./backend:/app
       - uploads:/app/uploads
+    networks:
+      - default
+      - lims_devnet
   celery-worker:
     build: ./backend
     command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info"]
@@ -107,11 +113,16 @@ services:
         # block below is for `next dev` parity only.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
     ports:
-      - "3000:3000"
+      # The standalone runner image listens on 3030 (see frontend/Dockerfile:
+      # ENV PORT=3030 / EXPOSE 3030), so publish host 3000 -> container 3030.
+      - "3000:3030"
     depends_on:
       - backend
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+    networks:
+      - default
+      - lims_devnet
 
   pgadmin:
     image: dpage/pgadmin4:latest

@@ -10,6 +10,7 @@ from fastapi import APIRouter
 
 from app.modules.audit_logs.router import router as audit_logs_router
 from app.modules.auth.router import router as auth_router
+from app.modules.closures.router import router as closures_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.departments.router import router as departments_router
 from app.modules.dispatches.router import router as dispatches_router
@@ -54,4 +55,5 @@ ALL_ROUTERS: list[APIRouter] = [
     dispatches_router,
     experiment_runs_router,
     reports_router,
+    closures_router,
 ]

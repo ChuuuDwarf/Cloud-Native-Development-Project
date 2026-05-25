@@ -4,6 +4,15 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/machine",
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({
+    user: { name: "Tester", role: "system_admin" },
+    logout: vi.fn(),
+    hasPermission: () => true,
+  }),
 }));
 
 vi.mock("next/link", () => ({
