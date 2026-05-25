@@ -638,7 +638,6 @@ def test_transfer_create_send_and_receive_moves_sample_to_next_lab(
     )
     assert sample_waiting["current_location"] == "Lab A 交接待送區"
 
-
     send_response = client.post(
         f"/api/transfers/{transfer['id']}/actions",
         headers=LAB_A_HEADERS,
@@ -666,7 +665,6 @@ def test_transfer_create_send_and_receive_moves_sample_to_next_lab(
         "status": "received",
         "received_by": "林雅婷",
     }
-
 
     histories = fetch_all(
         integration_db,
