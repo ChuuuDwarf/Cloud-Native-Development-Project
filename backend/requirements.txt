@@ -50,3 +50,4 @@ h11==0.16.0
 idna==3.13
 typing-inspection==0.4.2
 typing_extensions==4.15.0
+psycopg[binary]==3.3.2

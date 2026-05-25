@@ -1,10 +1,35 @@
+"use client";
+
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import KpiCard from "@/components/ui/KpiCard";
-import Chip from "@/components/ui/Chip";
+import { formatLab } from "@/components/labDisplay";
+import { dashboardApi } from "@/services/dashboard-api";
+import LabsPanel from "./_dashboard/LabsPanel";
+import DispatchPanel from "./_dashboard/DispatchPanel";
+import MachineStatusPanel from "./_dashboard/MachineStatusPanel";
+import AttentionPanel from "./_dashboard/AttentionPanel";
+
+const BLOCKED_STATUSES = ["故障中", "保養中", "停用"];
 
 export default function Dashboard() {
+  const dashboardQuery = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: dashboardApi.fetch,
+  });
+  const dashboard = dashboardQuery.data;
+
+  const isGlobalView = dashboard?.scope === "all";
+  const blockedMachines = useMemo(
+    () =>
+      dashboard?.machines?.filter((machine) =>
+        BLOCKED_STATUSES.includes(machine.status),
+      ) ?? [],
+    [dashboard],
+  );
+
   return (
     <div>
-      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -18,34 +43,6 @@ export default function Dashboard() {
           <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 4, fontFamily: "monospace" }}>
             SUPERVISOR DASHBOARD · 即時更新
           </p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            style={{
-              background: "var(--s2)",
-              border: "1px solid var(--border)",
-              color: "var(--text2)",
-              padding: "7px 14px",
-              borderRadius: 8,
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            📊 匯出報表
-          </button>
-          <button
-            style={{
-              background: "var(--s2)",
-              border: "1px solid var(--border)",
-              color: "var(--text2)",
-              padding: "7px 14px",
-              borderRadius: 8,
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            ⚙️ 調整規則
-          </button>
         </div>
       </div>
 
@@ -445,7 +442,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 右欄 */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {/* 告警通知 */}
           <div
@@ -692,4 +688,10 @@ export default function Dashboard() {
       </div>
     </div>
   );
+}
+
+function statusLine(query: { isLoading: boolean; isError: boolean }): string {
+  if (query.isLoading) return "讀取資料庫中";
+  if (query.isError) return "後端或 PostgreSQL 尚未啟動";
+  return "已連線 PostgreSQL";
 }

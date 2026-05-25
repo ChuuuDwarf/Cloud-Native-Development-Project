@@ -103,11 +103,32 @@ const nav: NavSection[] = [
         // Engineer-only workflow; see comment on `/sample` above.
         roles: ["system_admin", "lab_engineer", "lab_supervisor"],
       },
+      {
+        id: "execution",
+        href: "/execution",
+        icon: "🧫",
+        label: "實驗執行",
+        permission: "experiment_runs:read",
+      },
     ],
   },
   {
     section: "結案與倉儲",
     items: [
+      {
+        id: "report",
+        href: "/report",
+        icon: "📊",
+        label: "實驗報告管理",
+        permission: "reports:read",
+      },
+      {
+        id: "closure",
+        href: "/closure",
+        icon: "📑",
+        label: "結單管理",
+        permission: "reports:read",
+      },
       {
         id: "storage",
         href: "/storage",

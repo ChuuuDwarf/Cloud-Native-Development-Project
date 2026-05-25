@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { UserStatusLabel } from "@/constants/status-labels";
 import type { UserStatus } from "@/constants/enums";
+import { inputStyle, primaryBtn } from "@/constants/styles";
 import { useAuth } from "@/contexts/AuthContext";
 import { masterDataApi } from "@/services/master-data-api";
 import { userApi } from "@/services/user-api";
-import type { CreateUserPayload, UserResponse } from "@/types/user";
+import CreateUserModal from "./CreateUserModal";
+import UserRow from "./UserRow";
 
 export default function AccountPage() {
   const { hasPermission } = useAuth();
@@ -432,47 +433,3 @@ function Td({
     </td>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--s2)",
-  border: "1px solid var(--border)",
-  borderRadius: 6,
-  color: "var(--text)",
-  fontSize: 13,
-  padding: "8px 12px",
-  outline: "none",
-  width: "100%",
-};
-
-const primaryBtn: React.CSSProperties = {
-  padding: "8px 14px",
-  background: "linear-gradient(135deg,#388bfd,#39d0d8)",
-  color: "#fff",
-  fontWeight: 700,
-  border: "none",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontSize: 12,
-};
-
-const secondaryBtn: React.CSSProperties = {
-  padding: "6px 10px",
-  background: "transparent",
-  color: "var(--text2)",
-  border: "1px solid var(--border)",
-  borderRadius: 6,
-  cursor: "pointer",
-  fontSize: 11,
-};
-
-const roleBadge: React.CSSProperties = {
-  display: "inline-block",
-  background: "rgba(56,139,253,0.15)",
-  color: "var(--blue)",
-  border: "1px solid rgba(56,139,253,0.4)",
-  padding: "1px 8px",
-  borderRadius: 8,
-  fontSize: 10,
-  marginRight: 4,
-  fontFamily: "monospace",
-};

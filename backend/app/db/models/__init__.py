@@ -15,6 +15,7 @@ from app.db.models.departments import Department
 from app.db.models.files import File
 from app.db.models.issues import Issue
 from app.db.models.labs import Lab, LabCapability
+from app.db.models.machines import Dispatch, Machine, Recipe
 from app.db.models.notifications import Notification, NotificationDelivery
 from app.db.models.order_management import (
     OrderHistoryModel,
@@ -24,17 +25,21 @@ from app.db.models.order_management import (
     QuotaUsageModel,
 )
 from app.db.models.roles import Permission, Role, role_permissions, user_roles
+from app.db.models.storage import Storage, StorageHistory
 from app.db.models.storage_locations import StorageLocation
 from app.db.models.system_settings import SystemSetting, SystemSettingHistory
 from app.db.models.users import User
+from app.db.models.wips import Wip, WipHistory
 
 __all__ = [
     "AuditLog",
     "Department",
+    "Dispatch",
     "File",
     "Issue",
     "Lab",
     "LabCapability",
+    "Machine",
     "Notification",
     "NotificationDelivery",
     "OrderHistoryModel",
@@ -44,10 +49,14 @@ __all__ = [
     "QuotaSettingModel",
     "QuotaUsageModel",
     "Role",
+    "Storage",
+    "StorageHistory",
     "StorageLocation",
     "SystemSetting",
     "SystemSettingHistory",
     "User",
+    "Wip",
+    "WipHistory",
     "role_permissions",
     "user_roles",
 ]

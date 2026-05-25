@@ -17,6 +17,7 @@ celery_app = Celery(
     include=[
         "app.workers.escalation",
         "app.workers.email_sender",
+        "app.workers.experiment_tasks",
     ],
 )
 
