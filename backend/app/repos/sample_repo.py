@@ -174,7 +174,11 @@ async def update_sample_fields(
         },
     )
 
-    return dict(result.fetchone()._mapping)
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError("Expected row, got None")
+
+    return dict(row._mapping)
 
 
 async def update_sample_as_received(
@@ -205,7 +209,11 @@ async def update_sample_as_received(
         },
     )
 
-    return dict(result.fetchone()._mapping)
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError("Expected row, got None")
+
+    return dict(row._mapping)
 
 
 async def update_sample_as_in_storage(
@@ -235,7 +243,11 @@ async def update_sample_as_in_storage(
         },
     )
 
-    return dict(result.fetchone()._mapping)
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError("Expected row, got None")
+
+    return dict(row._mapping)
 
 
 async def update_sample_as_outbound(
@@ -265,7 +277,11 @@ async def update_sample_as_outbound(
         },
     )
 
-    return dict(result.fetchone()._mapping)
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError("Expected row, got None")
+
+    return dict(row._mapping)
 
 
 async def update_sample_as_picked_up(
@@ -296,7 +312,11 @@ async def update_sample_as_picked_up(
         },
     )
 
-    return dict(result.fetchone()._mapping)
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError("Expected row, got None")
+
+    return dict(row._mapping)
 
 
 async def update_sample_as_split(
@@ -566,7 +586,11 @@ async def create_wip_from_split(
         },
     )
 
-    return dict(result.fetchone()._mapping)
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError("Expected row, got None")
+
+    return dict(row._mapping)
 
 
 async def create_sample_history(

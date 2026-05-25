@@ -7,14 +7,14 @@ from app.services.wip_service import (
     can_manage_wip,
     can_view_wip,
     experiment_temp_location,
-    get_completable_wip_slots_for_current_segment,
     find_first_incomplete_wip_slot,
     find_wip_experiment_index_from_slots,
+    get_completable_wip_slots_for_current_segment,
     lab_location,
     machine_location,
     parse_requested_experiments,
-    validate_wip_create_items_in_order,
     validate_uuid,
+    validate_wip_create_items_in_order,
 )
 
 
@@ -113,8 +113,7 @@ def test_wip_complete_order_guard_allows_any_wip_in_contiguous_same_lab_segment(
 
     slots = build_ordered_wip_slots(experiments, wips)
     completable_ids = {
-        slot["wip"]["id"]
-        for slot in get_completable_wip_slots_for_current_segment(slots)
+        slot["wip"]["id"] for slot in get_completable_wip_slots_for_current_segment(slots)
     }
 
     assert completable_ids == {"a-1", "a-2"}
@@ -130,8 +129,7 @@ def test_wip_complete_order_guard_blocks_same_lab_after_intermediate_lab():
 
     slots = build_ordered_wip_slots(experiments, wips)
     completable_ids = [
-        slot["wip"]["id"]
-        for slot in get_completable_wip_slots_for_current_segment(slots)
+        slot["wip"]["id"] for slot in get_completable_wip_slots_for_current_segment(slots)
     ]
 
     assert completable_ids == ["a-1"]

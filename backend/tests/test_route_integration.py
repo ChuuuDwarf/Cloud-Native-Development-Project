@@ -15,10 +15,10 @@ import pytest
 sqlalchemy = pytest.importorskip("sqlalchemy")
 pytest.importorskip("fastapi.testclient")
 
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
@@ -26,10 +26,10 @@ if str(ROOT_DIR) not in sys.path:
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
-import database  # noqa: E402
-import main  # noqa: E402
+import app.core.database  # noqa: E402
+import app.main  # noqa: E402
 
-app = main.app
+app = app.main.app
 
 LAB_A_HEADERS = {"x-user-id": "user-laba-001"}
 LAB_B_HEADERS = {"x-user-id": "user-labb-001"}
@@ -245,10 +245,7 @@ def fetch_one(db, sql, params=None):
 
 
 def fetch_all(db, sql, params=None):
-    return [
-        dict(row._mapping)
-        for row in db.execute(text(sql), params or {}).fetchall()
-    ]
+    return [dict(row._mapping) for row in db.execute(text(sql), params or {}).fetchall()]
 
 
 @pytest.fixture
@@ -286,7 +283,7 @@ def client(integration_db):
         finally:
             pass
 
-    app.dependency_overrides[database.get_db] = override_get_db
+    app.dependency_overrides[app.core.database.get_db] = override_get_db
 
     with TestClient(app) as test_client:
         yield test_client
@@ -346,8 +343,7 @@ def test_sample_receive_split_and_wip_creation_persist_to_db(client, integration
     assert split_payload["created_wips"][0]["wip_no"] == "WIP-2026-0001-A-01"
     assert split_payload["created_wips"][1]["wip_no"] == "WIP-2026-0001-B-01"
     assert all(
-        wip["current_location"] == "Lab A 實驗暫存區"
-        for wip in split_payload["created_wips"]
+        wip["current_location"] == "Lab A 實驗暫存區" for wip in split_payload["created_wips"]
     )
 
     sample_row = fetch_one(
@@ -671,6 +667,8 @@ def test_outbound_and_factory_pickup_complete_full_sample_lifecycle(
         {"id": SAMPLE_A_ID},
     )
     assert wip_location["current_location"] == "已由使用者取回"
+
+
 def test_route_permissions_and_validation_errors(client):
     factory_receive_response = client.post(
         f"/api/samples/{SAMPLE_A_ID}/actions",
@@ -731,6 +729,7 @@ def test_route_permissions_and_validation_errors(client):
         },
     )
     assert lab_b_transfer_a_sample_response.status_code == 403
+
 
 def test_sample_detail_patch_inbound_and_history_routes(client, integration_db):
     detail_response = client.get(
@@ -853,18 +852,14 @@ def test_wip_list_detail_patch_history_and_all_actions(client, integration_db):
         headers=LAB_A_HEADERS,
     )
     assert lab_a_list_response.status_code == 200
-    assert [item["wip_no"] for item in lab_a_list_response.json()] == [
-        "WIP-2026-0001-A-01"
-    ]
+    assert [item["wip_no"] for item in lab_a_list_response.json()] == ["WIP-2026-0001-A-01"]
 
     lab_b_list_response = client.get(
         "/api/wips",
         headers=LAB_B_HEADERS,
     )
     assert lab_b_list_response.status_code == 200
-    assert [item["wip_no"] for item in lab_b_list_response.json()] == [
-        "WIP-2026-0001-B-01"
-    ]
+    assert [item["wip_no"] for item in lab_b_list_response.json()] == ["WIP-2026-0001-B-01"]
 
     admin_all_response = client.get(
         "/api/wips?include_all_for_flow=true",
@@ -1069,8 +1064,7 @@ def test_transfer_list_duplicate_cancel_and_wip_transfer_routes(client, integrat
     )
     assert lab_a_list_response.status_code == 200
     assert any(
-        item["transfer_no"] == sample_transfer["transfer_no"]
-        for item in lab_a_list_response.json()
+        item["transfer_no"] == sample_transfer["transfer_no"] for item in lab_a_list_response.json()
     )
 
     lab_b_list_response = client.get(
@@ -1079,8 +1073,7 @@ def test_transfer_list_duplicate_cancel_and_wip_transfer_routes(client, integrat
     )
     assert lab_b_list_response.status_code == 200
     assert any(
-        item["transfer_no"] == sample_transfer["transfer_no"]
-        for item in lab_b_list_response.json()
+        item["transfer_no"] == sample_transfer["transfer_no"] for item in lab_b_list_response.json()
     )
 
     invalid_transfer_action_response = client.post(

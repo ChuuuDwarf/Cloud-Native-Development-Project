@@ -134,7 +134,9 @@ class OrderRepository:
     async def get_order(self, order_id: int) -> Order:
         return order_to_schema(await self._get_order_model(order_id))
 
-    async def update_order(self, order_id: int, payload: OrderUpdate, current_user: CurrentUser) -> Order:
+    async def update_order(
+        self, order_id: int, payload: OrderUpdate, current_user: CurrentUser
+    ) -> Order:
         now = utc_now()
         order = await self._get_order_model(order_id)
         actor_id = user_id(current_user)
@@ -449,7 +451,9 @@ class OrderRepository:
         await self.db.refresh(quota)
         return quota
 
-    async def update_quota_setting(self, quota_id: int, payload: QuotaPatchPayload) -> QuotaSettingModel:
+    async def update_quota_setting(
+        self, quota_id: int, payload: QuotaPatchPayload
+    ) -> QuotaSettingModel:
         quota = await self.db.get(QuotaSettingModel, quota_id)
         if quota is None:
             raise not_found("Quota setting not found")
@@ -470,7 +474,9 @@ class OrderRepository:
         checks: list[dict[str, Any]] = [
             item
             for item in (
-                await self._quota_check("user", order.applicant_id, order.total_items, order.priority),
+                await self._quota_check(
+                    "user", order.applicant_id, order.total_items, order.priority
+                ),
                 await self._quota_check(
                     "department", order.department_id, order.total_items, order.priority
                 ),
@@ -531,7 +537,7 @@ class OrderRepository:
     async def record_quota_usage(self, order: OrderModel) -> None:
         existing_usage = (
             await self.db.execute(
-            select(QuotaUsageModel).where(QuotaUsageModel.order_id == order.id)
+                select(QuotaUsageModel).where(QuotaUsageModel.order_id == order.id)
             )
         ).scalar_one_or_none()
         if existing_usage:
@@ -575,16 +581,12 @@ class OrderRepository:
           module can split/dispatch the sample into WIPs later.
         """
 
-        approved_items = [
-            item for item in order.items if item.status == OrderStatus.APPROVED.value
-        ]
+        approved_items = [item for item in order.items if item.status == OrderStatus.APPROVED.value]
         if not approved_items:
             return
 
         lab_keys = {item.lab_id for item in approved_items if item.lab_id}
-        experiment_keys = {
-            item.experiment_id for item in approved_items if item.experiment_id
-        }
+        experiment_keys = {item.experiment_id for item in approved_items if item.experiment_id}
 
         labs = (
             (
@@ -603,9 +605,7 @@ class OrderRepository:
         capabilities = (
             (
                 await self.db.execute(
-                    select(LabCapability).where(
-                        cast(LabCapability.id, String).in_(experiment_keys)
-                    )
+                    select(LabCapability).where(cast(LabCapability.id, String).in_(experiment_keys))
                 )
             )
             .scalars()
@@ -647,9 +647,7 @@ class OrderRepository:
 
                 lab_name = lab.name if lab is not None else item.lab_id
                 experiment_name = (
-                    capability.experiment_item
-                    if capability is not None
-                    else item.experiment_id
+                    capability.experiment_item if capability is not None else item.experiment_id
                 )
 
                 if first_lab_name is None:
@@ -660,9 +658,7 @@ class OrderRepository:
                     experiment_parts.append(part)
 
             experiment_summary = self._truncate_text("、".join(experiment_parts), 100)
-            current_location = (
-                f"{first_lab_name} 收樣區" if first_lab_name else "收樣區"
-            )
+            current_location = f"{first_lab_name} 收樣區" if first_lab_name else "收樣區"
 
             sample_name_value = self._truncate_text(
                 next(
@@ -769,14 +765,14 @@ class OrderRepository:
         quota = (
             (
                 await self.db.execute(
-                select(QuotaSettingModel)
-                .where(
-                    QuotaSettingModel.scope_type == scope_type,
-                    QuotaSettingModel.scope_id == scope_id,
-                    QuotaSettingModel.is_active.is_(True),
+                    select(QuotaSettingModel)
+                    .where(
+                        QuotaSettingModel.scope_type == scope_type,
+                        QuotaSettingModel.scope_id == scope_id,
+                        QuotaSettingModel.is_active.is_(True),
+                    )
+                    .order_by(QuotaSettingModel.updated_at.desc(), QuotaSettingModel.id.desc())
                 )
-                .order_by(QuotaSettingModel.updated_at.desc(), QuotaSettingModel.id.desc())
-            )
             )
             .scalars()
             .first()
@@ -790,13 +786,13 @@ class OrderRepository:
         usages = (
             (
                 await self.db.execute(
-                select(QuotaUsageModel).where(
-                    QuotaUsageModel.scope_type == scope_type,
-                    QuotaUsageModel.scope_id == scope_id,
-                    QuotaUsageModel.year == now.year,
-                    QuotaUsageModel.month == now.month,
+                    select(QuotaUsageModel).where(
+                        QuotaUsageModel.scope_type == scope_type,
+                        QuotaUsageModel.scope_id == scope_id,
+                        QuotaUsageModel.year == now.year,
+                        QuotaUsageModel.month == now.month,
+                    )
                 )
-            )
             )
             .scalars()
             .all()
@@ -858,7 +854,9 @@ class OrderRepository:
         else:
             return 0
 
-        pending_orders = (await self.db.execute(select(OrderModel).where(*conditions))).scalars().all()
+        pending_orders = (
+            (await self.db.execute(select(OrderModel).where(*conditions))).scalars().all()
+        )
 
         return sum(order.total_items for order in pending_orders)
 
@@ -906,10 +904,11 @@ class OrderRepository:
     ) -> None:
         department_exists = (
             await self.db.execute(
-            select(Department.id).where(
-                Department.is_active.is_(True),
-                (cast(Department.id, String) == department_id) | (Department.code == department_id),
-            )
+                select(Department.id).where(
+                    Department.is_active.is_(True),
+                    (cast(Department.id, String) == department_id)
+                    | (Department.code == department_id),
+                )
             )
         ).scalar_one_or_none()
 
@@ -918,11 +917,11 @@ class OrderRepository:
         labs = (
             (
                 await self.db.execute(
-                select(Lab).where(
-                    Lab.is_active.is_(True),
-                    (cast(Lab.id, String).in_(lab_ids)) | (Lab.code.in_(lab_ids)),
+                    select(Lab).where(
+                        Lab.is_active.is_(True),
+                        (cast(Lab.id, String).in_(lab_ids)) | (Lab.code.in_(lab_ids)),
+                    )
                 )
-            )
             )
             .scalars()
             .all()
@@ -933,8 +932,8 @@ class OrderRepository:
         capabilities = (
             (
                 await self.db.execute(
-                select(LabCapability).where(cast(LabCapability.id, String).in_(experiment_ids))
-            )
+                    select(LabCapability).where(cast(LabCapability.id, String).in_(experiment_ids))
+                )
             )
             .scalars()
             .all()

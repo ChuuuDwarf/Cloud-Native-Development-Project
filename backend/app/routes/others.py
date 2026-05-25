@@ -3,22 +3,15 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.services.wip_service import (
-    build_ordered_wip_slots,
-    get_creatable_wip_slots_for_current_segment,
-    get_sample_wips_in_flow_order,
-    update_sample_to_pending_transfer_if_ready,
-    validate_wip_can_complete_in_order,
-)
 from app.services.temporary_others_service import (
     experiment_temp_location,
+    generate_sample_no,
+    generate_unique_wip_no,
     get_generated_storage_locations,
     get_real_labs,
     get_real_order,
     get_real_orders,
     get_real_users,
-    generate_sample_no,
-    generate_unique_wip_no,
     master_data,
     normalize_requested_experiments,
     parse_requested_experiments_from_sample,
@@ -26,6 +19,13 @@ from app.services.temporary_others_service import (
     removed_endpoint_response,
     resolve_current_user,
     resolve_real_lab_name,
+)
+from app.services.wip_service import (
+    build_ordered_wip_slots,
+    get_creatable_wip_slots_for_current_segment,
+    get_sample_wips_in_flow_order,
+    update_sample_to_pending_transfer_if_ready,
+    validate_wip_can_complete_in_order,
 )
 
 router = APIRouter(
@@ -247,8 +247,7 @@ async def generate_missing_wips_for_sample(
         existing_sample_wips,
     )
     requested_experiments = [
-        slot["experiment"]
-        for slot in get_creatable_wip_slots_for_current_segment(ordered_slots)
+        slot["experiment"] for slot in get_creatable_wip_slots_for_current_segment(ordered_slots)
     ]
 
     if len(requested_experiments) == 0:
@@ -349,7 +348,11 @@ async def generate_missing_wips_for_sample(
             },
         )
 
-        created_wip = dict(wip_result.fetchone()._mapping)
+        created_wip_row = wip_result.fetchone()
+        if created_wip_row is None:
+            raise RuntimeError("Expected created WIP row, got None")
+
+        created_wip = dict(created_wip_row._mapping)
         created_wips.append(created_wip)
 
         await db.execute(
@@ -513,7 +516,11 @@ async def complete_wip_by_others_test(
         },
     )
 
-    updated_wip = dict(result.fetchone()._mapping)
+    updated_wip_row = result.fetchone()
+    if updated_wip_row is None:
+        raise RuntimeError("Expected updated WIP row, got None")
+
+    updated_wip = dict(updated_wip_row._mapping)
 
     await db.execute(
         text(
@@ -723,10 +730,7 @@ async def confirm_order_delivery(
         )
 
     experiment_summary = "、".join(
-        [
-            f"{item['lab_name']}:{item['experiment_item']}"
-            for item in normalized_experiments
-        ]
+        [f"{item['lab_name']}:{item['experiment_item']}" for item in normalized_experiments]
     )
 
     first_lab = normalized_experiments[0]["lab_name"]
@@ -766,14 +770,21 @@ async def confirm_order_delivery(
             "order_no": order["order_no"],
             "sample_name": order.get("sample_name") or order.get("name") or "未命名樣品",
             "experiment_item": experiment_summary,
-            "applicant_name": order.get("applicant_name") or current_user.get("name") or "未命名申請人",
-            "applicant_department": order.get("applicant_department") or current_user.get("department"),
+            "applicant_name": order.get("applicant_name")
+            or current_user.get("name")
+            or "未命名申請人",
+            "applicant_department": order.get("applicant_department")
+            or current_user.get("department"),
             "current_location": current_location,
             "note": order.get("note"),
         },
     )
 
-    sample = dict(sample_result.fetchone()._mapping)
+    sample_row = sample_result.fetchone()
+    if sample_row is None:
+        raise RuntimeError("Expected created sample row, got None")
+
+    sample = dict(sample_row._mapping)
 
     await db.execute(
         text(
@@ -801,8 +812,7 @@ async def confirm_order_delivery(
         {
             "sample_id": sample["id"],
             "description": (
-                f"已確認送樣，樣品 {sample_no} 正在等待實驗室收樣，"
-                f"目前位置：{current_location}"
+                f"已確認送樣，樣品 {sample_no} 正在等待實驗室收樣，" f"目前位置：{current_location}"
             ),
             "operator_name": current_user.get("name") or "系統",
             "lab_name": first_lab,

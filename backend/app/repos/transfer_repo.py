@@ -60,7 +60,11 @@ async def count_transfers(db: AsyncSession) -> int:
         )
     )
 
-    return int(result.fetchone()._mapping["total"])
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError("Expected row, got None")
+
+    return int(row._mapping["total"])
 
 
 async def transfer_no_exists(db: AsyncSession, transfer_no: str) -> bool:
@@ -241,7 +245,11 @@ async def create_transfer(
         },
     )
 
-    return dict(result.fetchone()._mapping)
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError("Expected row, got None")
+
+    return dict(row._mapping)
 
 
 async def create_pending_sample_transfer(
@@ -298,7 +306,11 @@ async def create_pending_sample_transfer(
         },
     )
 
-    return dict(result.fetchone()._mapping)
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError("Expected row, got None")
+
+    return dict(row._mapping)
 
 
 async def mark_transfer_as_transferring(db: AsyncSession, transfer_id: str) -> None:
@@ -518,6 +530,7 @@ async def create_wip_history(
             "operator_name": operator_name,
         },
     )
+
 
 async def get_transferring_sample_transfer_for_receive(
     db: AsyncSession,

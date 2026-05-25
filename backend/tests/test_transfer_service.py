@@ -20,7 +20,10 @@ def test_transfer_visibility_filter_for_lab_users_includes_incoming_and_outgoing
 
 
 def test_transfer_visibility_filter_blocks_plant_users_and_unknown_roles():
-    assert build_transfer_visibility_filter({"role": "plant_user", "name": "王小明"}) == (["1 = 0"], {})
+    assert build_transfer_visibility_filter({"role": "plant_user", "name": "王小明"}) == (
+        ["1 = 0"],
+        {},
+    )
     assert build_transfer_visibility_filter({"role": "guest"}) == (["1 = 0"], {})
     assert build_transfer_visibility_filter({"role": "system_admin"}) == ([], {})
 

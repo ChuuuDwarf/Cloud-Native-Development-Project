@@ -50,10 +50,7 @@ async def quota_to_dict(quota: QuotaSettingModel, service: OrderService) -> dict
 
 @router.get("")
 async def list_quotas(service: OrderService = Depends(get_order_service)) -> ApiResponse:
-    quotas = [
-        await quota_to_dict(quota, service)
-        for quota in await service.list_quota_settings()
-    ]
+    quotas = [await quota_to_dict(quota, service) for quota in await service.list_quota_settings()]
     return ApiResponse(data=quotas)
 
 

@@ -10,7 +10,6 @@ from app.services.wip_service import (
     validate_wip_create_items_in_order,
 )
 
-
 fallback_user = {
     "id": "system",
     "name": "系統",
@@ -119,8 +118,8 @@ def is_lab_role(role: str | None) -> bool:
 
 def build_sample_visibility_filter(current_user: dict, scope: str | None = None):
     role = current_user.get("role")
-    where_clauses = []
-    params = {}
+    where_clauses: list[str] = []
+    params: dict[str, object] = {}
 
     if role == "system_admin":
         return where_clauses, params
@@ -232,9 +231,13 @@ async def can_view_sample(
         if db is None or not current_lab:
             return False
 
+        sample_id = sample.get("id")
+        if sample_id is None:
+            return False
+
         return await sample_repo.has_related_lab_sample_access(
             db,
-            sample_id=sample.get("id"),
+            sample_id=str(sample_id),
             current_lab=current_lab,
         )
 
@@ -267,11 +270,11 @@ def can_confirm_pickup(current_user: dict, sample: dict) -> bool:
 def validate_uuid(value: str | None, field_name: str) -> None:
     try:
         UUID(str(value))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as err:
         raise HTTPException(
             status_code=400,
             detail=f"{field_name} must be a valid UUID",
-        )
+        ) from err
 
 
 async def get_sample_or_404(sample_id: str, db: AsyncSession):
@@ -468,7 +471,14 @@ async def list_sample_history(
             (
                 h.lab_name = :current_lab
                 OR h.created_at <= (
-                    SELECT MIN(COALESCE(t.received_at, t.transferred_at, t.updated_at, t.created_at))
+                    SELECT MIN(
+                        COALESCE(
+                            t.received_at,
+                            t.transferred_at,
+                            t.updated_at,
+                            t.created_at
+                        )
+                    )
                     FROM transfers t
                     WHERE t.target_type = 'sample'
                       AND t.target_id = :sample_id
@@ -623,8 +633,7 @@ async def _receive_sample(
                 from_status=sample["status"],
                 to_status="received",
                 description=(
-                    f"交接單 {transfer_no} 已由 {to_lab} 確認收樣，"
-                    f"樣品已送達對方實驗室"
+                    f"交接單 {transfer_no} 已由 {to_lab} 確認收樣，" f"樣品已送達對方實驗室"
                 ),
                 operator_name=operator_name,
                 lab_name=from_lab,
@@ -726,8 +735,7 @@ async def _outbound_sample(
     next_unfinished_experiment = None
     for experiment in parse_requested_experiments(sample.get("experiment_item")):
         completed = any(
-            normalize_flow_value(wip["lab_name"])
-            == normalize_flow_value(experiment["lab_name"])
+            normalize_flow_value(wip["lab_name"]) == normalize_flow_value(experiment["lab_name"])
             and normalize_flow_value(wip["experiment_item"])
             == normalize_flow_value(experiment["experiment_item"])
             for wip in completed_wips
@@ -742,8 +750,7 @@ async def _outbound_sample(
         raise HTTPException(
             status_code=400,
             detail=(
-                f"此樣品後續還有 {next_lab} 的實驗，"
-                f"不能由 {current_lab} 通知取件，請先交接流轉"
+                f"此樣品後續還有 {next_lab} 的實驗，" f"不能由 {current_lab} 通知取件，請先交接流轉"
             ),
         )
 

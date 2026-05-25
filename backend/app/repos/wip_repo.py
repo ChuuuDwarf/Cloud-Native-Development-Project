@@ -185,7 +185,11 @@ async def update_wip_fields(
         },
     )
 
-    return dict(result.fetchone()._mapping)
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError(f"WIP not found: {wip_id}")
+
+    return dict(row._mapping)
 
 
 async def update_wip_status(
@@ -202,7 +206,7 @@ async def update_wip_status(
     next_location: str | None = None,
 ) -> dict:
     extra_sql = ""
-    params = {
+    params: dict[str, object] = {
         "wip_id": wip_id,
         "new_status": new_status,
     }
@@ -245,7 +249,11 @@ async def update_wip_status(
         params,
     )
 
-    return dict(result.fetchone()._mapping)
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError(f"WIP not found: {wip_id}")
+
+    return dict(row._mapping)
 
 
 async def update_sample_location(

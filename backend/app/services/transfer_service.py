@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repos import transfer_repo
 
-
 fallback_user = {
     "id": "system",
     "name": "系統",
@@ -62,8 +61,8 @@ def transfer_waiting_location(lab_name: str | None):
 
 def build_transfer_visibility_filter(current_user: dict):
     role = current_user.get("role")
-    where_clauses = []
-    params = {}
+    where_clauses: list[str] = []
+    params: dict[str, object] = {}
 
     if role == "system_admin":
         return where_clauses, params
@@ -90,11 +89,11 @@ def build_transfer_visibility_filter(current_user: dict):
 def validate_uuid(value: str | None, field_name: str) -> None:
     try:
         UUID(str(value))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as err:
         raise HTTPException(
             status_code=400,
             detail=f"{field_name} must be a valid UUID",
-        )
+        ) from err
 
 
 async def generate_transfer_no(db: AsyncSession):
@@ -207,6 +206,7 @@ async def create_transfer(
         )
 
     validate_uuid(target_id, "target_id")
+    target_id = str(target_id)
 
     from_lab = payload.get("from_lab") or get_user_lab(current_user)
     to_lab = payload.get("to_lab")
@@ -229,12 +229,11 @@ async def create_transfer(
 
     current_lab = get_user_lab(current_user)
 
-    if current_user.get("role") in ("lab_engineer", "lab_supervisor"):
-        if current_lab != from_lab:
-            raise HTTPException(
-                status_code=403,
-                detail="只能從自己所屬實驗室建立交接單",
-            )
+    if (current_user.get("role") in ("lab_engineer", "lab_supervisor")) and current_lab != from_lab:
+        raise HTTPException(
+            status_code=403,
+            detail="只能從自己所屬實驗室建立交接單",
+        )
 
     if target_type == "sample":
         sample = await get_sample_or_404(target_id, db)
@@ -369,16 +368,15 @@ async def handle_transfer_action(
     if not operator_name:
         raise HTTPException(status_code=400, detail="operator_name is required")
 
-    if current_user.get("role") in ("lab_engineer", "lab_supervisor"):
-        if (
-            current_lab
-            and transfer_data.get("from_lab")
-            and current_lab != transfer_data.get("from_lab")
-        ):
-            raise HTTPException(
-                status_code=403,
-                detail="只有來源實驗室可以操作這筆交接單",
-            )
+    if current_user.get("role") in ("lab_engineer", "lab_supervisor") and (
+        current_lab
+        and transfer_data.get("from_lab")
+        and current_lab != transfer_data.get("from_lab")
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="只有來源實驗室可以操作這筆交接單",
+        )
 
     if action == "send":
         return await send_transfer(

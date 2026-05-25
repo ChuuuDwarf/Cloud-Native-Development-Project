@@ -95,4 +95,4 @@ def test_validate_uuid_rejects_invalid_values():
         validate_uuid("not-a-uuid", "sample_id")
 
     assert exc.value.status_code == 400
-    assert "sample_id must be a valid UUID" == exc.value.detail
+    assert exc.value.detail == "sample_id must be a valid UUID"

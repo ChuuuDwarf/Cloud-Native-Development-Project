@@ -292,7 +292,11 @@ async def generate_sample_no(db: AsyncSession):
             """
         )
     )
-    total = int(result.fetchone()._mapping["total"])
+    row = result.fetchone()
+    if row is None:
+        raise RuntimeError("Expected row, got None")
+
+    total = int(row._mapping["total"])
 
     for index in range(total + 1, total + 1000):
         sample_no = f"SMP-2026-{index:04d}"
@@ -418,7 +422,7 @@ def safe_json_loads(value: Any):
     if value is None:
         return None
 
-    if isinstance(value, (dict, list)):
+    if isinstance(value, dict | list):
         return value
 
     if isinstance(value, str):
@@ -487,4 +491,3 @@ def parse_requested_experiments_from_sample(sample: dict):
             )
 
     return result
-

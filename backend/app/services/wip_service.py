@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repos import wip_repo
 
-
 fallback_user = {
     "id": "system",
     "name": "系統",
@@ -68,17 +67,17 @@ def is_lab_role(role: str | None) -> bool:
 def validate_uuid(value: str | None, field_name: str) -> None:
     try:
         UUID(str(value))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as err:
         raise HTTPException(
             status_code=400,
             detail=f"{field_name} must be a valid UUID",
-        )
+        ) from err
 
 
 def build_wip_visibility_filter(current_user: dict):
     role = current_user.get("role")
-    where_clauses = []
-    params = {}
+    where_clauses: list[str] = []
+    params: dict[str, object] = {}
 
     if role in ("system_admin", "lab_supervisor"):
         return where_clauses, params
@@ -126,8 +125,8 @@ def build_wip_flow_visibility_filter(current_user: dict):
     """
 
     role = current_user.get("role")
-    where_clauses = []
-    params = {}
+    where_clauses: list[str] = []
+    params: dict[str, object] = {}
 
     if role == "system_admin":
         return where_clauses, params
@@ -213,9 +212,13 @@ async def can_view_wip(
         if db is None:
             return False
 
+        sample_id = wip.get("sample_id")
+        if sample_id is None:
+            return False
+
         return await wip_repo.has_transfer_to_lab_for_sample(
             db,
-            sample_id=wip.get("sample_id"),
+            sample_id=str(sample_id),
             current_lab=current_lab,
         )
 
@@ -298,11 +301,10 @@ def find_current_experiment_index(
 
 
 def is_same_experiment_wip(experiment: dict, wip: dict) -> bool:
-    return (
-        normalize_flow_value(experiment.get("lab_name"))
-        == normalize_flow_value(wip.get("lab_name"))
-        and normalize_flow_value(experiment.get("experiment_item"))
-        == normalize_flow_value(wip.get("experiment_item"))
+    return normalize_flow_value(experiment.get("lab_name")) == normalize_flow_value(
+        wip.get("lab_name")
+    ) and normalize_flow_value(experiment.get("experiment_item")) == normalize_flow_value(
+        wip.get("experiment_item")
     )
 
 
@@ -452,7 +454,11 @@ async def validate_wip_can_complete_in_order(
     db: AsyncSession,
     wip: dict,
 ) -> int | None:
-    sample = await get_sample_by_id(wip.get("sample_id"), db)
+    sample_id = wip.get("sample_id")
+    if sample_id is None:
+        return None
+
+    sample = await get_sample_by_id(str(sample_id), db)
     if sample is None:
         return None
 
@@ -495,7 +501,11 @@ async def complete_wip_sample_flow(
     if not current_lab:
         return
 
-    sample = await get_sample_by_id(wip.get("sample_id"), db)
+    sample_id = wip.get("sample_id")
+    if sample_id is None:
+        return
+
+    sample = await get_sample_by_id(str(sample_id), db)
     if sample is None:
         return
 
@@ -520,9 +530,7 @@ async def complete_wip_sample_flow(
         return
 
     next_experiment = (
-        experiments[current_index + 1]
-        if current_index + 1 < len(experiments)
-        else None
+        experiments[current_index + 1] if current_index + 1 < len(experiments) else None
     )
 
     if next_experiment is None:
@@ -725,7 +733,7 @@ def _build_wip_action_update_options(
     payload: dict,
     current_lab: str | None,
 ) -> dict:
-    options = {
+    options: dict[str, object] = {
         "scheduled_at": False,
         "dispatched_at": False,
         "started_at": False,
@@ -751,7 +759,9 @@ def _build_wip_action_update_options(
     if action == "complete":
         options["completed_at"] = True
         options["progress"] = 100
-        options["next_location"] = payload.get("current_location") or experiment_temp_location(current_lab)
+        options["next_location"] = payload.get("current_location") or experiment_temp_location(
+            current_lab
+        )
 
     if action == "terminate":
         options["terminated_at"] = True
@@ -787,6 +797,8 @@ async def handle_wip_action(
             ),
         )
 
+    action = str(action)
+
     operator_name = payload.get("operator_name") or current_user.get("name")
 
     if not operator_name:
@@ -808,32 +820,41 @@ async def handle_wip_action(
         current_lab=current_lab,
     )
 
+    progress = update_options["progress"]
+    next_location = update_options["next_location"]
+
     updated_wip = await wip_repo.update_wip_status(
         db,
         wip_id=wip_id,
         new_status=new_status,
-        scheduled_at=update_options["scheduled_at"],
-        dispatched_at=update_options["dispatched_at"],
-        started_at=update_options["started_at"],
-        completed_at=update_options["completed_at"],
-        terminated_at=update_options["terminated_at"],
-        progress=update_options["progress"],
-        next_location=update_options["next_location"],
+        scheduled_at=bool(update_options["scheduled_at"]),
+        dispatched_at=bool(update_options["dispatched_at"]),
+        started_at=bool(update_options["started_at"]),
+        completed_at=bool(update_options["completed_at"]),
+        terminated_at=bool(update_options["terminated_at"]),
+        progress=progress if isinstance(progress, int) else None,
+        next_location=next_location if isinstance(next_location, str) else None,
     )
 
     if action in ("start", "resume", "complete"):
         next_location = update_options["next_location"]
 
-        if next_location:
+        sample_id = wip.get("sample_id")
+        if sample_id is None:
+            raise HTTPException(status_code=400, detail="sample_id is required")
+
+        sample_id = str(sample_id)
+
+        if isinstance(next_location, str) and next_location:
             await wip_repo.update_sample_location(
                 db,
-                sample_id=wip["sample_id"],
+                sample_id=sample_id,
                 next_location=next_location,
             )
 
             await wip_repo.update_current_lab_wips_location(
                 db,
-                sample_id=wip["sample_id"],
+                sample_id=sample_id,
                 current_lab=current_lab,
                 next_location=next_location,
             )
@@ -841,7 +862,7 @@ async def handle_wip_action(
             if action == "complete":
                 await update_sample_to_pending_transfer_if_ready(
                     db=db,
-                    sample_id=wip["sample_id"],
+                    sample_id=sample_id,
                     current_lab=current_lab,
                     next_location=next_location,
                     operator_name=operator_name,

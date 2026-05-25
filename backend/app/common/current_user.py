@@ -7,7 +7,6 @@ from app.common.dependencies import CurrentUser
 from app.db.models.departments import Department
 from app.db.models.labs import Lab
 
-
 ROLE_LABELS = {
     "system_admin": "系統管理者",
     "lab_supervisor": "實驗室主管",

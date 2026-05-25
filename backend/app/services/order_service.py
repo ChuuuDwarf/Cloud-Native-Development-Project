@@ -46,7 +46,9 @@ class OrderService:
     async def get_order(self, order_id: int) -> Order:
         return await self.repo.get_order(order_id)
 
-    async def update_order(self, order_id: int, payload: OrderUpdate, current_user: CurrentUser) -> Order:
+    async def update_order(
+        self, order_id: int, payload: OrderUpdate, current_user: CurrentUser
+    ) -> Order:
         return await self.repo.update_order(order_id, payload, current_user)
 
     async def delete_order(self, order_id: int, current_user: CurrentUser) -> None:
@@ -69,7 +71,9 @@ class OrderService:
     async def create_quota_setting(self, payload: QuotaPayload) -> QuotaSettingModel:
         return await self.repo.create_quota_setting(payload)
 
-    async def update_quota_setting(self, quota_id: int, payload: QuotaPatchPayload) -> QuotaSettingModel:
+    async def update_quota_setting(
+        self, quota_id: int, payload: QuotaPatchPayload
+    ) -> QuotaSettingModel:
         return await self.repo.update_quota_setting(quota_id, payload)
 
     async def check_quota(
