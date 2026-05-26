@@ -141,7 +141,7 @@ const nav: NavSection[] = [
         href: "/notifications",
         icon: "🔔",
         label: "通知中心",
-        roles: ["system_admin", "lab_supervisor", "lab_engineer", "plant_user"],
+        roles: ["system_admin", "lab_supervisor", "lab_engineer"],
       },
     ],
   },
