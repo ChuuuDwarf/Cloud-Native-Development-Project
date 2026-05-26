@@ -183,3 +183,10 @@ async def test_create_user_short_password_is_422(admin_client: AsyncClient) -> N
     }
     response = await admin_client.post("/api/users", json=payload)
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_engineer_a_can_get_me(engineer_a_client: AsyncClient) -> None:
+    res = await engineer_a_client.get("/api/me")
+    assert res.status_code == 200
+    assert res.json()["data"]["email"] == "engineer@example.com"

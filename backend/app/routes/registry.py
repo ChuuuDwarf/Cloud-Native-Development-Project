@@ -6,9 +6,13 @@ All API controllers are mounted from app/routes.
 from fastapi import APIRouter
 
 from app.routes.auth import router as auth_router
+<<<<<<< HEAD
 from app.routes.closures import router as closures_router
 from app.routes.dispatches import router as dispatches_router
 from app.routes.experiment_runs import router as experiment_runs_router
+=======
+from app.routes.issues import router as issues_router
+>>>>>>> 7ba22fc (feat: add issues api, frontend page and tests)
 from app.routes.labs import router as labs_router
 from app.routes.machines import router as machines_router
 from app.routes.master_data import router as master_data_router
@@ -26,6 +30,7 @@ from app.routes.workflow_views import router as workflow_views_router
 
 ALL_ROUTERS: list[APIRouter] = [
     auth_router,
+    issues_router,
     users_router,
     roles_router,
     master_data_router,

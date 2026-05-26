@@ -76,6 +76,7 @@ PERMISSIONS: list[tuple[str, str]] = [
     # issues / notifications
     ("issues:read", "查看異常 / 告警"),
     ("issues:create", "建立異常"),
+    ("issues:update", "編輯異常欄位 (title / 指派 / severity)"),
     ("issues:close", "關閉告警"),
     ("issues:escalate", "升級告警"),
     ("notifications:read", "查看通知"),
@@ -134,6 +135,7 @@ LAB_ENGINEER_PERMS: list[str] = [
     "closures:operate",
     "issues:read",
     "issues:create",
+    "issues:update",
     "issues:close",
     "issues:escalate",
     "notifications:read",
