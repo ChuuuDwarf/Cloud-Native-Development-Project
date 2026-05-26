@@ -1,7 +1,16 @@
+// Two dashboards coexist:
+// - C/D dispatch dashboard (DashboardData) — machines + dispatches + utilization
+// - E supervisor dashboard (DashboardSnapshot) — issues summary + escalations
+// They share the same /api/dashboard backend route family but render at
+// different paths in the frontend.
+
+import type { Severity } from "@/constants/enums";
 import type { MachineStatus } from "./machines";
 import type { WipStatus } from "./dispatches";
 
 export type { MachineStatus, WipStatus };
+
+// ---------- C/D dispatch dashboard ----------
 
 export interface DashboardKpis {
   pendingDispatches: number;
@@ -52,4 +61,37 @@ export interface DashboardData {
   labs: DashboardLab[];
   machines: DashboardMachine[];
   dispatches: DashboardDispatch[];
+}
+
+// ---------- E supervisor dashboard (Sprint 4) ----------
+
+export interface IssuesSummary {
+  totalOpen: number;
+  bySeverity: Record<string, number>;
+  createdToday: number;
+  escalatedToday: number;
+}
+
+export interface LabBreakdown {
+  labId: string;
+  labCode: string;
+  labName: string;
+  openIssues: number;
+  escalatedIssues: number;
+}
+
+export interface RecentEscalation {
+  id: string;
+  title: string;
+  severity: Severity;
+  escalationLevel: number;
+  labId: string;
+  updatedAt: string;
+}
+
+export interface DashboardSnapshot {
+  issues: IssuesSummary;
+  unreadNotifications: number;
+  byLab: LabBreakdown[];
+  recentEscalations: RecentEscalation[];
 }
