@@ -88,6 +88,7 @@ async def _scan_and_escalate_async() -> dict[str, int]:
                     )
 
                 # notify() commits, which also flushes our pending issue mutations.
+                # Escalation rings the supervisor's phone too (per Sprint 3d).
                 await notification_service.notify(
                     recipient_ids=recipient_ids,
                     lab_id=issue.lab_id,
@@ -96,7 +97,7 @@ async def _scan_and_escalate_async() -> dict[str, int]:
                     title=f"[升級 Lv{new_level}] {issue.title}",
                     body=issue.description,
                     severity=issue.severity,
-                    channels=[NotificationChannel.IN_APP],
+                    channels=[NotificationChannel.IN_APP, NotificationChannel.PHONE],
                 )
             except Exception:
                 # One bad issue must not abort the whole batch. Roll back this

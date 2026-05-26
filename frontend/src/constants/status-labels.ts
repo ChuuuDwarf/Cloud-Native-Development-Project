@@ -129,6 +129,7 @@ export const NotificationStatusLabel: Record<NotificationStatus, string> = {
 export const NotificationChannelLabel: Record<NotificationChannel, string> = {
   in_app: "站內通知",
   email: "Email",
+  phone: "電話通知",
 };
 
 export const UserStatusLabel: Record<UserStatus, string> = {

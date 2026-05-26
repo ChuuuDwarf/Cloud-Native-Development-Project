@@ -10,6 +10,7 @@ Re-runs safely: every row is upserted by natural key (email / code / name).
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -408,6 +409,14 @@ async def upsert_user(
         )
     ).scalar_one_or_none()
 
+    # All seed users share one phone so the CHT TAS callout pipeline can be
+    # demo'd end-to-end without spamming strangers. Override via the
+    # DEMO_PHONE env var so teammates can route the demo calls to their own
+    # number without editing this file (see docs/phone_api_demo.md).
+    # Empty / unset → None so the notify() recipient query (which filters
+    # on User.phone IS NOT NULL) correctly skips phone fan-out altogether.
+    DEMO_PHONE: str | None = os.getenv("DEMO_PHONE") or None
+
     if user is None:
         user = User(
             email=email,
@@ -417,6 +426,7 @@ async def upsert_user(
             lab_id=lab.id if lab else None,
             status=UserStatus.ACTIVE,
             is_active=True,
+            phone=DEMO_PHONE,
         )
         user.roles = desired_roles
         session.add(user)
@@ -428,6 +438,7 @@ async def upsert_user(
         user.lab_id = lab.id if lab else None
         user.status = UserStatus.ACTIVE
         user.is_active = True
+        user.phone = DEMO_PHONE
         user.roles = desired_roles
 
     return user
