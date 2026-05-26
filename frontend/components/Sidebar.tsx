@@ -418,12 +418,9 @@ export default function Sidebar() {
             <div
               style={{
                 fontSize: 10,
-<<<<<<< HEAD
                 color: "var(--text3)",
                 fontFamily: "monospace",
                 whiteSpace: "nowrap",
-=======
->>>>>>> a6bdf3f (fix: removed devcontainer and add apply_lab_scope function and unit tests)
               }}
             >
               {userPositionLabel}

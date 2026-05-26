@@ -25,11 +25,7 @@ import asyncpg
 import pytest
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
-<<<<<<< HEAD
 from sqlalchemy import text
-=======
-from sqlalchemy import text as sa_text
->>>>>>> 2e25079 (feat: add frontend /notifications page)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -135,18 +131,10 @@ def _prepare_database() -> None:
         )
 
         async with ddl_engine.begin() as conn:
-<<<<<<< HEAD
             await conn.execute(text("DROP SCHEMA public CASCADE"))
             await conn.execute(text("CREATE SCHEMA public"))
             await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
             await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "pgcrypto"'))
-=======
-            # Legacy tables no longer in metadata but possibly present in the
-            # test DB from earlier migrations. Drop them with CASCADE so their
-            # FK constraints don't block metadata.drop_all on the parent table.
-            await conn.execute(sa_text("DROP TABLE IF EXISTS notification_deliveries CASCADE"))
-            await conn.run_sync(Base.metadata.drop_all)
->>>>>>> 2e25079 (feat: add frontend /notifications page)
             await conn.run_sync(Base.metadata.create_all)
 
         await ddl_engine.dispose()
