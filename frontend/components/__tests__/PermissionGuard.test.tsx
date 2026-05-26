@@ -28,7 +28,7 @@ describe("PermissionGuard", () => {
     render(
       <PermissionGuard requiredPermission="user:read">
         <div>protected child</div>
-      </PermissionGuard>,
+      </PermissionGuard>
     );
 
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe("PermissionGuard", () => {
     render(
       <PermissionGuard requiredPermission="user:read">
         <div>protected child</div>
-      </PermissionGuard>,
+      </PermissionGuard>
     );
 
     expect(screen.getByText("protected child")).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("PermissionGuard", () => {
     render(
       <PermissionGuard requiredPermission="user:read">
         <div>protected child</div>
-      </PermissionGuard>,
+      </PermissionGuard>
     );
 
     expect(screen.getByText(/無權限/)).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe("PermissionGuard", () => {
     render(
       <PermissionGuard requiredPermission="user:read">
         <div>protected child</div>
-      </PermissionGuard>,
+      </PermissionGuard>
     );
 
     // Before redirects replaceMock should not be called

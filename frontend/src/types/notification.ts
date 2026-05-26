@@ -1,8 +1,4 @@
-import type {
-  NotificationChannel,
-  NotificationStatus,
-  Severity,
-} from "@/constants/enums";
+import type { NotificationChannel, NotificationStatus, Severity } from "@/constants/enums";
 
 // === API response shape (matches backend NotificationRead) ===
 export interface NotificationResponse {
