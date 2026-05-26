@@ -1,10 +1,11 @@
-"""merge heads + create machines / recipes / dispatches (組員 C)
+"""create machines / recipes / dispatches (組員 C)
 
-Merges the two parallel heads (``0001`` and ``a14aa7269a7f``) into a single
-head AND adds 組員 C's three tables.
+Adds 組員 C's three tables. Chains after D's ``0001`` (which itself now follows
+B's head), giving a single linear head:
+E(a14aa7269a7f) -> A(fea80b716b10) -> B(c65036646f0b) -> 0001 -> 0002.
 
 Revision ID: 0002_c_machines
-Revises: 0001, a14aa7269a7f
+Revises: 0001
 Create Date: 2026-05-24
 """
 
@@ -19,7 +20,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0002_c_machines"
-down_revision: str | Sequence[str] | None = ("0001", "a14aa7269a7f")
+down_revision: str | Sequence[str] | None = "0001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiGet } from "@/lib/api";
 import KpiCard from "@/components/ui/KpiCard";
 import { machinesApi } from "@/services/machines-api";
 import { recipesApi } from "@/services/recipes-api";
@@ -16,6 +17,24 @@ import DispatchAssignPanel from "./DispatchAssignPanel";
 import StrategyBar, { STRATEGIES } from "./StrategyBar";
 
 const BLOCKED = ["故障中", "保養中", "停用"];
+
+// B 的 wips.priority（英文）→ 派工單優先級（中文）。
+const PRIORITY_MAP: Record<string, string> = {
+  normal: "一般",
+  high: "高",
+  urgent: "特急",
+};
+
+// /api/wips 回傳的 WIP（snake_case），這裡只取派工挑單需要的欄位。
+type WipLite = {
+  id: string;
+  wip_no: string;
+  order_no: string;
+  experiment_item: string | null;
+  priority: string;
+  status: string;
+  lab_name: string | null;
+};
 
 function toDateTimeLocal(value?: string | null) {
   if (!value) return "";
@@ -37,6 +56,8 @@ export default function DispatchPage() {
   const machinesQuery = useQuery({
     queryKey: ["machines"],
     queryFn: machinesApi.list,
+    // 機台狀態(閒置/使用中/保養/故障)會被其他流程改動；定時刷新才能即時抓到可派工機台。
+    refetchInterval: 10000,
   });
   const recipesQuery = useQuery({
     queryKey: ["recipes"],
@@ -46,6 +67,14 @@ export default function DispatchPage() {
     queryKey: ["dispatches"],
     queryFn: dispatchesApi.list,
   });
+  const wipsQuery = useQuery({
+    queryKey: ["wips", "for-dispatch"],
+    // B 的 /api/wips 回傳裸陣列（或 { data: [...] }），不是 { items }。
+    queryFn: () => apiGet<WipLite[] | { data?: WipLite[] }>("/api/wips"),
+  });
+
+  const [prefill, setPrefill] = useState<Record<string, string> | null>(null);
+  const [prefillNonce, setPrefillNonce] = useState(0);
 
   const machines = useMemo(
     () => machinesQuery.data ?? [],
@@ -57,8 +86,36 @@ export default function DispatchPage() {
     [dispatchesQuery.data],
   );
 
-  const invalidateDispatches = () =>
+  const invalidateDispatches = () => {
     queryClient.invalidateQueries({ queryKey: ["dispatches"] });
+    // WIP 狀態會隨建立/排程/指派前進（C→B 連動），一併刷新待排程挑單清單。
+    queryClient.invalidateQueries({ queryKey: ["wips", "for-dispatch"] });
+  };
+
+  // 待排程 WIP（B 已送排程、尚未建立派工單者）→ 供挑單快速填入。
+  const waitingWips = useMemo(() => {
+    const raw = wipsQuery.data;
+    const items: WipLite[] = Array.isArray(raw) ? raw : (raw?.data ?? []);
+    const dispatchedWipNos = new Set(
+      (dispatchesQuery.data ?? []).map((dispatch) => dispatch.wipId),
+    );
+    return items.filter(
+      (wip) =>
+        wip.status === "waiting_schedule" && !dispatchedWipNos.has(wip.wip_no),
+    );
+  }, [wipsQuery.data, dispatchesQuery.data]);
+
+  function pickWipForDispatch(wip: WipLite) {
+    setPrefill({
+      dispatchId: `DSP-${wip.wip_no}`,
+      wipId: wip.wip_no,
+      orderId: wip.order_no,
+      experimentItem: wip.experiment_item ?? "",
+      priority: PRIORITY_MAP[wip.priority] ?? "一般",
+      dueAt: "",
+    });
+    setPrefillNonce((nonce) => nonce + 1);
+  }
 
   const create = useMutation({
     mutationFn: (payload: CreateDispatchPayload) =>
@@ -104,6 +161,10 @@ export default function DispatchPage() {
 
   const activeDispatch =
     dispatches.find((dispatch) => dispatch.dispatchId === activeDispatchId) ??
+    // 預設挑第一筆「待派工」且有實驗項目的派工單(面板就是對它操作),
+    // 而非清單第一列(常是尚未產生、無實驗項目的空列 → 會顯示「無可用機台」)。
+    dispatches.find((d) => d.status === "待派工" && d.experimentItem) ??
+    dispatches.find((d) => d.experimentItem) ??
     dispatches[0];
   const activeScheduleDraft = activeDispatch
     ? scheduleDrafts[activeDispatch.dispatchId]
@@ -166,11 +227,23 @@ export default function DispatchPage() {
     );
   }, [activeDispatch, recipes, selectedMachineId]);
 
+  // 當沒有可派工機台時，說明「為何」：是沒有支援該實驗項目的機台(能力問題)，
+  // 還是支援的機台目前都不可用(狀態問題)。避免誤以為把機台轉閒置就能派。
+  const machineHint = useMemo(() => {
+    const item = activeDispatch?.experimentItem;
+    if (!item) return "未選擇 WIP";
+    if (assignableMachines.length > 0) return null;
+    const supporting = machines.filter((m) => m.supportedItems.includes(item));
+    return supporting.length === 0
+      ? `尚無支援「${item}」的機台 — 請至「機台管理」新增或編輯機台支援此項目`
+      : "支援的機台目前皆不可用(保養 / 故障 / 停用)";
+  }, [activeDispatch, assignableMachines, machines]);
+
   const summary = useMemo(
     () => ({
-      pending: dispatches.filter((dispatch) => dispatch.status === "待派工")
+      pending: dispatches.filter((dispatch) => dispatch.status === "待排程")
         .length,
-      scheduling: dispatches.filter((dispatch) => dispatch.status === "排程中")
+      scheduling: dispatches.filter((dispatch) => dispatch.status === "待派工")
         .length,
       ready: dispatches.filter((dispatch) => dispatch.status === "待上機")
         .length,
@@ -197,7 +270,12 @@ export default function DispatchPage() {
     });
   }
 
-  const canAssign = Boolean(selectedMachineId && assignableRecipes[0]);
+  // 只有「待派工」的派工單能確認派工（待上機已派完，待排程需先排程）。
+  const canAssign = Boolean(
+    selectedMachineId &&
+      assignableRecipes[0] &&
+      activeDispatch?.status === "待派工",
+  );
   const canApplySuggested = Boolean(
     activeDispatch?.scheduledStart && activeDispatch?.scheduledEnd,
   );
@@ -254,14 +332,14 @@ export default function DispatchPage() {
         }}
       >
         <KpiCard
-          label="待派工 WIP"
+          label="待排程 WIP"
           value={summary.pending}
           sub="由使用者建立"
           color="var(--yellow)"
           icon="🗂️"
         />
         <KpiCard
-          label="排程中"
+          label="待派工"
           value={summary.scheduling}
           sub={`策略 ${strategy}`}
           color="var(--purple)"
@@ -285,6 +363,36 @@ export default function DispatchPage() {
 
       <StrategyBar strategy={strategy} onReplan={handleReplan} />
 
+      <div style={waitingWipsBoxStyle}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+          待排程 WIP{" "}
+          <span style={{ color: "var(--text3)", fontWeight: 400 }}>
+            （從「分貨 / WIP」頁送排程後出現；點選即可快速填入左側表單）
+          </span>
+        </div>
+        {wipsQuery.isLoading ? (
+          <div style={hintTextStyle}>讀取中…</div>
+        ) : waitingWips.length === 0 ? (
+          <div style={hintTextStyle}>
+            目前沒有待排程的 WIP。請先到「分貨 / WIP」頁建立 WIP 並按「前往排程 /
+            派工」。
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {waitingWips.map((wip) => (
+              <button
+                key={wip.id}
+                onClick={() => pickWipForDispatch(wip)}
+                style={wipChipStyle}
+              >
+                {wip.wip_no} · {wip.experiment_item ?? "-"} ·{" "}
+                {wip.lab_name ?? "-"}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div
         style={{
           display: "grid",
@@ -296,6 +404,8 @@ export default function DispatchPage() {
           experimentItems={experimentItems}
           submitting={create.isPending}
           onSubmit={(payload) => create.mutate(payload)}
+          prefill={prefill}
+          prefillNonce={prefillNonce}
         />
         <DispatchTable
           dispatches={dispatches}
@@ -306,6 +416,7 @@ export default function DispatchPage() {
           activeDispatch={activeDispatch}
           assignableMachines={assignableMachines}
           assignableRecipes={assignableRecipes}
+          machineHint={machineHint}
           scheduledStart={scheduledStart}
           scheduledEnd={scheduledEnd}
           canApplySuggested={canApplySuggested}
@@ -333,6 +444,29 @@ const selectStyle: React.CSSProperties = {
   padding: "9px 10px",
   borderRadius: 8,
   fontSize: 12,
+};
+
+const waitingWipsBoxStyle: React.CSSProperties = {
+  background: "var(--s1)",
+  border: "1px solid var(--border)",
+  borderRadius: 10,
+  padding: 14,
+  marginBottom: 16,
+};
+
+const hintTextStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "var(--text3)",
+};
+
+const wipChipStyle: React.CSSProperties = {
+  background: "var(--s2)",
+  border: "1px solid var(--border)",
+  color: "var(--text)",
+  padding: "7px 10px",
+  borderRadius: 8,
+  fontSize: 12,
+  cursor: "pointer",
 };
 
 const buttonStyle: React.CSSProperties = {

@@ -379,8 +379,7 @@ async def generate_missing_wips_for_sample(
             {
                 "wip_id": created_wip["id"],
                 "description": (
-                    f"由 /others 功能建立 WIP："
-                    f"{lab_name} / {experiment_item}，位置：{wip_location}"
+                    f"由 /others 功能建立 WIP：{lab_name} / {experiment_item}，位置：{wip_location}"
                 ),
                 "operator_name": current_user.get("name") or "系統",
             },
@@ -627,9 +626,9 @@ def get_schedules():
     return []
 
 
-@router.get("/dispatches")
-def get_dispatches():
-    return []
+# NOTE: GET /api/dispatches is now served by the real dispatches router
+# (app/routes/dispatches.py, 組員 C). The former stub here was removed to avoid
+# a duplicate route. See [[cd-yields-to-ab-models]].
 
 
 @router.get("/issues")
@@ -812,7 +811,7 @@ async def confirm_order_delivery(
         {
             "sample_id": sample["id"],
             "description": (
-                f"已確認送樣，樣品 {sample_no} 正在等待實驗室收樣，" f"目前位置：{current_location}"
+                f"已確認送樣，樣品 {sample_no} 正在等待實驗室收樣，目前位置：{current_location}"
             ),
             "operator_name": current_user.get("name") or "系統",
             "lab_name": first_lab,

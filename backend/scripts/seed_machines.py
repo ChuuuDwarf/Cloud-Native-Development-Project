@@ -7,7 +7,7 @@ Run from ``backend/`` (after ``alembic upgrade heads``)::
 Re-runs safely: every row is upserted by natural key (machine_id / recipe_id /
 dispatch_id). Status values are stored verbatim in Chinese:
     Machine : 閒置 / 使用中 / 保養中 / 故障中 / 停用
-    Dispatch: 待派工 / 排程中 / 待上機
+    Dispatch: 待排程 / 待派工 / 待上機
 
 Data is aligned with the existing experiment seed (scripts/seed_experiments.py)
 so labs / items / machines / recipes line up.
@@ -85,6 +85,34 @@ MACHINES: list[dict] = [
         "utilization": 22,
         "last_maintenance": "2026-05-02",
     },
+    # 對應 seed_experiments 的樣品實驗項目（EDX / IV / TC），讓既有 demo WIP 也能派工。
+    {
+        "machine_id": "EDX-001",
+        "name": "能量散射光譜儀",
+        "supported_items": ["EDX"],
+        "owner": "林佳慧",
+        "status": "閒置",
+        "utilization": 18,
+        "last_maintenance": "2026-05-15",
+    },
+    {
+        "machine_id": "IV-001",
+        "name": "半導體參數量測儀",
+        "supported_items": ["IV"],
+        "owner": "陳明德",
+        "status": "閒置",
+        "utilization": 35,
+        "last_maintenance": "2026-05-14",
+    },
+    {
+        "machine_id": "TC-001",
+        "name": "溫度循環試驗機",
+        "supported_items": ["TC"],
+        "owner": "張建平",
+        "status": "閒置",
+        "utilization": 27,
+        "last_maintenance": "2026-05-11",
+    },
 ]
 
 # recipe_id, name, version, experiment_item, machine_ids, method, parameters, updated_by
@@ -149,9 +177,39 @@ RECIPES: list[dict] = [
         "parameters": {"樣品量": "10mg", "稀釋倍率": "100x"},
         "updated_by": "張建平",
     },
+    {
+        "recipe_id": "RCP-EDX-v1.0",
+        "name": "EDX 成份分析 Recipe",
+        "version": "v1.0",
+        "experiment_item": "EDX",
+        "machine_ids": ["EDX-001"],
+        "method": "能量散射光譜成份定量",
+        "parameters": {"加速電壓": "20kV", "取樣時間": "60s"},
+        "updated_by": "林佳慧",
+    },
+    {
+        "recipe_id": "RCP-IV-v1.0",
+        "name": "IV 特性量測 Recipe",
+        "version": "v1.0",
+        "experiment_item": "IV",
+        "machine_ids": ["IV-001"],
+        "method": "電流-電壓特性掃描",
+        "parameters": {"電壓範圍": "-5V~5V", "步進": "0.1V"},
+        "updated_by": "陳明德",
+    },
+    {
+        "recipe_id": "RCP-TC-v1.0",
+        "name": "溫度循環試驗 Recipe",
+        "version": "v1.0",
+        "experiment_item": "TC",
+        "machine_ids": ["TC-001"],
+        "method": "高低溫循環應力試驗",
+        "parameters": {"溫度範圍": "-40~125度", "循環數": "500"},
+        "updated_by": "張建平",
+    },
 ]
 
-# Dispatches — mixed states. 待派工 (no suggestion), 排程中 (with suggestion),
+# Dispatches — mixed states. 待排程 (no suggestion), 待派工 (with suggestion),
 # 待上機 (fully assigned). Items all map to a supporting machine.
 DISPATCHES: list[dict] = [
     {
@@ -162,7 +220,7 @@ DISPATCHES: list[dict] = [
         "priority": "高",
         "lab": LAB,
         "due_at": "2026-05-28",
-        "status": "待派工",
+        "status": "待排程",
         "created_by": "林佳慧",
     },
     {
@@ -173,7 +231,7 @@ DISPATCHES: list[dict] = [
         "priority": "中",
         "lab": LAB,
         "due_at": "2026-05-30",
-        "status": "待派工",
+        "status": "待排程",
         "created_by": "林佳慧",
     },
     {
@@ -184,7 +242,7 @@ DISPATCHES: list[dict] = [
         "priority": "高",
         "lab": LAB,
         "due_at": "2026-05-27",
-        "status": "排程中",
+        "status": "待派工",
         "suggested_machine_id": "SEM-001",
         "strategy": "Priority First",
         "created_by": "林佳慧",

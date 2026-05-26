@@ -8,7 +8,18 @@ export type OrderStatus =
   | "sample_delivered"
   | "sample_received"
   | "ready_for_pickup"
-  | "closed";
+  | "closed"
+  // Cross-module downstream statuses written into the shared orders table by
+  // C (排程) and D (執行/結案). A doesn't act on these but must display them.
+  | "waiting_sample"
+  | "received"
+  | "split"
+  | "scheduled"
+  | "in_progress"
+  | "waiting_result_confirm"
+  | "completed"
+  | "waiting_report_return"
+  | "waiting_pickup";
 
 export type OrderAction =
   | "submit"
@@ -18,7 +29,13 @@ export type OrderAction =
   | "ready_for_pickup"
   | "close";
 
-export type PriorityLevel = "normal" | "urgent" | "critical";
+export type PriorityLevel =
+  | "normal"
+  | "urgent"
+  | "critical"
+  | "low"
+  | "medium"
+  | "high";
 export type OrderStatusFilter = "all" | OrderStatus;
 
 export type Department = { id: string; code?: string; name: string };

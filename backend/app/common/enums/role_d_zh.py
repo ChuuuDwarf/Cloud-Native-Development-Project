@@ -30,13 +30,27 @@ WIP_ZH: dict[WipStatus, str] = {
     WipStatus.TERMINATED: "已終止",
 }
 
+# D's fine-grained execution status -> a value allowed by B's ``wips.status``
+# CHECK constraint (created/waiting_schedule/scheduled/dispatched/running/paused/
+# completed/terminated/cancelled). D's own fine-grained status is persisted in
+# ``wip_execution.exec_status``; this map is only for the coarse value written to
+# B's ``wips.status`` so it stays CHECK-valid. See [[cd-yields-to-ab-models]].
+WIP_EXEC_TO_B: dict[WipStatus, str] = {
+    WipStatus.WAITING_LOAD: "dispatched",
+    WipStatus.RUNNING: "running",
+    WipStatus.UNLOADED: "running",
+    WipStatus.WAITING_CONFIRM: "running",
+    WipStatus.COMPLETED: "completed",
+    WipStatus.TERMINATED: "terminated",
+}
+
 ORDER_ZH: dict[OrderStatus, str] = {
     OrderStatus.SCHEDULED: "排程中",
     OrderStatus.IN_PROGRESS: "實驗中",
     OrderStatus.WAITING_RESULT_CONFIRM: "待結果確認",
-    OrderStatus.COMPLETED: "已完成",
+    OrderStatus.COMPLETED: "實驗完成",
     OrderStatus.WAITING_REPORT_RETURN: "待報告回傳",
-    OrderStatus.WAITING_PICKUP: "待取件",
+    OrderStatus.WAITING_PICKUP: "待送件",
     OrderStatus.CLOSED: "已結案",
 }
 

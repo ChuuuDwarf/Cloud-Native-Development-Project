@@ -35,10 +35,23 @@ export interface AbortReviewPayload {
  * (`{ items, page, pageSize, total }`); action endpoints return
  * `ApiResponse<T>` (`{ data, message }`).
  */
+export interface Operator {
+  name: string;
+  role: string;
+}
+
 export const experimentsApi = {
   async list(): Promise<Wip[]> {
     const res = await httpClient.get<PageResponse<Wip>>("/experiment-runs");
     return res.data.items;
+  },
+
+  /** 此 WIP 所屬實驗室的人員/主管（上機登記操作人下拉）。 */
+  async getOperators(wipId: string): Promise<Operator[]> {
+    const res = await httpClient.get<ApiResponse<Operator[]>>(
+      `/experiment-runs/${wipId}/operators`,
+    );
+    return res.data.data;
   },
 
   async checkIn(wipId: string, payload: CheckInPayload): Promise<Wip> {
@@ -68,6 +81,14 @@ export const experimentsApi = {
   async uploadResult(wipId: string, payload: ResultPayload): Promise<Wip> {
     const res = await httpClient.post<ApiResponse<Wip>>(
       `/experiment-runs/${wipId}/result`,
+      payload,
+    );
+    return res.data.data;
+  },
+
+  async verify(wipId: string, payload: CheckOutPayload): Promise<Wip> {
+    const res = await httpClient.post<ApiResponse<Wip>>(
+      `/experiment-runs/${wipId}/verify`,
       payload,
     );
     return res.data.data;

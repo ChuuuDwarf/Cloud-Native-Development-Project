@@ -10,6 +10,7 @@ export default function DispatchAssignPanel({
   activeDispatch,
   assignableMachines,
   assignableRecipes,
+  machineHint,
   scheduledStart,
   scheduledEnd,
   canApplySuggested,
@@ -22,6 +23,7 @@ export default function DispatchAssignPanel({
   activeDispatch?: Dispatch;
   assignableMachines: Machine[];
   assignableRecipes: Recipe[];
+  machineHint?: string | null;
   scheduledStart: string;
   scheduledEnd: string;
   canApplySuggested: boolean;
@@ -52,7 +54,9 @@ export default function DispatchAssignPanel({
         <div style={summaryBoxStyle}>
           {assignableMachines
             .map((machine) => `${machine.machineId} ${machine.name}`)
-            .join("、") || "無可用機台"}
+            .join("、") ||
+            machineHint ||
+            "無可用機台"}
         </div>
         <div style={fieldLabelStyle}>相容 Recipe</div>
         <div style={summaryBoxStyle}>
@@ -77,16 +81,32 @@ export default function DispatchAssignPanel({
             style={inputStyle}
           />
         </div>
-        <Btn small disabled={!canApplySuggested} onClick={onApplySuggested}>
-          套用系統預估時間
-        </Btn>
-        <Btn
-          variant="primary"
-          disabled={!canAssign || assigning}
-          onClick={onAssign}
-        >
-          {assigning ? "派工中…" : "確認派工"}
-        </Btn>
+        {activeDispatch?.status === "待派工" ? (
+          <>
+            <Btn small disabled={!canApplySuggested} onClick={onApplySuggested}>
+              套用系統預估時間
+            </Btn>
+            <Btn
+              variant="primary"
+              disabled={!canAssign || assigning}
+              onClick={onAssign}
+            >
+              {assigning ? "派工中…" : "確認派工"}
+            </Btn>
+          </>
+        ) : activeDispatch?.status === "待上機" ? (
+          <div style={{ fontSize: 12, color: "var(--green)" }}>
+            ✅ 已完成派工，請至「實驗執行」頁對該 WIP 上機。
+          </div>
+        ) : activeDispatch?.status === "待排程" ? (
+          <div style={{ fontSize: 12, color: "var(--text3)" }}>
+            尚未排程。請先按右上「產生建議」，進入「待派工」後才能確認派工。
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: "var(--text3)" }}>
+            請從中間清單選一筆「待派工」的派工單。
+          </div>
+        )}
       </div>
     </Panel>
   );
@@ -100,6 +120,10 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   fontSize: 12,
   width: "100%",
+  // Without these the 100% width + padding (content-box) and the datetime-local
+  // input's intrinsic min-width overflow the fixed-width (340px) right panel.
+  boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const fieldLabelStyle: React.CSSProperties = {

@@ -82,6 +82,14 @@ services:
     volumes:
       - ./backend:/app
       - uploads:/app/uploads
+    # Override the image's HEALTHCHECK (curl :8000/health), which only fits the
+    # web service — the worker serves no HTTP. Ping the worker over the broker.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_app inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,6 +106,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
     volumes:
       - ./backend:/app
+    # Disable the image's HEALTHCHECK (curl :8000/health): beat is a scheduler
+    # with no HTTP endpoint and no broker-ping. It runs as PID 1, so if it dies
+    # the container exits — a false "unhealthy" probe is worse than none.
+    healthcheck:
+      disable: true
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,7 +131,10 @@ services:
       - backend
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
-      PORT: "3000"
+      # NOTE: do NOT set PORT here — the Dockerfile sets PORT=3030 and the port
+      # mapping above publishes host 3000 -> container 3030. Overriding PORT to
+      # 3000 made Next listen on 3000 while the mapping still targeted 3030, so
+      # http://localhost:3000 was unreachable.
     networks:
       - default
       - lims_devnet

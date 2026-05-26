@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class CreateDispatchPayload(BaseModel):
-    """建立派工單（狀態預設「待派工」）。"""
+    """建立派工單（狀態預設「待排程」）。"""
 
     dispatch_id: str = Field(..., alias="dispatchId")
     wip_id: str = Field(..., alias="wipId")
@@ -30,7 +30,7 @@ class ReplanBody(BaseModel):
 
 
 class AssignDispatchPayload(BaseModel):
-    """指派機台 / Recipe 與排程時段（排程中 → 待上機）。"""
+    """指派機台 / Recipe 與排程時段（待派工 → 待上機）。"""
 
     machine_id: str = Field(..., alias="machineId")
     recipe_id: str = Field(..., alias="recipeId")

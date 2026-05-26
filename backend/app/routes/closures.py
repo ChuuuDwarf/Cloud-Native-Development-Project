@@ -1,16 +1,11 @@
 """結案與倉儲取件 API：/api/closures。
 
-Ported from Role D's flat ``app/routers/closures.py``. Thin router — all logic
-lives in :class:`app.modules.closures.service.ClosureService`.
+Controller for the closures module — mounted from the central ``app/routes``
+registry. Thin router; all logic lives in
+:class:`app.modules.closures.service.ClosureService`.
 
-Auth: Role D gated the write endpoints on ``Role.STAFF`` (實驗室人員). Here we
-use the canonical permission deps — ``require_permission("closures:operate")``
-for writes; reads require an authenticated user. (Permission codes follow the
-``<resource>:<action>`` convention used across the project.)
-
-Response envelopes follow ``app.common.schemas``:
-- single/object  → ``{"data": ..., "message": "success"}``
-- list           → ``{"items": [...], "page": 1, "pageSize": ..., "total": ...}``
+Auth: write endpoints require ``require_permission("closures:operate")``; reads
+require an authenticated user.
 """
 
 from typing import Annotated
@@ -35,7 +30,7 @@ async def list_closures(
 ) -> PageResponse[dict]:
     """列出各委託單的結單狀態與條件達成情況。"""
     items = await service.list_closures()
-    return PageResponse(items=items, page=1, page_size=len(items), total=len(items))
+    return PageResponse(items=items, page=1, pageSize=len(items), total=len(items))
 
 
 @router.get("/storage", response_model=PageResponse[dict])
@@ -46,7 +41,7 @@ async def list_storage(
 ) -> PageResponse[dict]:
     """倉儲取件清單（給 /storage 頁使用）。"""
     items = await service.list_storage(status)
-    return PageResponse(items=items, page=1, page_size=len(items), total=len(items))
+    return PageResponse(items=items, page=1, pageSize=len(items), total=len(items))
 
 
 @router.get("/{order_id}/check", response_model=ApiResponse[dict])

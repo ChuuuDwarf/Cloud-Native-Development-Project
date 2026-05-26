@@ -1,9 +1,9 @@
-// 報告頁角色權限測試：鎖住「主管繼承人員權限，可建立報告」這條規則。
-// useResourceQuery 被 mock 成 offline=false（回傳 fallback 假資料），否則新增按鈕
-// 會因離線而恆為 disabled，測不到角色邏輯。頁面用到 useQueryClient，故以
-// QueryClientProvider 包裝渲染（對齊 app/__tests__/AccountPage.test.tsx 的寫法）。
+// 報告頁角色權限測試：鎖住「建立報告需 reports:operate（主管/管理者繼承人員權限）」。
+// useResourceQuery 被 mock 成 offline=false（回傳 fallback 假資料），否則新增按鈕會因
+// 離線而恆為 disabled。權限改由 useAuth().hasPermission 決定（不再有角色切換器），
+// 故 mock useAuth。頁面用到 useQueryClient/useQuery，以 QueryClientProvider 包裝渲染。
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@/hooks/useResourceQuery", () => ({
@@ -13,6 +13,11 @@ vi.mock("@/hooks/useResourceQuery", () => ({
     offline: false,
     reload: vi.fn(),
   }),
+}));
+
+const hasPermissionMock = vi.fn();
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({ hasPermission: hasPermissionMock }),
 }));
 
 import ReportPage from "@/../app/report/page";
@@ -29,29 +34,17 @@ function renderPage() {
 }
 
 const createBtn = () => screen.getByRole("button", { name: /新增報告/ });
-const roleSelect = () => screen.getByRole("combobox");
 
 describe("報告頁 · 新增報告權限", () => {
-  it("實驗室人員可新增報告", () => {
+  it("有 reports:operate 可新增報告（人員/主管/管理者）", () => {
+    hasPermissionMock.mockImplementation((code: string) => code === "reports:operate");
     renderPage();
     expect(createBtn()).toBeEnabled();
   });
 
-  it("實驗室主管可新增報告（繼承人員權限）", () => {
+  it("無 reports:operate 不可新增報告（廠區使用者）", () => {
+    hasPermissionMock.mockReturnValue(false);
     renderPage();
-    fireEvent.change(roleSelect(), { target: { value: "實驗室主管" } });
-    expect(createBtn()).toBeEnabled();
-  });
-
-  it("廠區使用者不可新增報告", () => {
-    renderPage();
-    fireEvent.change(roleSelect(), { target: { value: "廠區使用者" } });
-    expect(createBtn()).toBeDisabled();
-  });
-
-  it("系統管理者不可新增報告", () => {
-    renderPage();
-    fireEvent.change(roleSelect(), { target: { value: "系統管理者" } });
     expect(createBtn()).toBeDisabled();
   });
 });

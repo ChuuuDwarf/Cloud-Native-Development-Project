@@ -7,8 +7,8 @@ import type { DashboardDispatch } from "@/types/dashboard";
 import type { WipStatus } from "@/types/dispatches";
 
 const STATUS_CHIP: Record<WipStatus, "pending" | "review" | "approved"> = {
-  待派工: "pending",
-  排程中: "review",
+  待排程: "pending",
+  待派工: "review",
   待上機: "approved",
 };
 

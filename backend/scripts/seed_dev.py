@@ -62,12 +62,17 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("schedules:manage", "編輯排程"),
     ("dispatches:read", "查看派工"),
     ("dispatches:manage", "建立 / 修改派工"),
-    # experiment runs / reports
+    # experiment runs / reports / closures (組員 C/D router require_permission codes)
     ("experiment_runs:read", "查看實驗執行"),
     ("experiment_runs:execute", "上下機、回報結果"),
+    ("experiments:operate", "上下機、進度、結果上傳、確認、提出中止申請"),
+    ("experiments:review", "主管審核中止申請"),
     ("reports:read", "查看報告"),
     ("reports:create", "建立報告草稿"),
     ("reports:publish", "發布報告"),
+    ("reports:operate", "建立 / 編輯 / 送審 / 發布報告"),
+    ("reports:review", "主管審核報告"),
+    ("closures:operate", "結案、入庫 / 出庫取件"),
     # issues / notifications
     ("issues:read", "查看異常 / 告警"),
     ("issues:create", "建立異常"),
@@ -121,9 +126,12 @@ LAB_ENGINEER_PERMS: list[str] = [
     "dispatches:manage",
     "experiment_runs:read",
     "experiment_runs:execute",
+    "experiments:operate",
     "reports:read",
     "reports:create",
     "reports:publish",
+    "reports:operate",
+    "closures:operate",
     "issues:read",
     "issues:create",
     "issues:close",
@@ -142,6 +150,9 @@ LAB_SUPERVISOR_EXTRA_PERMS: list[str] = [
     "dashboard:read",
     "audit_logs:read",
     "departments:read",
+    # 主管專屬審核權（中止申請、報告審核）
+    "experiments:review",
+    "reports:review",
 ]
 
 ROLES: dict[str, tuple[str, list[str]]] = {

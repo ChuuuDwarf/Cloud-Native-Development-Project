@@ -6,8 +6,8 @@ import { formatLab } from "@/components/labDisplay";
 import type { Dispatch, WipStatus } from "@/types/dispatches";
 
 const STATUS_CHIP: Record<WipStatus, "pending" | "review" | "approved"> = {
-  待派工: "pending",
-  排程中: "review",
+  待排程: "pending",
+  待派工: "review",
   待上機: "approved",
 };
 
@@ -33,7 +33,7 @@ export default function DispatchTable({
   onSelect: (dispatchId: string) => void;
 }) {
   return (
-    <Panel title="待派工 / 待排程清單" tag={`${dispatches.length} 筆`}>
+    <Panel title="待排程 / 待排程清單" tag={`${dispatches.length} 筆`}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: "var(--s2)" }}>

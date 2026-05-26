@@ -7,12 +7,20 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Dispatch, Machine, Recipe
+from app.db.models import Dispatch, Machine, Recipe, Wip, WipHistory
 
 
 class DispatchRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def get_wip_by_no(self, wip_no: str) -> Wip | None:
+        """Look up B's WIP by business code (``dispatches.wip_id`` == ``wips.wip_no``)."""
+        result = await self._session.execute(select(Wip).where(Wip.wip_no == wip_no))
+        return result.scalar_one_or_none()
+
+    def add_wip_history(self, history: WipHistory) -> None:
+        self._session.add(history)
 
     async def list_dispatches(self) -> Sequence[Dispatch]:
         result = await self._session.execute(select(Dispatch).order_by(Dispatch.dispatch_id))

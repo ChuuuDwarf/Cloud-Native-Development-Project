@@ -24,11 +24,18 @@ from app.db.models.order_management import (
     QuotaSettingModel,
     QuotaUsageModel,
 )
+from app.db.models.reports import (
+    Report,
+    ReportAttachment,
+    ReportTemplate,
+    ReportVersion,
+)
 from app.db.models.roles import Permission, Role, role_permissions, user_roles
 from app.db.models.storage import Storage, StorageHistory
 from app.db.models.storage_locations import StorageLocation
 from app.db.models.system_settings import SystemSetting, SystemSettingHistory
 from app.db.models.users import User
+from app.db.models.wip_execution import WipExecution
 from app.db.models.wips import Wip, WipHistory
 
 __all__ = [
@@ -48,6 +55,11 @@ __all__ = [
     "Permission",
     "QuotaSettingModel",
     "QuotaUsageModel",
+    "Recipe",
+    "Report",
+    "ReportAttachment",
+    "ReportTemplate",
+    "ReportVersion",
     "Role",
     "Storage",
     "StorageHistory",
@@ -56,6 +68,7 @@ __all__ = [
     "SystemSettingHistory",
     "User",
     "Wip",
+    "WipExecution",
     "WipHistory",
     "role_permissions",
     "user_roles",

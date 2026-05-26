@@ -37,4 +37,9 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.escalation.scan_and_escalate",
         "schedule": crontab(minute="*"),
     },
+    # 進度自動推進：每 2 秒檢查一次，依各 WIP 的 next_progress_at（隨機 3/5/8 秒）+1%。
+    "tick-experiment-progress": {
+        "task": "app.workers.experiment_tasks.tick_progress",
+        "schedule": 2.0,
+    },
 }

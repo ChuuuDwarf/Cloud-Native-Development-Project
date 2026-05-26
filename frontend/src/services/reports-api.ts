@@ -1,12 +1,30 @@
 import { httpClient } from "@/api/httpClient";
 import type { ApiResponse, PageResponse } from "@/types/api";
-import type { Report } from "@/types/lab";
+import type { Report, ReportTemplate } from "@/types/lab";
 
 /** Payload for 編輯報告 (summary / conclusion / 新增附件檔名). */
 export interface ReportEditPayload {
   summary?: string | null;
   conclusion?: string | null;
   attachmentName?: string | null;
+}
+
+/** 新增報告選項：自填內容、要生假數據的實驗項目、套用範本、是否直接送審。 */
+export interface ReportCreatePayload {
+  summary?: string | null;
+  conclusion?: string | null;
+  experimentItems?: string[];
+  templateId?: number | null;
+  submit?: boolean;
+}
+
+/** 存範本的 payload。 */
+export interface ReportTemplatePayload {
+  name: string;
+  orderId?: string | null;
+  summary?: string;
+  conclusion?: string;
+  fromReportId?: string | null;
 }
 
 /** Payload for 主管審核報告. */
@@ -27,11 +45,28 @@ export const reportsApi = {
     return res.data.items;
   },
 
-  /** 從實驗結果建立報告草稿. */
-  async create(wipId: string): Promise<Report> {
+  /** 從實驗結果建立報告（可自填內容、選實驗項目生假數據、套範本、直接送審）。 */
+  async create(wipId: string, opts: ReportCreatePayload = {}): Promise<Report> {
     const res = await httpClient.post<ApiResponse<Report>>("/reports", {
       wipId,
+      ...opts,
     });
+    return res.data.data;
+  },
+
+  /** 報告範本清單。 */
+  async listTemplates(): Promise<ReportTemplate[]> {
+    const res =
+      await httpClient.get<PageResponse<ReportTemplate>>("/reports/templates");
+    return res.data.items;
+  },
+
+  /** 存報告範本（可參考委託單或由現有報告存成）。 */
+  async saveTemplate(payload: ReportTemplatePayload): Promise<ReportTemplate> {
+    const res = await httpClient.post<ApiResponse<ReportTemplate>>(
+      "/reports/templates",
+      payload,
+    );
     return res.data.data;
   },
 

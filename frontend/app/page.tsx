@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import KpiCard from "@/components/ui/KpiCard";
+import Chip from "@/components/ui/Chip";
 import { formatLab } from "@/components/labDisplay";
 import { dashboardApi } from "@/services/dashboard-api";
 import LabsPanel from "./_dashboard/LabsPanel";

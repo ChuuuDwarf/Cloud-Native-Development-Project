@@ -1,0 +1,15 @@
+# Never copy host build artifacts / deps into the image build context.
+# Copying a stale host .next (esp. a `next dev` build) makes the in-image
+# `next build` produce output that doesn't reflect current source.
+node_modules
+.next
+out
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env*.local
+.git
+.DS_Store
+coverage
+playwright-report
+test-results

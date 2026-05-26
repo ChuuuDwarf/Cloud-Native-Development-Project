@@ -23,8 +23,9 @@ export function useResourceQuery<T>(
   queryKey: readonly unknown[],
   queryFn: () => Promise<T>,
   fallback: T,
+  options?: { refetchInterval?: number },
 ): ResourceResult<T> {
-  const query = useQuery({ queryKey, queryFn, retry: 1 });
+  const query = useQuery({ queryKey, queryFn, retry: 1, ...options });
 
   return {
     data: query.isError ? fallback : (query.data ?? fallback),

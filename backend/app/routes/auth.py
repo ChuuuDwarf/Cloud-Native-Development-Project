@@ -47,7 +47,7 @@ async def login(
 
     return ApiResponse(
         data=LoginResponse(
-            user_id=user.id,
+            userId=user.id,
             name=user.name,
             email=user.email,
             role=role,

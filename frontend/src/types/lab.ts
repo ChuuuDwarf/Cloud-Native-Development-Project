@@ -48,6 +48,7 @@ export interface Wip {
   checkOutAt: string | null;
   resultNote: string | null;
   rawDataUrl: string | null;
+  experimentData?: Record<string, Record<string, string>>;
   dataVerified: boolean;
   abort: AbortInfo | null;
   history: HistoryEvent[];
@@ -70,9 +71,20 @@ export interface Report {
   conclusion: string;
   attachments: { name: string; at: string }[];
   status: string;
+  experimentData?: Record<string, Record<string, string>>;
   createdAt: string;
   createdBy: string;
   versions: ReportVersion[];
+}
+
+export interface ReportTemplate {
+  id: number;
+  name: string;
+  orderId: string | null;
+  summary: string;
+  conclusion: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface ClosureCondition {
@@ -119,12 +131,14 @@ const CHIP_MAP: Record<string, ChipType> = {
   待確認: "review",
   待結果確認: "review",
   已完成: "done",
+  實驗完成: "done",
   已終止: "rejected",
   實驗中: "running",
   暫停中: "paused",
   待主管判定: "paused",
   待報告回傳: "review",
   待取件: "approved",
+  待送件: "approved",
   已結案: "done",
   排程: "review",
   // 報告

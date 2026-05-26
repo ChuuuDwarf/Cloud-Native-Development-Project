@@ -1,4 +1,4 @@
-export type WipStatus = "待派工" | "排程中" | "待上機";
+export type WipStatus = "待排程" | "待派工" | "待上機";
 
 export type Strategy =
   | "FIFO"

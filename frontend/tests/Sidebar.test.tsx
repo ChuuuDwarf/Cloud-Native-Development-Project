@@ -1,6 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/machine",
@@ -33,9 +34,19 @@ vi.mock("next/link", () => ({
 
 import Sidebar from "@/components/Sidebar";
 
+// Sidebar uses useQuery (master-data); render inside a QueryClientProvider.
+function renderSidebar() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return renderToStaticMarkup(
+    <QueryClientProvider client={client}>
+      <Sidebar />
+    </QueryClientProvider>,
+  );
+}
+
 describe("Sidebar", () => {
   it("renders core navigation groups and links", () => {
-    const html = renderToStaticMarkup(<Sidebar />);
+    const html = renderSidebar();
 
     expect(html).toContain("LIMS");
     expect(html).toContain("主管儀表板");
@@ -46,7 +57,7 @@ describe("Sidebar", () => {
   });
 
   it("marks the current pathname as active", () => {
-    const html = renderToStaticMarkup(<Sidebar />);
+    const html = renderSidebar();
 
     expect(html).toContain("3px solid var(--blue)");
     expect(html).toContain("rgba(56,139,253,0.15)");

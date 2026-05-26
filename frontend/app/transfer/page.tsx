@@ -599,7 +599,7 @@ export default function SampleTransferPage() {
     <div>
       <div style={headerStyle}>
         <div>
-          <h1 style={titleStyle}>樣品交接管理</h1>
+          <h1 style={titleStyle}>樣品交付管理</h1>
           <p style={subtitleStyle}>
             TRANSFER OUT · 目前 Lab：{currentLab} ·
             這裡負責建立交接、送出交接，以及查看我方相關交接狀態。

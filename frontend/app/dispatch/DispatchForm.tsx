@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Btn from "@/components/ui/Btn";
 import Panel from "@/components/ui/Panel";
 import type { CreateDispatchPayload } from "@/types/dispatches";
@@ -42,12 +42,26 @@ export default function DispatchForm({
   experimentItems,
   submitting,
   onSubmit,
+  prefill,
+  prefillNonce,
 }: {
   experimentItems: string[];
   submitting: boolean;
   onSubmit: (payload: CreateDispatchPayload) => void;
+  // 由「待排程 WIP」挑單帶入；手打仍可直接編輯這些欄位。
+  prefill?: Partial<FormState> | null;
+  prefillNonce?: number;
 }) {
   const [form, setForm] = useState<FormState>(EMPTY);
+
+  // 每次挑單（prefillNonce 變動）就把 WIP 資料填入表單；之後仍可手動編輯。
+  useEffect(() => {
+    if (prefill) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setForm({ ...EMPTY, ...prefill });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillNonce]);
 
   const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
 
@@ -57,7 +71,7 @@ export default function DispatchForm({
 
   return (
     <Panel
-      title="新增待派工 WIP"
+      title="新增待排程 WIP"
       action={
         <Btn small onClick={() => setForm(DEMO)}>
           快速填入
@@ -131,4 +145,8 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   fontSize: 12,
   width: "100%",
+  // 沒有 border-box 時，100% 寬 + padding 會撐出欄寬，datetime-local 的日期選擇圖示
+  // 被裁切到面板外而點不到。
+  boxSizing: "border-box",
+  minWidth: 0,
 };

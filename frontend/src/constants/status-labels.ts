@@ -31,9 +31,9 @@ export const OrderStatusLabel: Record<OrderStatus, string> = {
   scheduled: "排程中",
   in_progress: "實驗中",
   waiting_result_confirm: "待結果確認",
-  completed: "已完成",
+  completed: "實驗完成",
   waiting_report_return: "待報告回傳",
-  waiting_pickup: "待取件",
+  waiting_pickup: "待送件",
   closed: "已結案",
   cancelled: "已取消",
 };

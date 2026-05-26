@@ -54,7 +54,9 @@ export function Input({
 }
 
 export function StatusBadge({ status }: { status: OrderStatus }) {
-  return <span style={statusBadgeStyle}>{statusLabel[status]}</span>;
+  // Fallback to the raw value so an unmapped (e.g. future cross-module) status
+  // never renders as a blank badge.
+  return <span style={statusBadgeStyle}>{statusLabel[status] ?? status}</span>;
 }
 
 export function Modal({
