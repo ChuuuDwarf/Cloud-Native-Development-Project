@@ -4,14 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-<<<<<<< HEAD
 import { useQuery } from "@tanstack/react-query";
 import { masterDataApi } from "@/services/master-data-api";
 
 type RoleName = "system_admin" | "lab_supervisor" | "lab_engineer" | "plant_user";
-=======
-import { RoleLabel } from "@/constants/status-labels";
->>>>>>> 8aa60d9 (fix: removed devcontainer and add apply_lab_scope function and unit tests)
 
 interface NavItem {
   id: string;
@@ -134,17 +130,10 @@ const nav: NavSection[] = [
         roles: ["system_admin", "lab_engineer", "lab_supervisor"],
       },
       {
-        id: "exception",
-        href: "/exception",
+        id: "issues",
+        href: "/issues",
         icon: "⚠️",
-        label: "異常管理",
-        roles: ["system_admin", "lab_supervisor", "lab_engineer"],
-      },
-      {
-        id: "alert",
-        href: "/alert",
-        icon: "🔔",
-        label: "告警升級",
+        label: "異常與告警",
         roles: ["system_admin", "lab_supervisor", "lab_engineer"],
       },
     ],
@@ -430,11 +419,7 @@ export default function Sidebar() {
 >>>>>>> a6bdf3f (fix: removed devcontainer and add apply_lab_scope function and unit tests)
               }}
             >
-<<<<<<< HEAD
               {userPositionLabel}
-=======
-              {user?.role ? (RoleLabel[user.role] ?? user.role) : "—"}
->>>>>>> 8aa60d9 (fix: removed devcontainer and add apply_lab_scope function and unit tests)
             </div>
           </div>
         )}

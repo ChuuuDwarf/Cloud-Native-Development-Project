@@ -160,35 +160,51 @@ def _prepare_database() -> None:
     asyncio.run(_setup())
 
 
+async def _build_authed_client(email: str, password: str) -> AsyncIterator[AsyncClient]:
+    """Build a fresh AsyncClient logged in as the given user."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.post(
+            "/api/auth/login",
+            json={"email": email, "password": password},
+        )
+        assert res.status_code == 200, res.text
+        yield ac
+
+
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
+    """Unauthenticated AsyncClient — for 401 tests and login flows."""
     transport = ASGITransport(app=app)
-
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 
 @pytest.fixture
-async def admin_client(client: AsyncClient) -> AsyncClient:
-    """A client already logged in as the seeded admin user."""
-
-    res = await client.post(
-        "/api/auth/login",
-        json={"email": "admin@example.com", "password": "Admin1234"},
-    )
-
-    assert res.status_code == 200, res.text
-    return client
+async def admin_client() -> AsyncIterator[AsyncClient]:
+    async for c in _build_authed_client("admin@example.com", "Admin1234"):
+        yield c
 
 
 @pytest.fixture
-async def plant_user_client(client: AsyncClient) -> AsyncClient:
-    """A client logged in as the seeded plant_user."""
+async def plant_user_client() -> AsyncIterator[AsyncClient]:
+    async for c in _build_authed_client("requester@example.com", "Reque1234"):
+        yield c
 
-    res = await client.post(
-        "/api/auth/login",
-        json={"email": "requester@example.com", "password": "Reque1234"},
-    )
 
-    assert res.status_code == 200, res.text
-    return client
+@pytest.fixture
+async def engineer_a_client() -> AsyncIterator[AsyncClient]:
+    async for c in _build_authed_client("engineer@example.com", "Engin1234"):
+        yield c
+
+
+@pytest.fixture
+async def engineer_b_client() -> AsyncIterator[AsyncClient]:
+    async for c in _build_authed_client("engineer2@example.com", "Engin1234"):
+        yield c
+
+
+@pytest.fixture
+async def supervisor_a_client() -> AsyncIterator[AsyncClient]:
+    async for c in _build_authed_client("supervisor@example.com", "Super1234"):
+        yield c
