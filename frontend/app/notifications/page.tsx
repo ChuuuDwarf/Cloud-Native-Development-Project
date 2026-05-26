@@ -139,7 +139,9 @@ function NotificationRow({
       <Td>
         <span style={{ color: "var(--text2)" }}>{n.body || "—"}</span>
       </Td>
-      <Td>{NotificationChannelLabel[n.channel] ?? n.channel}</Td>
+      <Td>
+        {CHANNEL_ICON[n.channel] ?? "📨"} {NotificationChannelLabel[n.channel] ?? n.channel}
+      </Td>
       <Td>{NotificationStatusLabel[n.status] ?? n.status}</Td>
       <Td>{new Date(n.createdAt).toLocaleString("zh-TW")}</Td>
     </tr>
@@ -188,3 +190,9 @@ function SeverityChip({ severity }: { severity: Severity }) {
     </span>
   );
 }
+
+const CHANNEL_ICON: Record<string, string> = {
+  in_app: "🔔",
+  email: "✉️",
+  phone: "📞",
+};

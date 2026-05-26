@@ -19,10 +19,10 @@ help:
 	@echo "    install-frontend   npm ci"
 	@echo ""
 	@echo "  Local dev (foreground; run each in its own shell)"
-	@echo "    dev-backend        uvicorn + celery worker + celery beat (one shell)"
-	@echo "    dev-frontend       next dev                              (port 3000)"
-	@echo "    worker             celery worker only                    (legacy / debug)"
-	@echo "    beat               celery beat only                      (legacy / debug)"
+	@echo "    dev-backend        uvicorn app.main:app --reload   (port 8000)"
+	@echo "    dev-frontend       next dev                        (port 3000)"
+	@echo "    worker             celery -A app.core.celery_app worker"
+	@echo "    beat               celery -A app.core.celery_app beat"
 	@echo ""
 	@echo "  DB"
 	@echo "    migrate            alembic upgrade head"
@@ -65,15 +65,8 @@ install-frontend:
 # Local dev
 # ---------------------------------------------------------------------------
 
-# Starts uvicorn + a Celery worker + Celery beat in one shell.
-# Ctrl-C kills the whole process group (the trap handles the cleanup).
-# Logs from all three interleave on stdout; prefix tags help disambiguate.
 dev-backend:
-	@cd backend && \
-	trap 'kill 0' INT TERM EXIT; \
-	(celery -A app.core.celery_app worker --loglevel=info 2>&1 | sed -u 's/^/[worker] /') & \
-	(celery -A app.core.celery_app beat --loglevel=info 2>&1 | sed -u 's/^/[beat]   /') & \
-	uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 2>&1 | sed -u 's/^/[api]    /'
+	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 dev-frontend:
 	cd frontend && npm run dev
@@ -85,8 +78,7 @@ beat:
 	cd backend && celery -A app.core.celery_app beat --loglevel=info
 
 dev:
-	@echo "在 2 個 shell 分別執行： make dev-backend (含 worker+beat)，make dev-frontend"
-	@echo "別忘了先 make infra 起 postgres + redis"
+	@echo "在不同 shell 分別執行： make infra && make dev-backend && make dev-frontend && make worker && make beat"
 
 lint:
 	cd frontend && npm run lint

@@ -62,7 +62,10 @@ class IssueService:
                     title=f"[新異常] {issue.title}",
                     body=issue.description,
                     severity=issue.severity,
-                    channels=[NotificationChannel.IN_APP],
+                    # Every severity rings the engineer's phone immediately
+                    # (per Sprint 3d product call). PHONE goes through Celery,
+                    # so a TAS outage doesn't block the in-app notification.
+                    channels=[NotificationChannel.IN_APP, NotificationChannel.PHONE],
                 )
         except Exception:
             logger.exception("initial-notify failed for issue=%s", issue.id)

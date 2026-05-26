@@ -23,6 +23,11 @@ class User(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
 
+    # Local phone for CHT TAS callout (Sprint 3d). Format: 09XXXXXXXX or
+    # 0X-XXXXXXXX (no spaces / no symbols expected). Nullable because not
+    # every account needs to receive phone alerts (e.g. system_admin).
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
     department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("departments.id", ondelete="SET NULL"),

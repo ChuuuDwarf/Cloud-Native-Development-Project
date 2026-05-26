@@ -124,14 +124,16 @@ export const MachineStatusValues: readonly MachineStatus[] = [
   "disabled",
 ] as const;
 
-export type NotificationChannel = "in_app" | "email";
+export type NotificationChannel = "in_app" | "email" | "phone";
 export const NotificationChannel = {
   InApp: "in_app",
   Email: "email",
+  Phone: "phone",
 } as const;
 export const NotificationChannelValues: readonly NotificationChannel[] = [
   "in_app",
   "email",
+  "phone",
 ] as const;
 
 export type NotificationStatus = "unread" | "read";

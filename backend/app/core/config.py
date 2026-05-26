@@ -38,6 +38,13 @@ class Settings(BaseSettings):
 
     uploads_dir: str = Field(default="./uploads")
 
+    # 中華電信 TAS phone callout (Sprint 3d). When ``cht_api_key`` is empty
+    # the phone_sender task logs the would-be call and exits, so dev can run
+    # the escalation pipeline without burning real minutes.
+    cht_api_key: str = Field(default="")
+    cht_service_number: str = Field(default="")
+    cht_base_url: str = Field(default="https://tasapi.cht.com.tw/apis/CHTIoT")
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
