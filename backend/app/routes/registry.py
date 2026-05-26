@@ -16,6 +16,7 @@ from app.routes.issues import router as issues_router
 from app.routes.labs import router as labs_router
 from app.routes.machines import router as machines_router
 from app.routes.master_data import router as master_data_router
+from app.routes.notifications import router as notifications_router
 from app.routes.orders import router as orders_router
 from app.routes.others import router as others_router
 from app.routes.quotas import router as quotas_router
@@ -35,6 +36,7 @@ ALL_ROUTERS: list[APIRouter] = [
     roles_router,
     master_data_router,
     labs_router,
+    notifications_router,
     orders_router,
     samples_router,
     quotas_router,
