@@ -12,6 +12,11 @@ function getDefaultRouteByRole(role?: string) {
     case "system_admin":
       return "/";
 
+    case "general_supervisor":
+      // 大主管 lands on the cross-lab dashboard — that's the whole point
+      // of the role.
+      return "/";
+
     case "lab_supervisor":
       return "/";
 
@@ -34,11 +39,11 @@ const routeRoleRules: Array<{
   {
     path: "/",
     exact: true,
-    allowedRoles: ["system_admin", "lab_supervisor"],
+    allowedRoles: ["system_admin", "general_supervisor", "lab_supervisor"],
   },
   {
     path: "/approve",
-    allowedRoles: ["system_admin", "lab_supervisor"],
+    allowedRoles: ["system_admin", "general_supervisor", "lab_supervisor"],
   },
   {
     path: "/account",
@@ -50,39 +55,45 @@ const routeRoleRules: Array<{
   },
   {
     path: "/sample",
-    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer", "plant_user"],
+    allowedRoles: [
+      "system_admin",
+      "general_supervisor",
+      "lab_supervisor",
+      "lab_engineer",
+      "plant_user",
+    ],
   },
   {
     path: "/wip",
-    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+    allowedRoles: ["system_admin", "general_supervisor", "lab_supervisor", "lab_engineer"],
   },
   {
     path: "/dispatch",
-    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+    allowedRoles: ["system_admin", "general_supervisor", "lab_supervisor", "lab_engineer"],
   },
   {
     path: "/machine",
-    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+    allowedRoles: ["system_admin", "general_supervisor", "lab_supervisor", "lab_engineer"],
   },
   {
     path: "/recipe",
-    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+    allowedRoles: ["system_admin", "general_supervisor", "lab_supervisor", "lab_engineer"],
   },
   {
     path: "/transfer",
-    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+    allowedRoles: ["system_admin", "general_supervisor", "lab_supervisor", "lab_engineer"],
   },
   {
     path: "/storage",
-    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+    allowedRoles: ["system_admin", "general_supervisor", "lab_supervisor", "lab_engineer"],
   },
   {
     path: "/exception",
-    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+    allowedRoles: ["system_admin", "general_supervisor", "lab_supervisor", "lab_engineer"],
   },
   {
     path: "/alert",
-    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+    allowedRoles: ["system_admin", "general_supervisor", "lab_supervisor", "lab_engineer"],
   },
   {
     path: "/orders",

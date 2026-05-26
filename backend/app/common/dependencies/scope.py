@@ -5,15 +5,19 @@ Each protected endpoint can build a SQLAlchemy ``select()`` and call
 caller's role. Centralising the rule here keeps every module's repository
 queries consistent with the role matrix in ``docs/role.md``:
 
-==============  ============================================================
-Role            Filter applied
-==============  ============================================================
-system_admin    none — sees everything
-lab_engineer    ``lab_id_column == user.lab_id``
-lab_supervisor  ``lab_id_column == user.lab_id`` (same as engineer)
-plant_user      ``created_by_column == user.id`` (own records only); raises
-                ``ForbiddenError`` if no ``created_by_column`` is supplied
-==============  ============================================================
+==================  ============================================================
+Role                Filter applied
+==================  ============================================================
+system_admin        none — sees everything
+general_supervisor  none — 大主管 oversees every lab. Used by ``apply_lab_scope``
+                    for read-side row visibility; write paths that need to know
+                    which labs the actor is allowed in (e.g. order approval)
+                    check ``order_security.ALL_LABS_ROLES`` separately.
+lab_engineer        ``lab_id_column == user.lab_id``
+lab_supervisor      ``lab_id_column == user.lab_id`` (same as engineer)
+plant_user          ``created_by_column == user.id`` (own records only); raises
+                    ``ForbiddenError`` if no ``created_by_column`` is supplied
+==================  ============================================================
 
 Anything else (unknown role, missing ``lab_id`` for a lab-bound role)
 raises :class:`ForbiddenError` rather than silently leaking rows.
@@ -68,7 +72,12 @@ def apply_lab_scope(
         return stmt
 
     role = user.role
-    if role == "system_admin":
+    if role in ("system_admin", "general_supervisor"):
+        # general_supervisor (大主管) is intentionally treated like an admin
+        # for *read* paths: the dashboard / issues list / notifications etc.
+        # need cross-lab visibility. Write authorisation is still gated by
+        # per-endpoint permission checks (require_permission), so this does
+        # not grant them broader mutate rights than lab_supervisor.
         return stmt
 
     if role in ("lab_supervisor", "lab_engineer"):

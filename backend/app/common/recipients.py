@@ -31,3 +31,21 @@ async def recipients_for_role_in_lab(
     stmt = select(User.id).join(User.roles).where(User.lab_id == lab_id, Role.name == role_name)
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def recipients_for_global_role(
+    session: AsyncSession,
+    *,
+    role_name: str,
+) -> list[UUID]:
+    """All user ids holding ``role_name`` regardless of lab.
+
+    For lab-less roles (e.g. ``general_supervisor``, ``system_admin``) that
+    receive cross-lab notifications — escalation level-2 fan-out is the
+    main caller. Deliberately the mirror of
+    :func:`recipients_for_role_in_lab`; do NOT use this for lab-bound roles
+    or you will spam users in unrelated labs.
+    """
+    stmt = select(User.id).join(User.roles).where(Role.name == role_name)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())

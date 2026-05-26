@@ -140,6 +140,8 @@ export function LoginForm({ onSuccess }: Props) {
           <br />
           admin@example.com / Admin1234
           <br />
+          director@example.com / Direc1234
+          <br />
           supervisor@example.com / Super1234
           <br />
           engineer@example.com / Engin1234
