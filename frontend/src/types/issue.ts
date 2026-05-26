@@ -49,3 +49,13 @@ export interface ListIssuesQuery {
   page?: number;
   pageSize?: number;
 }
+
+// === Acknowledgement: a user who marked a notification for this issue read ===
+export interface IssueAcknowledgement {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  role: string | null;
+  channel: string;
+  readAt: string;
+}

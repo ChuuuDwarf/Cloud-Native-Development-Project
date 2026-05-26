@@ -2,6 +2,7 @@ import { httpClient } from "@/api/httpClient";
 import type { ApiResponse, PageResponse } from "@/types/api";
 import type {
   CreateIssuePayload,
+  IssueAcknowledgement,
   IssueResponse,
   ListIssuesQuery,
   UpdateIssuePayload,
@@ -27,6 +28,13 @@ export const issueApi = {
 
   async update(id: string, payload: UpdateIssuePayload): Promise<IssueResponse> {
     const res = await httpClient.patch<ApiResponse<IssueResponse>>(`/issues/${id}`, payload);
+    return res.data.data;
+  },
+
+  async listAcknowledgements(id: string): Promise<IssueAcknowledgement[]> {
+    const res = await httpClient.get<ApiResponse<IssueAcknowledgement[]>>(
+      `/issues/${id}/acknowledgements`
+    );
     return res.data.data;
   },
 };

@@ -14,6 +14,7 @@ from app.common.dependencies import (
 from app.common.enums import IssueStatus, IssueType, Severity
 from app.common.schemas import ApiResponse, PageResponse
 from app.schemas.issues import (
+    IssueAcknowledgement,
     IssueCreate,
     IssueListParams,
     IssueRead,
@@ -82,3 +83,16 @@ async def update_issue(
 ) -> ApiResponse[IssueRead]:
     updated = await service.update_issue(issue_id, payload, user)
     return ApiResponse(data=IssueRead.model_validate(updated), message="updated")
+
+
+@router.get(
+    "/{issue_id}/acknowledgements",
+    response_model=ApiResponse[list[IssueAcknowledgement]],
+)
+async def list_issue_acknowledgements(
+    issue_id: UUID,
+    service: Annotated[IssueService, Depends(get_issue_service)],
+    user: Annotated[CurrentUser, Depends(require_permission("issues:read"))],
+) -> ApiResponse[list[IssueAcknowledgement]]:
+    rows = await service.list_acknowledgements(issue_id, user)
+    return ApiResponse(data=[IssueAcknowledgement.model_validate(r) for r in rows])
