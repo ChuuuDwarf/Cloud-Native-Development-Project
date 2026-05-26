@@ -4,12 +4,7 @@
 
 export type Role = "廠區使用者" | "實驗室人員" | "實驗室主管" | "系統管理者";
 
-export const ROLES: Role[] = [
-  "廠區使用者",
-  "實驗室人員",
-  "實驗室主管",
-  "系統管理者",
-];
+export const ROLES: Role[] = ["廠區使用者", "實驗室人員", "實驗室主管", "系統管理者"];
 
 // HTTP 標頭只能帶 ASCII，角色代碼對照（對應後端 deps.ROLE_CODES）
 export const ROLE_CODE: Record<Role, string> = {

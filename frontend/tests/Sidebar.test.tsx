@@ -40,7 +40,7 @@ function renderSidebar() {
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <Sidebar />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
 }
 

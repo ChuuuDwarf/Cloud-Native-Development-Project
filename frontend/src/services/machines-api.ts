@@ -10,29 +10,19 @@ export const machinesApi = {
   },
 
   async create(payload: MachinePayload): Promise<Machine> {
-    const res = await httpClient.post<ApiResponse<Machine>>(
-      "/machines",
-      payload,
-    );
+    const res = await httpClient.post<ApiResponse<Machine>>("/machines", payload);
     return res.data.data;
   },
 
   async update(machineId: string, payload: MachinePayload): Promise<Machine> {
-    const res = await httpClient.patch<ApiResponse<Machine>>(
-      `/machines/${machineId}`,
-      payload,
-    );
+    const res = await httpClient.patch<ApiResponse<Machine>>(`/machines/${machineId}`, payload);
     return res.data.data;
   },
 
-  async updateStatus(
-    machineId: string,
-    status: MachineStatus,
-  ): Promise<Machine> {
-    const res = await httpClient.patch<ApiResponse<Machine>>(
-      `/machines/${machineId}/status`,
-      { status },
-    );
+  async updateStatus(machineId: string, status: MachineStatus): Promise<Machine> {
+    const res = await httpClient.patch<ApiResponse<Machine>>(`/machines/${machineId}/status`, {
+      status,
+    });
     return res.data.data;
   },
 };

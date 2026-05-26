@@ -4,11 +4,7 @@ import Panel from "@/components/ui/Panel";
 import { formatLab } from "@/components/labDisplay";
 import type { DashboardMachine } from "@/types/dashboard";
 
-export default function MachineStatusPanel({
-  machines,
-}: {
-  machines: DashboardMachine[];
-}) {
+export default function MachineStatusPanel({ machines }: { machines: DashboardMachine[] }) {
   return (
     <Panel title="機台狀態" tag={`${machines.length} 台`}>
       {machines.slice(0, 8).map((machine) => (

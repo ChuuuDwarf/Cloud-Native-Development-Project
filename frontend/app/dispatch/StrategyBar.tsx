@@ -82,9 +82,7 @@ export default function StrategyBar({
           onClick={() => onReplan(policy.reason, policy.strategy)}
         >
           {policy.label}
-          <span
-            style={{ display: "block", color: "var(--text3)", fontSize: 9 }}
-          >
+          <span style={{ display: "block", color: "var(--text3)", fontSize: 9 }}>
             {policy.strategy}
           </span>
         </Btn>

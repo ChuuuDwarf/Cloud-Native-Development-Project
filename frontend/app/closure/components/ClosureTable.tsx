@@ -9,9 +9,7 @@ import { th, td, tdMono, linkBtn } from "../styles";
 
 export type RunFn = (fn: () => Promise<unknown>, okText: string) => Promise<void>;
 
-const noPerm = (
-  <span style={{ fontSize: 10, color: "var(--text3)" }}>廠區使用者無操作權限</span>
-);
+const noPerm = <span style={{ fontSize: 10, color: "var(--text3)" }}>廠區使用者無操作權限</span>;
 
 function ClosureAction({
   c,

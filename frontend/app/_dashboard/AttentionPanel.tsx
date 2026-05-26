@@ -4,11 +4,7 @@ import Panel from "@/components/ui/Panel";
 import { formatLab } from "@/components/labDisplay";
 import type { DashboardMachine } from "@/types/dashboard";
 
-export default function AttentionPanel({
-  machines,
-}: {
-  machines: DashboardMachine[];
-}) {
+export default function AttentionPanel({ machines }: { machines: DashboardMachine[] }) {
   return (
     <Panel title="需注意" tag={`${machines.length} 項`}>
       {machines.map((machine) => (
@@ -20,9 +16,7 @@ export default function AttentionPanel({
             fontSize: 12,
           }}
         >
-          <strong style={{ color: "var(--orange)" }}>
-            {machine.machineId}
-          </strong>
+          <strong style={{ color: "var(--orange)" }}>{machine.machineId}</strong>
           <span style={{ color: "var(--text2)" }}>
             {" "}
             · {formatLab(machine.lab)} · {machine.status}

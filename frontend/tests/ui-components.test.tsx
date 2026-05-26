@@ -24,13 +24,7 @@ describe("Chip", () => {
 describe("KpiCard", () => {
   it("renders label, value, sub text, icon, and accent color", () => {
     const html = renderToStaticMarkup(
-      <KpiCard
-        label="平均稼動率"
-        value="48%"
-        sub="4 台機台"
-        color="var(--green)"
-        icon="UP"
-      />,
+      <KpiCard label="平均稼動率" value="48%" sub="4 台機台" color="var(--green)" icon="UP" />
     );
 
     expect(html).toContain("平均稼動率");
@@ -41,9 +35,7 @@ describe("KpiCard", () => {
   });
 
   it("omits optional sub text and icon when not provided", () => {
-    const html = renderToStaticMarkup(
-      <KpiCard label="待派工 WIP" value={3} color="var(--blue)" />,
-    );
+    const html = renderToStaticMarkup(<KpiCard label="待派工 WIP" value={3} color="var(--blue)" />);
 
     expect(html).toContain("待派工 WIP");
     expect(html).toContain(">3<");

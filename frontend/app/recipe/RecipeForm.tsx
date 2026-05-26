@@ -50,7 +50,7 @@ function parseParameters(raw: string): Record<string, string> {
       .map((item) => {
         const [key, value] = item.split(":");
         return [(key ?? "").trim(), (value ?? "").trim()];
-      }),
+      })
   );
 }
 
@@ -71,19 +71,14 @@ export default function RecipeForm({
   const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
 
   const compatibleMachines = useMemo(
-    () =>
-      machines.filter((machine) =>
-        machine.supportedItems.includes(form.experimentItem),
-      ),
-    [machines, form.experimentItem],
+    () => machines.filter((machine) => machine.supportedItems.includes(form.experimentItem)),
+    [machines, form.experimentItem]
   );
 
   function submit() {
     // Prefer the chosen machine when it is compatible, otherwise fall back to
     // the first compatible machine (preserving the original page behavior).
-    const machineId = compatibleMachines.some(
-      (machine) => machine.machineId === form.machineId,
-    )
+    const machineId = compatibleMachines.some((machine) => machine.machineId === form.machineId)
       ? form.machineId
       : (compatibleMachines[0]?.machineId ?? form.machineId);
 
@@ -136,9 +131,7 @@ export default function RecipeForm({
         />
         <select
           value={form.experimentItem}
-          onChange={(e) =>
-            set({ experimentItem: e.target.value, machineId: "" })
-          }
+          onChange={(e) => set({ experimentItem: e.target.value, machineId: "" })}
           style={inputStyle}
         >
           <option value="">選擇實驗項目</option>
@@ -152,13 +145,11 @@ export default function RecipeForm({
           style={inputStyle}
         >
           <option value="">選擇相容機台</option>
-          {(compatibleMachines.length ? compatibleMachines : machines).map(
-            (machine) => (
-              <option key={machine.machineId} value={machine.machineId}>
-                {machine.machineId} · {machine.name} · {formatLab(machine.lab)}
-              </option>
-            ),
-          )}
+          {(compatibleMachines.length ? compatibleMachines : machines).map((machine) => (
+            <option key={machine.machineId} value={machine.machineId}>
+              {machine.machineId} · {machine.name} · {formatLab(machine.lab)}
+            </option>
+          ))}
         </select>
         <textarea
           placeholder="實驗方法"

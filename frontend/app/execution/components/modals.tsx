@@ -7,10 +7,7 @@ import Btn from "@/components/ui/Btn";
 import { experimentsApi } from "@/services/experiments-api";
 import type { Wip } from "@/types/lab";
 
-export type RunFn = (
-  fn: () => Promise<unknown>,
-  okText: string,
-) => Promise<void>;
+export type RunFn = (fn: () => Promise<unknown>, okText: string) => Promise<void>;
 
 type MachineLite = {
   machineId: string;
@@ -68,11 +65,9 @@ export function CheckinModal({
   const machineOptions = useMemo(
     () =>
       machines.filter(
-        (m) =>
-          m.supportedItems.includes(w.experimentItem) &&
-          !BLOCKED.includes(m.status),
+        (m) => m.supportedItems.includes(w.experimentItem) && !BLOCKED.includes(m.status)
       ),
-    [machines, w.experimentItem],
+    [machines, w.experimentItem]
   );
 
   // 預選派工已指派的機台（w.machineId），否則第一台。
@@ -80,18 +75,16 @@ export function CheckinModal({
     () =>
       (w.machineId && machineOptions.some((m) => m.machineId === w.machineId)
         ? w.machineId
-        : machineOptions[0]?.machineId) ?? "",
+        : machineOptions[0]?.machineId) ?? ""
   );
 
   // 對應「此實驗項目 + 選定機台」的 Recipe。
   const recipeOptions = useMemo(
     () =>
       recipes.filter(
-        (r) =>
-          r.experimentItem === w.experimentItem &&
-          r.machineIds.includes(machineId),
+        (r) => r.experimentItem === w.experimentItem && r.machineIds.includes(machineId)
       ),
-    [recipes, w.experimentItem, machineId],
+    [recipes, w.experimentItem, machineId]
   );
 
   const [recipe, setRecipe] = useState(w.recipe ?? "");
@@ -121,7 +114,7 @@ export function CheckinModal({
                     machineId,
                     recipe: effectiveRecipe,
                   }),
-                "上機登記完成",
+                "上機登記完成"
               )
             }
           >
@@ -135,11 +128,7 @@ export function CheckinModal({
       </Field>
       <Field label="操作人 *">
         {operators.length > 0 ? (
-          <select
-            style={inputStyle}
-            value={operator}
-            onChange={(e) => setOperator(e.target.value)}
-          >
+          <select style={inputStyle} value={operator} onChange={(e) => setOperator(e.target.value)}>
             <option value="">請選擇操作人</option>
             {operators.map((p) => (
               <option key={p.name} value={p.name}>
@@ -152,9 +141,7 @@ export function CheckinModal({
             style={inputStyle}
             value={operator}
             onChange={(e) => setOperator(e.target.value)}
-            placeholder={
-              operatorsQuery.isLoading ? "載入此實驗室人員中…" : "必填"
-            }
+            placeholder={operatorsQuery.isLoading ? "載入此實驗室人員中…" : "必填"}
           />
         )}
       </Field>
@@ -200,23 +187,13 @@ export function CheckinModal({
         )}
       </Field>
       {!valid && (
-        <p style={{ fontSize: 11, color: "var(--orange)" }}>
-          請填操作人,並選擇機台與 Recipe
-        </p>
+        <p style={{ fontSize: 11, color: "var(--orange)" }}>請填操作人,並選擇機台與 Recipe</p>
       )}
     </Modal>
   );
 }
 
-export function ResultModal({
-  w,
-  run,
-  onClose,
-}: {
-  w: Wip;
-  run: RunFn;
-  onClose: () => void;
-}) {
+export function ResultModal({ w, run, onClose }: { w: Wip; run: RunFn; onClose: () => void }) {
   const [note, setNote] = useState("");
   const [rawDataUrl, setRawDataUrl] = useState("");
   const [verified, setVerified] = useState(false);
@@ -239,7 +216,7 @@ export function ResultModal({
                     rawDataUrl: rawDataUrl || null,
                     dataVerified: verified,
                   }),
-                "結果已上傳，進入待結果確認",
+                "結果已上傳，進入待結果確認"
               )
             }
           >
@@ -273,26 +250,14 @@ export function ResultModal({
           color: "var(--text2)",
         }}
       >
-        <input
-          type="checkbox"
-          checked={verified}
-          onChange={(e) => setVerified(e.target.checked)}
-        />
+        <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} />
         已驗證數據完整性（未勾選將無法在下一步確認結果）
       </label>
     </Modal>
   );
 }
 
-export function AbortModal({
-  w,
-  run,
-  onClose,
-}: {
-  w: Wip;
-  run: RunFn;
-  onClose: () => void;
-}) {
+export function AbortModal({ w, run, onClose }: { w: Wip; run: RunFn; onClose: () => void }) {
   const [reason, setReason] = useState("");
   return (
     <Modal
@@ -306,10 +271,7 @@ export function AbortModal({
             variant="danger"
             disabled={!reason.trim()}
             onClick={() =>
-              run(
-                () => experimentsApi.abortRequest(w.wipId, reason),
-                "已提出中止申請，待主管判定",
-              )
+              run(() => experimentsApi.abortRequest(w.wipId, reason), "已提出中止申請，待主管判定")
             }
           >
             送出申請
@@ -332,15 +294,7 @@ export function AbortModal({
   );
 }
 
-export function ReviewModal({
-  w,
-  run,
-  onClose,
-}: {
-  w: Wip;
-  run: RunFn;
-  onClose: () => void;
-}) {
+export function ReviewModal({ w, run, onClose }: { w: Wip; run: RunFn; onClose: () => void }) {
   const [note, setNote] = useState("");
   return (
     <Modal
@@ -353,9 +307,8 @@ export function ReviewModal({
           <Btn
             onClick={() =>
               run(
-                () =>
-                  experimentsApi.abortReview(w.wipId, { approve: false, note }),
-                "已駁回，實驗繼續",
+                () => experimentsApi.abortReview(w.wipId, { approve: false, note }),
+                "已駁回，實驗繼續"
               )
             }
           >
@@ -364,11 +317,7 @@ export function ReviewModal({
           <Btn
             variant="danger"
             onClick={() =>
-              run(
-                () =>
-                  experimentsApi.abortReview(w.wipId, { approve: true, note }),
-                "已核准終止",
-              )
+              run(() => experimentsApi.abortReview(w.wipId, { approve: true, note }), "已核准終止")
             }
           >
             核准終止
@@ -412,17 +361,12 @@ export function ReviewModal({
 function ExperimentDataBlock({ data }: { data?: Record<string, Record<string, string>> }) {
   const entries = Object.entries(data ?? {});
   if (entries.length === 0) {
-    return (
-      <div style={{ fontSize: 12, color: "var(--text3)" }}>（此實驗無保存的量測數據）</div>
-    );
+    return <div style={{ fontSize: 12, color: "var(--text3)" }}>（此實驗無保存的量測數據）</div>;
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {entries.map(([item, fields]) => (
-        <div
-          key={item}
-          style={{ background: "var(--s2)", borderRadius: 8, padding: 12 }}
-        >
+        <div key={item} style={{ background: "var(--s2)", borderRadius: 8, padding: 12 }}>
           <div
             style={{
               fontSize: 11,
@@ -442,10 +386,7 @@ function ExperimentDataBlock({ data }: { data?: Record<string, Record<string, st
             }}
           >
             {Object.entries(fields).map(([k, v]) => (
-              <div
-                key={k}
-                style={{ display: "flex", justifyContent: "space-between", gap: 8 }}
-              >
+              <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                 <span style={{ color: "var(--text3)" }}>{k}</span>
                 <span style={{ fontWeight: 600 }}>{v}</span>
               </div>
@@ -457,15 +398,7 @@ function ExperimentDataBlock({ data }: { data?: Record<string, Record<string, st
   );
 }
 
-export function VerifyModal({
-  w,
-  run,
-  onClose,
-}: {
-  w: Wip;
-  run: RunFn;
-  onClose: () => void;
-}) {
+export function VerifyModal({ w, run, onClose }: { w: Wip; run: RunFn; onClose: () => void }) {
   return (
     <Modal
       open
@@ -477,10 +410,7 @@ export function VerifyModal({
           <Btn
             variant="primary"
             onClick={() =>
-              run(
-                () => experimentsApi.verify(w.wipId, { operator: "實驗室人員" }),
-                "數據已驗證",
-              )
+              run(() => experimentsApi.verify(w.wipId, { operator: "實驗室人員" }), "數據已驗證")
             }
           >
             確認數據無誤，完成驗證
@@ -626,11 +556,7 @@ export function DetailModal({ w, onClose }: { w: Wip; onClose: () => void }) {
 function Info({ label, v }: { label: string; v: string }) {
   return (
     <div>
-      <div
-        style={{ fontSize: 10, color: "var(--text3)", fontFamily: "monospace" }}
-      >
-        {label}
-      </div>
+      <div style={{ fontSize: 10, color: "var(--text3)", fontFamily: "monospace" }}>{label}</div>
       <div style={{ marginTop: 2 }}>{v}</div>
     </div>
   );

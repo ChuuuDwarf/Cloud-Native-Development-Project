@@ -21,10 +21,7 @@ export default function RecipeTable({ recipes }: { recipes: Recipe[] }) {
         </thead>
         <tbody>
           {recipes.map((recipe) => (
-            <tr
-              key={recipe.recipeId}
-              style={{ borderBottom: "1px solid var(--border2)" }}
-            >
+            <tr key={recipe.recipeId} style={{ borderBottom: "1px solid var(--border2)" }}>
               <td style={tdStyle}>
                 <div style={{ fontFamily: "monospace", color: "var(--text)" }}>
                   {recipe.recipeId}
@@ -46,18 +43,13 @@ export default function RecipeTable({ recipes }: { recipes: Recipe[] }) {
               <td style={tdStyle}>
                 {recipe.updatedBy}
                 <br />
-                <span style={{ color: "var(--text3)", fontSize: 11 }}>
-                  {recipe.updatedAt}
-                </span>
+                <span style={{ color: "var(--text3)", fontSize: 11 }}>{recipe.updatedAt}</span>
               </td>
             </tr>
           ))}
           {recipes.length === 0 && (
             <tr>
-              <td
-                colSpan={HEADERS.length}
-                style={{ ...tdStyle, textAlign: "center", padding: 28 }}
-              >
+              <td colSpan={HEADERS.length} style={{ ...tdStyle, textAlign: "center", padding: 28 }}>
                 尚無 Recipe，請先建立機台，再新增 Recipe。
               </td>
             </tr>

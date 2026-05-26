@@ -36,8 +36,8 @@ export default function CreateUserModal({
     onSuccess: () => onCreated(),
     onError: (err: unknown) => {
       const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })
-          ?.response?.data?.error?.message ?? "建立失敗";
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
+          ?.message ?? "建立失敗";
       setError(msg);
     },
   });
@@ -129,9 +129,7 @@ export default function CreateUserModal({
           <select
             style={inputStyle}
             value={form.departmentId ?? ""}
-            onChange={(e) =>
-              setForm({ ...form, departmentId: e.target.value || null })
-            }
+            onChange={(e) => setForm({ ...form, departmentId: e.target.value || null })}
           >
             <option value="">— 未指定 —</option>
             {departments.map((d) => (
@@ -145,9 +143,7 @@ export default function CreateUserModal({
           <select
             style={inputStyle}
             value={form.labId ?? ""}
-            onChange={(e) =>
-              setForm({ ...form, labId: e.target.value || null })
-            }
+            onChange={(e) => setForm({ ...form, labId: e.target.value || null })}
           >
             <option value="">— 未指定 —</option>
             {labs.map((l) => (
@@ -186,13 +182,7 @@ export default function CreateUserModal({
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span style={{ fontSize: 11, color: "var(--text2)" }}>{label}</span>

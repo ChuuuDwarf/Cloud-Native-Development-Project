@@ -23,7 +23,7 @@ export function useResourceQuery<T>(
   queryKey: readonly unknown[],
   queryFn: () => Promise<T>,
   fallback: T,
-  options?: { refetchInterval?: number },
+  options?: { refetchInterval?: number }
 ): ResourceResult<T> {
   const query = useQuery({ queryKey, queryFn, retry: 1, ...options });
 

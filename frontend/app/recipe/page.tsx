@@ -3,11 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import KpiCard from "@/components/ui/KpiCard";
-import {
-  machinesApi,
-  recipesApi,
-  type RecipePayload,
-} from "@/services/recipes-api";
+import { machinesApi, recipesApi, type RecipePayload } from "@/services/recipes-api";
 import RecipeForm from "./RecipeForm";
 import RecipeTable from "./RecipeTable";
 
@@ -26,17 +22,11 @@ export default function RecipePage() {
   });
 
   const recipes = useMemo(() => recipesQuery.data ?? [], [recipesQuery.data]);
-  const machines = useMemo(
-    () => machinesQuery.data ?? [],
-    [machinesQuery.data],
-  );
+  const machines = useMemo(() => machinesQuery.data ?? [], [machinesQuery.data]);
 
   const experimentItems = useMemo(
-    () =>
-      Array.from(
-        new Set(machines.flatMap((machine) => machine.supportedItems)),
-      ),
-    [machines],
+    () => Array.from(new Set(machines.flatMap((machine) => machine.supportedItems))),
+    [machines]
   );
 
   const create = useMutation({
@@ -48,12 +38,8 @@ export default function RecipePage() {
   });
 
   const parameterCount = useMemo(
-    () =>
-      recipes.reduce(
-        (sum, recipe) => sum + Object.keys(recipe.parameters).length,
-        0,
-      ),
-    [recipes],
+    () => recipes.reduce((sum, recipe) => sum + Object.keys(recipe.parameters).length, 0),
+    [recipes]
   );
 
   return (
@@ -76,8 +62,7 @@ export default function RecipePage() {
               fontFamily: "monospace",
             }}
           >
-            ROLE C · POSTGRESQL ·{" "}
-            {statusLine(recipesQuery, machinesQuery, create.isError)}
+            ROLE C · POSTGRESQL · {statusLine(recipesQuery, machinesQuery, create.isError)}
           </p>
         </div>
       </div>
@@ -120,9 +105,7 @@ export default function RecipePage() {
         />
       </div>
 
-      <div
-        style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16 }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16 }}>
         <RecipeForm
           key={formNonce}
           machines={machines}
@@ -139,12 +122,10 @@ export default function RecipePage() {
 function statusLine(
   recipesQuery: { isLoading: boolean; isError: boolean },
   machinesQuery: { isLoading: boolean; isError: boolean },
-  createError: boolean,
+  createError: boolean
 ): string {
   if (recipesQuery.isLoading || machinesQuery.isLoading) return "讀取資料庫中";
-  if (recipesQuery.isError || machinesQuery.isError)
-    return "後端或 PostgreSQL 尚未啟動";
-  if (createError)
-    return "建立 Recipe 失敗，只有實驗室人員可建立，並請確認機台與 Recipe ID";
+  if (recipesQuery.isError || machinesQuery.isError) return "後端或 PostgreSQL 尚未啟動";
+  if (createError) return "建立 Recipe 失敗，只有實驗室人員可建立，並請確認機台與 Recipe ID";
   return "已連線 PostgreSQL";
 }

@@ -120,7 +120,7 @@ const nav: NavSection[] = [
         href: "/report",
         icon: "📊",
         label: "實驗報告管理",
-        roles: ["system_admin",  "lab_supervisor"],
+        roles: ["system_admin", "lab_supervisor"],
       },
       {
         id: "closure",

@@ -56,53 +56,36 @@ export const reportsApi = {
 
   /** 報告範本清單。 */
   async listTemplates(): Promise<ReportTemplate[]> {
-    const res =
-      await httpClient.get<PageResponse<ReportTemplate>>("/reports/templates");
+    const res = await httpClient.get<PageResponse<ReportTemplate>>("/reports/templates");
     return res.data.items;
   },
 
   /** 存報告範本（可參考委託單或由現有報告存成）。 */
   async saveTemplate(payload: ReportTemplatePayload): Promise<ReportTemplate> {
-    const res = await httpClient.post<ApiResponse<ReportTemplate>>(
-      "/reports/templates",
-      payload,
-    );
+    const res = await httpClient.post<ApiResponse<ReportTemplate>>("/reports/templates", payload);
     return res.data.data;
   },
 
   async edit(reportId: string, payload: ReportEditPayload): Promise<Report> {
-    const res = await httpClient.patch<ApiResponse<Report>>(
-      `/reports/${reportId}`,
-      payload,
-    );
+    const res = await httpClient.patch<ApiResponse<Report>>(`/reports/${reportId}`, payload);
     return res.data.data;
   },
 
   /** 送審 (草稿/已改版 → 待審核). */
   async submit(reportId: string): Promise<Report> {
-    const res = await httpClient.post<ApiResponse<Report>>(
-      `/reports/${reportId}/submit`,
-    );
+    const res = await httpClient.post<ApiResponse<Report>>(`/reports/${reportId}/submit`);
     return res.data.data;
   },
 
   /** 主管審核 (確認 / 退回). */
-  async review(
-    reportId: string,
-    payload: ReportReviewPayload,
-  ): Promise<Report> {
-    const res = await httpClient.post<ApiResponse<Report>>(
-      `/reports/${reportId}/review`,
-      payload,
-    );
+  async review(reportId: string, payload: ReportReviewPayload): Promise<Report> {
+    const res = await httpClient.post<ApiResponse<Report>>(`/reports/${reportId}/review`, payload);
     return res.data.data;
   },
 
   /** 發布並回傳使用者 (已確認 → 已發布/已回傳). */
   async publish(reportId: string): Promise<Report> {
-    const res = await httpClient.post<ApiResponse<Report>>(
-      `/reports/${reportId}/publish`,
-    );
+    const res = await httpClient.post<ApiResponse<Report>>(`/reports/${reportId}/publish`);
     return res.data.data;
   },
 };

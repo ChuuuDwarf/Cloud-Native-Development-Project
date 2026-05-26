@@ -76,15 +76,9 @@ export default function DispatchPage() {
   const [prefill, setPrefill] = useState<Record<string, string> | null>(null);
   const [prefillNonce, setPrefillNonce] = useState(0);
 
-  const machines = useMemo(
-    () => machinesQuery.data ?? [],
-    [machinesQuery.data],
-  );
+  const machines = useMemo(() => machinesQuery.data ?? [], [machinesQuery.data]);
   const recipes = useMemo(() => recipesQuery.data ?? [], [recipesQuery.data]);
-  const dispatches = useMemo(
-    () => dispatchesQuery.data ?? [],
-    [dispatchesQuery.data],
-  );
+  const dispatches = useMemo(() => dispatchesQuery.data ?? [], [dispatchesQuery.data]);
 
   const invalidateDispatches = () => {
     queryClient.invalidateQueries({ queryKey: ["dispatches"] });
@@ -97,11 +91,10 @@ export default function DispatchPage() {
     const raw = wipsQuery.data;
     const items: WipLite[] = Array.isArray(raw) ? raw : (raw?.data ?? []);
     const dispatchedWipNos = new Set(
-      (dispatchesQuery.data ?? []).map((dispatch) => dispatch.wipId),
+      (dispatchesQuery.data ?? []).map((dispatch) => dispatch.wipId)
     );
     return items.filter(
-      (wip) =>
-        wip.status === "waiting_schedule" && !dispatchedWipNos.has(wip.wip_no),
+      (wip) => wip.status === "waiting_schedule" && !dispatchedWipNos.has(wip.wip_no)
     );
   }, [wipsQuery.data, dispatchesQuery.data]);
 
@@ -118,8 +111,7 @@ export default function DispatchPage() {
   }
 
   const create = useMutation({
-    mutationFn: (payload: CreateDispatchPayload) =>
-      dispatchesApi.create(payload),
+    mutationFn: (payload: CreateDispatchPayload) => dispatchesApi.create(payload),
     onSuccess: invalidateDispatches,
   });
 
@@ -152,11 +144,8 @@ export default function DispatchPage() {
   });
 
   const experimentItems = useMemo(
-    () =>
-      Array.from(
-        new Set(machines.flatMap((machine) => machine.supportedItems)),
-      ),
-    [machines],
+    () => Array.from(new Set(machines.flatMap((machine) => machine.supportedItems))),
+    [machines]
   );
 
   const activeDispatch =
@@ -170,16 +159,11 @@ export default function DispatchPage() {
     ? scheduleDrafts[activeDispatch.dispatchId]
     : undefined;
   const scheduledStart =
-    activeScheduleDraft?.scheduledStart ??
-    toDateTimeLocal(activeDispatch?.scheduledStart);
+    activeScheduleDraft?.scheduledStart ?? toDateTimeLocal(activeDispatch?.scheduledStart);
   const scheduledEnd =
-    activeScheduleDraft?.scheduledEnd ??
-    toDateTimeLocal(activeDispatch?.scheduledEnd);
+    activeScheduleDraft?.scheduledEnd ?? toDateTimeLocal(activeDispatch?.scheduledEnd);
 
-  function updateScheduleDraft(
-    field: "scheduledStart" | "scheduledEnd",
-    value: string,
-  ) {
+  function updateScheduleDraft(field: "scheduledStart" | "scheduledEnd", value: string) {
     if (!activeDispatch) return;
     setScheduleDrafts((current) => ({
       ...current,
@@ -206,15 +190,13 @@ export default function DispatchPage() {
     return machines.filter(
       (machine) =>
         machine.supportedItems.includes(activeDispatch.experimentItem) &&
-        !BLOCKED.includes(machine.status),
+        !BLOCKED.includes(machine.status)
     );
   }, [activeDispatch, machines]);
 
   const selectedMachineId =
     activeDispatch?.suggestedMachineId &&
-    assignableMachines.some(
-      (machine) => machine.machineId === activeDispatch.suggestedMachineId,
-    )
+    assignableMachines.some((machine) => machine.machineId === activeDispatch.suggestedMachineId)
       ? activeDispatch.suggestedMachineId
       : assignableMachines[0]?.machineId;
 
@@ -223,7 +205,7 @@ export default function DispatchPage() {
     return recipes.filter(
       (recipe) =>
         recipe.experimentItem === activeDispatch.experimentItem &&
-        recipe.machineIds.includes(selectedMachineId),
+        recipe.machineIds.includes(selectedMachineId)
     );
   }, [activeDispatch, recipes, selectedMachineId]);
 
@@ -241,17 +223,12 @@ export default function DispatchPage() {
 
   const summary = useMemo(
     () => ({
-      pending: dispatches.filter((dispatch) => dispatch.status === "待排程")
-        .length,
-      scheduling: dispatches.filter((dispatch) => dispatch.status === "待派工")
-        .length,
-      ready: dispatches.filter((dispatch) => dispatch.status === "待上機")
-        .length,
-      blockedMachines: machines.filter((machine) =>
-        BLOCKED.includes(machine.status),
-      ).length,
+      pending: dispatches.filter((dispatch) => dispatch.status === "待排程").length,
+      scheduling: dispatches.filter((dispatch) => dispatch.status === "待派工").length,
+      ready: dispatches.filter((dispatch) => dispatch.status === "待上機").length,
+      blockedMachines: machines.filter((machine) => BLOCKED.includes(machine.status)).length,
     }),
-    [dispatches, machines],
+    [dispatches, machines]
   );
 
   function handleReplan(reason: string, recommendedStrategy: Strategy) {
@@ -272,13 +249,9 @@ export default function DispatchPage() {
 
   // 只有「待派工」的派工單能確認派工（待上機已派完，待排程需先排程）。
   const canAssign = Boolean(
-    selectedMachineId &&
-      assignableRecipes[0] &&
-      activeDispatch?.status === "待派工",
+    selectedMachineId && assignableRecipes[0] && activeDispatch?.status === "待派工"
   );
-  const canApplySuggested = Boolean(
-    activeDispatch?.scheduledStart && activeDispatch?.scheduledEnd,
-  );
+  const canApplySuggested = Boolean(activeDispatch?.scheduledStart && activeDispatch?.scheduledEnd);
 
   return (
     <div>
@@ -313,11 +286,7 @@ export default function DispatchPage() {
               <option key={item}>{item}</option>
             ))}
           </select>
-          <button
-            onClick={() => suggest.mutate()}
-            disabled={suggest.isPending}
-            style={buttonStyle}
-          >
+          <button onClick={() => suggest.mutate()} disabled={suggest.isPending} style={buttonStyle}>
             {suggest.isPending ? "產生中…" : "產生建議"}
           </button>
         </div>
@@ -374,19 +343,13 @@ export default function DispatchPage() {
           <div style={hintTextStyle}>讀取中…</div>
         ) : waitingWips.length === 0 ? (
           <div style={hintTextStyle}>
-            目前沒有待排程的 WIP。請先到「分貨 / WIP」頁建立 WIP 並按「前往排程 /
-            派工」。
+            目前沒有待排程的 WIP。請先到「分貨 / WIP」頁建立 WIP 並按「前往排程 / 派工」。
           </div>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {waitingWips.map((wip) => (
-              <button
-                key={wip.id}
-                onClick={() => pickWipForDispatch(wip)}
-                style={wipChipStyle}
-              >
-                {wip.wip_no} · {wip.experiment_item ?? "-"} ·{" "}
-                {wip.lab_name ?? "-"}
+              <button key={wip.id} onClick={() => pickWipForDispatch(wip)} style={wipChipStyle}>
+                {wip.wip_no} · {wip.experiment_item ?? "-"} · {wip.lab_name ?? "-"}
               </button>
             ))}
           </div>

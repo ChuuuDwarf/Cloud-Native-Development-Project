@@ -61,47 +61,33 @@ export default function DispatchTable({
               <td style={tdStyle}>
                 {dispatch.wipId}
                 <br />
-                <span style={{ color: "var(--text3)" }}>
-                  {dispatch.orderId}
-                </span>
+                <span style={{ color: "var(--text3)" }}>{dispatch.orderId}</span>
               </td>
               <td style={tdStyle}>{formatLab(dispatch.lab)}</td>
               <td style={tdStyle}>{dispatch.experimentItem}</td>
               <td style={tdStyle}>{dispatch.priority}</td>
               <td style={tdStyle}>{dispatch.dueAt}</td>
               <td style={tdStyle}>
-                <Chip
-                  type={STATUS_CHIP[dispatch.status]}
-                  label={dispatch.status}
-                />
+                <Chip type={STATUS_CHIP[dispatch.status]} label={dispatch.status} />
               </td>
               <td style={tdStyle}>
-                {dispatch.assignedMachineId ??
-                  dispatch.suggestedMachineId ??
-                  "尚未產生"}
+                {dispatch.assignedMachineId ?? dispatch.suggestedMachineId ?? "尚未產生"}
               </td>
               <td style={tdStyle}>
                 {dispatch.scheduledStart ?? "-"}
                 <br />
-                <span style={{ color: "var(--text3)" }}>
-                  {dispatch.scheduledEnd ?? ""}
-                </span>
+                <span style={{ color: "var(--text3)" }}>{dispatch.scheduledEnd ?? ""}</span>
               </td>
               <td style={tdStyle}>
                 {dispatch.replanReason ?? "-"}
                 <br />
-                <span style={{ color: "var(--text3)" }}>
-                  {dispatch.strategy ?? ""}
-                </span>
+                <span style={{ color: "var(--text3)" }}>{dispatch.strategy ?? ""}</span>
               </td>
             </tr>
           ))}
           {dispatches.length === 0 && (
             <tr>
-              <td
-                colSpan={HEADERS.length}
-                style={{ ...tdStyle, textAlign: "center", padding: 28 }}
-              >
+              <td colSpan={HEADERS.length} style={{ ...tdStyle, textAlign: "center", padding: 28 }}>
                 尚無 WIP，請從左側新增。
               </td>
             </tr>

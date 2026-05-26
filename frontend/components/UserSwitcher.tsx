@@ -26,29 +26,20 @@ export function authHeaders(userId?: string) {
 function userScopeLabel(user?: AppUser) {
   if (!user) return "未連線";
   if (user.lab) return formatLab(user.lab);
-  return user.role === "實驗室大主管" || user.role === "系統管理者"
-    ? "全 LAB"
-    : user.department;
+  return user.role === "實驗室大主管" || user.role === "系統管理者" ? "全 LAB" : user.department;
 }
 
-export default function UserSwitcher({
-  onChange,
-}: {
-  onChange?: (user: AppUser) => void;
-}) {
+export default function UserSwitcher({ onChange }: { onChange?: (user: AppUser) => void }) {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [currentUserId, setCurrentUserId] = useState(getCurrentUserId);
 
   useEffect(() => {
     fetch(`${apiUrl}/api/users`)
-      .then((res) =>
-        res.ok ? res.json() : Promise.reject(new Error("users failed")),
-      )
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("users failed"))))
       .then((payload: { data: AppUser[] }) => {
         setUsers(payload.data);
         const selectedUser =
-          payload.data.find((user) => user.userId === currentUserId) ??
-          payload.data[0];
+          payload.data.find((user) => user.userId === currentUserId) ?? payload.data[0];
         if (selectedUser) onChange?.(selectedUser);
       })
       .catch(() => undefined);

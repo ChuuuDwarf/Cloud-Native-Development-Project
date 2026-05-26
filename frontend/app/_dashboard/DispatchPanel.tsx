@@ -14,11 +14,7 @@ const STATUS_CHIP: Record<WipStatus, "pending" | "review" | "approved"> = {
 
 const HEADERS = ["WIP", "LAB", "實驗項目", "優先", "狀態", "機台", "預估時間"];
 
-export default function DispatchPanel({
-  dispatches,
-}: {
-  dispatches: DashboardDispatch[];
-}) {
+export default function DispatchPanel({ dispatches }: { dispatches: DashboardDispatch[] }) {
   return (
     <Panel title="WIP 進度追蹤" tag={`${dispatches.length} 筆`}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -33,33 +29,23 @@ export default function DispatchPanel({
         </thead>
         <tbody>
           {dispatches.slice(0, 8).map((dispatch) => (
-            <tr
-              key={dispatch.dispatchId}
-              style={{ borderBottom: "1px solid var(--border2)" }}
-            >
+            <tr key={dispatch.dispatchId} style={{ borderBottom: "1px solid var(--border2)" }}>
               <td style={tdStyle}>
                 {dispatch.wipId}
                 <br />
-                <span style={{ color: "var(--text3)" }}>
-                  {dispatch.orderId}
-                </span>
+                <span style={{ color: "var(--text3)" }}>{dispatch.orderId}</span>
               </td>
               <td style={tdStyle}>{formatLab(dispatch.lab)}</td>
               <td style={tdStyle}>{dispatch.experimentItem}</td>
               <td style={tdStyle}>{dispatch.priority}</td>
               <td style={tdStyle}>
-                <Chip
-                  type={STATUS_CHIP[dispatch.status]}
-                  label={dispatch.status}
-                />
+                <Chip type={STATUS_CHIP[dispatch.status]} label={dispatch.status} />
               </td>
               <td style={tdStyle}>{dispatch.suggestedMachineId ?? "-"}</td>
               <td style={tdStyle}>
                 {dispatch.scheduledStart ?? "-"}
                 <br />
-                <span style={{ color: "var(--text3)" }}>
-                  {dispatch.scheduledEnd ?? ""}
-                </span>
+                <span style={{ color: "var(--text3)" }}>{dispatch.scheduledEnd ?? ""}</span>
               </td>
             </tr>
           ))}

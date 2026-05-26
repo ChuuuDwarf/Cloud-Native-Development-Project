@@ -12,13 +12,7 @@ import {
 import MachineForm from "./MachineForm";
 import MachineTable from "./MachineTable";
 
-const STATUSES: MachineStatus[] = [
-  "閒置",
-  "使用中",
-  "保養中",
-  "故障中",
-  "停用",
-];
+const STATUSES: MachineStatus[] = ["閒置", "使用中", "保養中", "故障中", "停用"];
 const BLOCKED: MachineStatus[] = ["保養中", "故障中", "停用"];
 
 export default function MachinePage() {
@@ -32,13 +26,9 @@ export default function MachinePage() {
     queryKey: ["machines"],
     queryFn: machinesApi.list,
   });
-  const machines = useMemo(
-    () => machinesQuery.data ?? [],
-    [machinesQuery.data],
-  );
+  const machines = useMemo(() => machinesQuery.data ?? [], [machinesQuery.data]);
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["machines"] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["machines"] });
 
   const save = useMutation({
     mutationFn: (payload: MachinePayload) =>
@@ -53,8 +43,7 @@ export default function MachinePage() {
   });
 
   const applyStatus = useMutation({
-    mutationFn: (machineId: string) =>
-      machinesApi.updateStatus(machineId, selectedStatus),
+    mutationFn: (machineId: string) => machinesApi.updateStatus(machineId, selectedStatus),
     onSuccess: invalidate,
   });
 
@@ -62,9 +51,7 @@ export default function MachinePage() {
     const available = machines.filter((m) => m.status === "閒置").length;
     const blocked = machines.filter((m) => BLOCKED.includes(m.status)).length;
     const avg = machines.length
-      ? Math.round(
-          machines.reduce((sum, m) => sum + m.utilization, 0) / machines.length,
-        )
+      ? Math.round(machines.reduce((sum, m) => sum + m.utilization, 0) / machines.length)
       : 0;
     return { available, blocked, avg };
   }, [machines]);
@@ -89,8 +76,7 @@ export default function MachinePage() {
               fontFamily: "monospace",
             }}
           >
-            ROLE C ·{" "}
-            {statusLine(machinesQuery, save.isError || applyStatus.isError)}
+            ROLE C · {statusLine(machinesQuery, save.isError || applyStatus.isError)}
           </p>
         </div>
         <select
@@ -142,9 +128,7 @@ export default function MachinePage() {
         />
       </div>
 
-      <div
-        style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16 }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16 }}>
         <MachineForm
           key={`${editing?.machineId ?? "new"}-${formNonce}`}
           initial={editing}
@@ -165,7 +149,7 @@ export default function MachinePage() {
 
 function statusLine(
   query: { isLoading: boolean; isError: boolean },
-  mutationError: boolean,
+  mutationError: boolean
 ): string {
   if (query.isLoading) return "讀取資料庫中…";
   if (query.isError) return "後端或 PostgreSQL 尚未啟動";

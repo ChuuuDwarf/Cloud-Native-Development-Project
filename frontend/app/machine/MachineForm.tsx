@@ -61,9 +61,7 @@ export default function MachineForm({
   submitting: boolean;
   onSubmit: (payload: MachinePayload) => void;
 }) {
-  const [form, setForm] = useState<FormState>(
-    initial ? toFormState(initial) : EMPTY,
-  );
+  const [form, setForm] = useState<FormState>(initial ? toFormState(initial) : EMPTY);
 
   const isEdit = initial !== null;
   const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
@@ -115,11 +113,7 @@ export default function MachineForm({
           onChange={(e) => set({ name: e.target.value })}
           style={inputStyle}
         />
-        <select
-          value={form.lab}
-          onChange={(e) => set({ lab: e.target.value })}
-          style={inputStyle}
-        >
+        <select value={form.lab} onChange={(e) => set({ lab: e.target.value })} style={inputStyle}>
           <option value="">選擇實驗室</option>
           {LABS.map((lab) => (
             <option key={lab} value={lab}>

@@ -35,7 +35,7 @@ export default function EditModal({
                     conclusion,
                     attachmentName: attachmentName || null,
                   }),
-                "報告已更新",
+                "報告已更新"
               )
             }
           >

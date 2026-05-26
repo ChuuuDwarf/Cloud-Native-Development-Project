@@ -21,36 +21,27 @@ export const dispatchesApi = {
   },
 
   async create(payload: CreateDispatchPayload): Promise<Dispatch> {
-    const res = await httpClient.post<ApiResponse<Dispatch>>(
-      "/dispatches",
-      payload,
-    );
+    const res = await httpClient.post<ApiResponse<Dispatch>>("/dispatches", payload);
     return res.data.data;
   },
 
   async suggest(strategy: Strategy): Promise<Dispatch[]> {
-    const res = await httpClient.post<ApiResponse<Dispatch[]>>(
-      "/dispatches/suggest",
-      { strategy },
-    );
+    const res = await httpClient.post<ApiResponse<Dispatch[]>>("/dispatches/suggest", { strategy });
     return res.data.data;
   },
 
   async replan(reason: string, strategy: Strategy): Promise<Dispatch[]> {
-    const res = await httpClient.post<ApiResponse<Dispatch[]>>(
-      "/dispatches/replan",
-      { reason, strategy },
-    );
+    const res = await httpClient.post<ApiResponse<Dispatch[]>>("/dispatches/replan", {
+      reason,
+      strategy,
+    });
     return res.data.data;
   },
 
-  async assign(
-    dispatchId: string,
-    payload: AssignDispatchPayload,
-  ): Promise<Dispatch> {
+  async assign(dispatchId: string, payload: AssignDispatchPayload): Promise<Dispatch> {
     const res = await httpClient.post<ApiResponse<Dispatch>>(
       `/dispatches/${dispatchId}/assign`,
-      payload,
+      payload
     );
     return res.data.data;
   },

@@ -29,7 +29,7 @@ function renderPage() {
   return render(
     <QueryClientProvider client={client}>
       <ReportPage />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
 }
 

@@ -53,9 +53,7 @@ export default function Modal({
             background: "var(--s1)",
           }}
         >
-          <span style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>
-            {title}
-          </span>
+          <span style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>{title}</span>
           <button
             onClick={onClose}
             style={{
@@ -90,13 +88,7 @@ export default function Modal({
 }
 
 // 表單欄位
-export function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div
       style={{

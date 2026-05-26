@@ -49,7 +49,7 @@ export const experimentsApi = {
   /** 此 WIP 所屬實驗室的人員/主管（上機登記操作人下拉）。 */
   async getOperators(wipId: string): Promise<Operator[]> {
     const res = await httpClient.get<ApiResponse<Operator[]>>(
-      `/experiment-runs/${wipId}/operators`,
+      `/experiment-runs/${wipId}/operators`
     );
     return res.data.data;
   },
@@ -57,7 +57,7 @@ export const experimentsApi = {
   async checkIn(wipId: string, payload: CheckInPayload): Promise<Wip> {
     const res = await httpClient.post<ApiResponse<Wip>>(
       `/experiment-runs/${wipId}/check-in`,
-      payload,
+      payload
     );
     return res.data.data;
   },
@@ -65,23 +65,22 @@ export const experimentsApi = {
   async checkOut(wipId: string, payload: CheckOutPayload): Promise<Wip> {
     const res = await httpClient.post<ApiResponse<Wip>>(
       `/experiment-runs/${wipId}/check-out`,
-      payload,
+      payload
     );
     return res.data.data;
   },
 
   async updateProgress(wipId: string, progress: number): Promise<Wip> {
-    const res = await httpClient.patch<ApiResponse<Wip>>(
-      `/experiment-runs/${wipId}/progress`,
-      { progress },
-    );
+    const res = await httpClient.patch<ApiResponse<Wip>>(`/experiment-runs/${wipId}/progress`, {
+      progress,
+    });
     return res.data.data;
   },
 
   async uploadResult(wipId: string, payload: ResultPayload): Promise<Wip> {
     const res = await httpClient.post<ApiResponse<Wip>>(
       `/experiment-runs/${wipId}/result`,
-      payload,
+      payload
     );
     return res.data.data;
   },
@@ -89,7 +88,7 @@ export const experimentsApi = {
   async verify(wipId: string, payload: CheckOutPayload): Promise<Wip> {
     const res = await httpClient.post<ApiResponse<Wip>>(
       `/experiment-runs/${wipId}/verify`,
-      payload,
+      payload
     );
     return res.data.data;
   },
@@ -97,23 +96,22 @@ export const experimentsApi = {
   async confirm(wipId: string, payload: CheckOutPayload): Promise<Wip> {
     const res = await httpClient.post<ApiResponse<Wip>>(
       `/experiment-runs/${wipId}/confirm`,
-      payload,
+      payload
     );
     return res.data.data;
   },
 
   async abortRequest(wipId: string, reason: string): Promise<Wip> {
-    const res = await httpClient.post<ApiResponse<Wip>>(
-      `/experiment-runs/${wipId}/abort-request`,
-      { reason },
-    );
+    const res = await httpClient.post<ApiResponse<Wip>>(`/experiment-runs/${wipId}/abort-request`, {
+      reason,
+    });
     return res.data.data;
   },
 
   async abortReview(wipId: string, payload: AbortReviewPayload): Promise<Wip> {
     const res = await httpClient.post<ApiResponse<Wip>>(
       `/experiment-runs/${wipId}/abort-review`,
-      payload,
+      payload
     );
     return res.data.data;
   },
@@ -121,7 +119,7 @@ export const experimentsApi = {
   /** 模擬機台回報「完成」訊號 (POST /experiment-runs/{id}/machine-signal). */
   async machineSignal(wipId: string): Promise<unknown> {
     const res = await httpClient.post<ApiResponse<unknown>>(
-      `/experiment-runs/${wipId}/machine-signal`,
+      `/experiment-runs/${wipId}/machine-signal`
     );
     return res.data.data;
   },

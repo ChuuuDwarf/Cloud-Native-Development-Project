@@ -12,10 +12,7 @@ export default function LabsPanel({
   isGlobalView: boolean;
 }) {
   return (
-    <Panel
-      title={isGlobalView ? "各 LAB 情況" : "本 LAB 情況"}
-      tag={`${labs.length} LAB`}
-    >
+    <Panel title={isGlobalView ? "各 LAB 情況" : "本 LAB 情況"} tag={`${labs.length} LAB`}>
       <div
         style={{
           display: "grid",
@@ -71,9 +68,7 @@ function Metric({
       }}
     >
       <span>{label}</span>
-      <strong style={{ color: danger ? "var(--red)" : "var(--text)" }}>
-        {value}
-      </strong>
+      <strong style={{ color: danger ? "var(--red)" : "var(--text)" }}>{value}</strong>
     </div>
   );
 }

@@ -29,10 +29,7 @@ export default function DispatchAssignPanel({
   canApplySuggested: boolean;
   canAssign: boolean;
   assigning: boolean;
-  onScheduleChange: (
-    field: "scheduledStart" | "scheduledEnd",
-    value: string,
-  ) => void;
+  onScheduleChange: (field: "scheduledStart" | "scheduledEnd", value: string) => void;
   onApplySuggested: () => void;
   onAssign: () => void;
 }) {
@@ -47,27 +44,20 @@ export default function DispatchAssignPanel({
         }}
       >
         <div style={fieldLabelStyle}>實驗項目</div>
-        <div style={summaryBoxStyle}>
-          {activeDispatch?.experimentItem ?? "未選擇 WIP"}
-        </div>
+        <div style={summaryBoxStyle}>{activeDispatch?.experimentItem ?? "未選擇 WIP"}</div>
         <div style={fieldLabelStyle}>可派工機台</div>
         <div style={summaryBoxStyle}>
-          {assignableMachines
-            .map((machine) => `${machine.machineId} ${machine.name}`)
-            .join("、") ||
+          {assignableMachines.map((machine) => `${machine.machineId} ${machine.name}`).join("、") ||
             machineHint ||
             "無可用機台"}
         </div>
         <div style={fieldLabelStyle}>相容 Recipe</div>
         <div style={summaryBoxStyle}>
-          {assignableRecipes
-            .map((recipe) => `${recipe.recipeId} ${recipe.name}`)
-            .join("、") || "無相容 Recipe"}
+          {assignableRecipes.map((recipe) => `${recipe.recipeId} ${recipe.name}`).join("、") ||
+            "無相容 Recipe"}
         </div>
         <div style={fieldLabelStyle}>最終派工時間</div>
-        <div
-          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <input
             type="datetime-local"
             value={scheduledStart}
@@ -86,11 +76,7 @@ export default function DispatchAssignPanel({
             <Btn small disabled={!canApplySuggested} onClick={onApplySuggested}>
               套用系統預估時間
             </Btn>
-            <Btn
-              variant="primary"
-              disabled={!canAssign || assigning}
-              onClick={onAssign}
-            >
+            <Btn variant="primary" disabled={!canAssign || assigning} onClick={onAssign}>
               {assigning ? "派工中…" : "確認派工"}
             </Btn>
           </>

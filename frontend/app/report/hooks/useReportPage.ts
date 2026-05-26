@@ -42,11 +42,10 @@ export function useReportPage() {
 
   // 已有正式報告（已確認/已發布/已回傳）的 WIP 不再列入可建立清單，避免重複開立。
   const wipsWithFormalReport = new Set(
-    reports.filter((r) => FORMAL_REPORT_STATUSES.includes(r.status)).map((r) => r.wipId),
+    reports.filter((r) => FORMAL_REPORT_STATUSES.includes(r.status)).map((r) => r.wipId)
   );
   const creatable = wips.filter(
-    (w) =>
-      (w.status === "待確認" || w.status === "已完成") && !wipsWithFormalReport.has(w.wipId),
+    (w) => (w.status === "待確認" || w.status === "已完成") && !wipsWithFormalReport.has(w.wipId)
   );
   const draftReports = reports.filter((r) => DRAFT_STATUSES.includes(r.status));
   const formalReports = reports.filter((r) => !DRAFT_STATUSES.includes(r.status));

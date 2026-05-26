@@ -24,7 +24,7 @@ export default function CreateModal({
   const [conclusion, setConclusion] = useState("");
   // 預設勾選此 WIP 的實驗項目（生對應假數據）。
   const [items, setItems] = useState<string[]>(() =>
-    selectedWip?.experimentItem ? [selectedWip.experimentItem] : [],
+    selectedWip?.experimentItem ? [selectedWip.experimentItem] : []
   );
 
   function toggleItem(item: string) {
@@ -41,7 +41,7 @@ export default function CreateModal({
           templateId: templateId === "" ? null : templateId,
           submit: doSubmit,
         }),
-      doSubmit ? "已建立並送審" : "已建立報告草稿",
+      doSubmit ? "已建立並送審" : "已建立報告草稿"
     );
   }
 

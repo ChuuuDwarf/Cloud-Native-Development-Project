@@ -29,13 +29,7 @@ export type OrderAction =
   | "ready_for_pickup"
   | "close";
 
-export type PriorityLevel =
-  | "normal"
-  | "urgent"
-  | "critical"
-  | "low"
-  | "medium"
-  | "high";
+export type PriorityLevel = "normal" | "urgent" | "critical" | "low" | "medium" | "high";
 export type OrderStatusFilter = "all" | OrderStatus;
 
 export type Department = { id: string; code?: string; name: string };

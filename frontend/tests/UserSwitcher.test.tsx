@@ -1,10 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import UserSwitcher, {
-  authHeaders,
-  getCurrentUserId,
-} from "@/components/UserSwitcher";
+import UserSwitcher, { authHeaders, getCurrentUserId } from "@/components/UserSwitcher";
 
 describe("UserSwitcher helpers", () => {
   afterEach(() => {

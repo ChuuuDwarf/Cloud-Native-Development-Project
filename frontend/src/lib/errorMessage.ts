@@ -10,8 +10,7 @@ import type { ApiErrorBody } from "@/types/api";
  * error message, then a generic hint.
  */
 export function errorMessage(e: unknown): string {
-  const res = (e as { response?: { data?: ApiErrorBody } } | undefined)
-    ?.response;
+  const res = (e as { response?: { data?: ApiErrorBody } } | undefined)?.response;
   const backend = res?.data?.error?.message;
   if (backend) return backend;
   if (e instanceof Error && e.message) return e.message;

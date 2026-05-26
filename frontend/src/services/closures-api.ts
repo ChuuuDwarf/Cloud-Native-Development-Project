@@ -24,51 +24,40 @@ export const closuresApi = {
   async listStorage(status?: string): Promise<StorageItem[]> {
     const res = await httpClient.get<PageResponse<StorageItem>>(
       "/closures/storage",
-      status ? { params: { status } } : undefined,
+      status ? { params: { status } } : undefined
     );
     return res.data.items;
   },
 
   /** 轉待取件 (結單條件全部滿足後). */
   async toPickup(orderId: string): Promise<ClosureCheck> {
-    const res = await httpClient.post<ApiResponse<ClosureCheck>>(
-      `/closures/${orderId}/to-pickup`,
-    );
+    const res = await httpClient.post<ApiResponse<ClosureCheck>>(`/closures/${orderId}/to-pickup`);
     return res.data.data;
   },
 
   /** 樣品入庫. */
-  async inbound(
-    orderId: string,
-    payload: CloseStepPayload,
-  ): Promise<StorageItem> {
+  async inbound(orderId: string, payload: CloseStepPayload): Promise<StorageItem> {
     const res = await httpClient.post<ApiResponse<StorageItem>>(
       `/closures/${orderId}/inbound`,
-      payload,
+      payload
     );
     return res.data.data;
   },
 
   /** 樣品出庫取件. */
-  async outbound(
-    orderId: string,
-    payload: CloseStepPayload,
-  ): Promise<StorageItem> {
+  async outbound(orderId: string, payload: CloseStepPayload): Promise<StorageItem> {
     const res = await httpClient.post<ApiResponse<StorageItem>>(
       `/closures/${orderId}/outbound`,
-      payload,
+      payload
     );
     return res.data.data;
   },
 
   /** 委託單結案 (使用者取件後). */
-  async close(
-    orderId: string,
-    payload: CloseStepPayload,
-  ): Promise<ClosureCheck> {
+  async close(orderId: string, payload: CloseStepPayload): Promise<ClosureCheck> {
     const res = await httpClient.post<ApiResponse<ClosureCheck>>(
       `/closures/${orderId}/close`,
-      payload,
+      payload
     );
     return res.data.data;
   },

@@ -11,11 +11,7 @@ export default function RoleSwitcher({
 }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <span
-        style={{ fontSize: 10, color: "var(--text3)", fontFamily: "monospace" }}
-      >
-        目前角色
-      </span>
+      <span style={{ fontSize: 10, color: "var(--text3)", fontFamily: "monospace" }}>目前角色</span>
       <select
         value={role}
         onChange={(e) => onChange(e.target.value as Role)}

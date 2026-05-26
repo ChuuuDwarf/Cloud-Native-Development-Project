@@ -17,10 +17,7 @@ export const recipesApi = {
   },
 
   async update(recipeId: string, payload: RecipePayload): Promise<Recipe> {
-    const res = await httpClient.patch<ApiResponse<Recipe>>(
-      `/recipes/${recipeId}`,
-      payload,
-    );
+    const res = await httpClient.patch<ApiResponse<Recipe>>(`/recipes/${recipeId}`, payload);
     return res.data.data;
   },
 };

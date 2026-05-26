@@ -22,11 +22,8 @@ export default function Dashboard() {
 
   const isGlobalView = dashboard?.scope === "all";
   const blockedMachines = useMemo(
-    () =>
-      dashboard?.machines?.filter((machine) =>
-        BLOCKED_STATUSES.includes(machine.status),
-      ) ?? [],
-    [dashboard],
+    () => dashboard?.machines?.filter((machine) => BLOCKED_STATUSES.includes(machine.status)) ?? [],
+    [dashboard]
   );
 
   return (

@@ -28,7 +28,7 @@ export function downloadReport(r: Report) {
     "",
     "## 版本紀錄",
     ...r.versions.map(
-      (v) => `- v${v.version} · ${v.status}${v.note ? ` · ${v.note}` : ""}（${v.at} · ${v.by}）`,
+      (v) => `- v${v.version} · ${v.status}${v.note ? ` · ${v.note}` : ""}（${v.at} · ${v.by}）`
     ),
     "",
   ];

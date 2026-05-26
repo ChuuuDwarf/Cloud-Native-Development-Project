@@ -65,7 +65,7 @@ function RowActions({ w, canOperate, isChief, offline, open, run, flashError }: 
             onClick={() =>
               run(
                 () => experimentsApi.checkOut(w.wipId, { operator: w.operator ?? "實驗室人員" }),
-                "下機登記完成",
+                "下機登記完成"
               )
             }
           >
