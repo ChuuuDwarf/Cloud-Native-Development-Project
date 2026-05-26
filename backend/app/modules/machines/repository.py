@@ -14,8 +14,11 @@ class MachineRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_machines(self) -> Sequence[Machine]:
-        result = await self._session.execute(select(Machine).order_by(Machine.machine_id))
+    async def list_machines(self, lab_name: str | None = None) -> Sequence[Machine]:
+        stmt = select(Machine)
+        if lab_name is not None:
+            stmt = stmt.where(Machine.lab == lab_name)
+        result = await self._session.execute(stmt.order_by(Machine.machine_id))
         return result.scalars().all()
 
     async def get_by_machine_id(self, machine_id: str) -> Machine | None:

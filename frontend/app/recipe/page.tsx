@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 import KpiCard from "@/components/ui/KpiCard";
 import { machinesApi, recipesApi, type RecipePayload } from "@/services/recipes-api";
 import RecipeForm from "./RecipeForm";
@@ -9,6 +10,8 @@ import RecipeTable from "./RecipeTable";
 
 export default function RecipePage() {
   const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission("recipes:manage");
   // Bump to remount RecipeForm so it clears after a successful create.
   const [formNonce, setFormNonce] = useState(0);
 
@@ -62,7 +65,7 @@ export default function RecipePage() {
               fontFamily: "monospace",
             }}
           >
-            ROLE C · POSTGRESQL · {statusLine(recipesQuery, machinesQuery, create.isError)}
+            POSTGRESQL · {statusLine(recipesQuery, machinesQuery, create.error)}
           </p>
         </div>
       </div>
@@ -105,14 +108,18 @@ export default function RecipePage() {
         />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16 }}>
-        <RecipeForm
-          key={formNonce}
-          machines={machines}
-          experimentItems={experimentItems}
-          submitting={create.isPending}
-          onSubmit={(payload) => create.mutate(payload)}
-        />
+      <div
+        style={{ display: "grid", gridTemplateColumns: canManage ? "320px 1fr" : "1fr", gap: 16 }}
+      >
+        {canManage && (
+          <RecipeForm
+            key={formNonce}
+            machines={machines}
+            experimentItems={experimentItems}
+            submitting={create.isPending}
+            onSubmit={(payload) => create.mutate(payload)}
+          />
+        )}
         <RecipeTable recipes={recipes} />
       </div>
     </div>
@@ -122,10 +129,25 @@ export default function RecipePage() {
 function statusLine(
   recipesQuery: { isLoading: boolean; isError: boolean },
   machinesQuery: { isLoading: boolean; isError: boolean },
-  createError: boolean
+  createError: unknown
 ): string {
   if (recipesQuery.isLoading || machinesQuery.isLoading) return "讀取資料庫中";
   if (recipesQuery.isError || machinesQuery.isError) return "後端或 PostgreSQL 尚未啟動";
-  if (createError) return "建立 Recipe 失敗，只有實驗室人員可建立，並請確認機台與 Recipe ID";
+  if (createError) {
+    const msg = extractApiError(createError);
+    return msg ? `建立 Recipe 失敗：${msg}` : "建立 Recipe 失敗";
+  }
   return "已連線 PostgreSQL";
+}
+
+function extractApiError(err: unknown): string | null {
+  // axios error shape: err.response.data.error.message
+  if (typeof err === "object" && err !== null) {
+    const anyErr = err as {
+      response?: { data?: { error?: { message?: string } } };
+      message?: string;
+    };
+    return anyErr.response?.data?.error?.message ?? anyErr.message ?? null;
+  }
+  return null;
 }

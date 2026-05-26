@@ -6,12 +6,12 @@ import Panel from "@/components/ui/Panel";
 import { formatLab } from "@/components/labDisplay";
 import type { Machine, MachinePayload } from "@/types/machines";
 
-const LABS = ["LAB A", "LAB B", "LAB C"];
+const LABS = ["LAB-A", "LAB-B", "LAB-C"];
 
 const DEMO: FormState = {
   machineId: "AFM-004",
   name: "原子力顯微鏡",
-  lab: "LAB A",
+  lab: "LAB-A",
   supportedItems: "表面形貌分析, 粗糙度量測",
   owner: "林育誠",
   utilization: "18",

@@ -17,7 +17,8 @@ import logging
 from collections.abc import Sequence
 from datetime import datetime
 
-from app.common.errors import ConflictError, NotFoundError, ValidationError
+from app.common.dependencies.lab_scope import LabScope
+from app.common.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.db.models import Dispatch, Machine, WipHistory
 from app.modules.dispatches.repository import DispatchRepository
 from app.modules.dispatches.schemas import (
@@ -98,16 +99,22 @@ def _match_machine(item: str, machines: Sequence[Machine]) -> str | None:
 
 
 class DispatchService:
-    def __init__(self, repo: DispatchRepository) -> None:
+    def __init__(self, repo: DispatchRepository, scope: LabScope) -> None:
         self._repo = repo
+        self._scope = scope
 
     async def list_dispatches(self) -> list[dict]:
-        dispatches = await self._repo.list_dispatches()
+        if self._scope.restricted_without_lab:
+            return []
+        dispatches = await self._repo.list_dispatches(lab_code=self._scope.list_lab_code_filter())
         return [dispatch_dict(d) for d in dispatches]
 
     async def _require(self, dispatch_id: str) -> Dispatch:
         dispatch = await self._repo.get_by_dispatch_id(dispatch_id)
         if dispatch is None:
+            raise NotFoundError(f"找不到派工單：{dispatch_id}")
+        # Hide cross-lab dispatches as 404 (don't leak existence).
+        if not self._scope.sees_all_labs and dispatch.lab != self._scope.lab_code:
             raise NotFoundError(f"找不到派工單：{dispatch_id}")
         return dispatch
 
@@ -121,6 +128,20 @@ class DispatchService:
     async def create(self, payload: CreateDispatchPayload, created_by: str) -> dict:
         if await self._repo.get_by_dispatch_id(payload.dispatch_id) is not None:
             raise ConflictError(f"派工單編號已存在：{payload.dispatch_id}")
+
+        # Derive dispatch.lab from the WIP it's tied to, so future list-scope
+        # filters can find it. WIP stores display name (Chinese), dispatches
+        # stores short code; resolve via labs table.
+        wip = await self._repo.get_wip_by_no(payload.wip_id)
+        if wip is None:
+            raise NotFoundError(f"找不到 WIP：{payload.wip_id}")
+        dispatch_lab = ""
+        if wip.lab_name:
+            dispatch_lab = (await self._repo.lab_code_for_name(wip.lab_name)) or ""
+        # Reject if caller can't access this WIP's lab.
+        if not self._scope.can_access_lab(dispatch_lab):
+            raise ForbiddenError(f"無權限為實驗室 {dispatch_lab} 建立派工單")
+
         dispatch = Dispatch(
             dispatch_id=payload.dispatch_id,
             wip_id=payload.wip_id,
@@ -130,6 +151,7 @@ class DispatchService:
             due_at=payload.due_at,
             status=STATUS_PENDING,
             created_by=created_by,
+            lab=dispatch_lab,
         )
         self._repo.add(dispatch)
         # 建立派工單 → WIP 進入待排程（送排程）。
@@ -147,8 +169,11 @@ class DispatchService:
         """Run the chosen strategy over all 待排程 dispatches: set a suggested
         machine and move them to 待派工. Returns the affected dispatches."""
         self._validate_strategy(strategy)
-        pending = list(await self._repo.list_by_statuses([STATUS_PENDING]))
-        machines = await self._repo.list_machines()
+        if self._scope.restricted_without_lab:
+            return []
+        lab_filter = self._scope.list_lab_code_filter()
+        pending = list(await self._repo.list_by_statuses([STATUS_PENDING], lab_code=lab_filter))
+        machines = await self._repo.list_machines(lab_code=lab_filter)
         ordered = _order_by_strategy(pending, strategy)
         for d in ordered:
             d.suggested_machine_id = _match_machine(d.experiment_item, machines)
@@ -169,8 +194,15 @@ class DispatchService:
         """Re-run suggestion for 待派工 (and 待排程) dispatches with a new
         strategy; record strategy + replanReason. Returns affected dispatches."""
         self._validate_strategy(strategy)
-        affected = list(await self._repo.list_by_statuses([STATUS_PENDING, STATUS_SCHEDULING]))
-        machines = await self._repo.list_machines()
+        if self._scope.restricted_without_lab:
+            return []
+        lab_filter = self._scope.list_lab_code_filter()
+        affected = list(
+            await self._repo.list_by_statuses(
+                [STATUS_PENDING, STATUS_SCHEDULING], lab_code=lab_filter
+            )
+        )
+        machines = await self._repo.list_machines(lab_code=lab_filter)
         ordered = _order_by_strategy(affected, strategy)
         for d in ordered:
             d.suggested_machine_id = _match_machine(d.experiment_item, machines)
@@ -198,6 +230,10 @@ class DispatchService:
 
         machine = await self._repo.get_machine(payload.machine_id)
         if machine is None:
+            raise NotFoundError(f"找不到機台：{payload.machine_id}")
+        # Block assigning a machine from another lab (same 404 as not-found
+        # so existence isn't leaked).
+        if not self._scope.can_access_lab(machine.lab):
             raise NotFoundError(f"找不到機台：{payload.machine_id}")
         if dispatch.experiment_item not in (machine.supported_items or []):
             raise ValidationError(

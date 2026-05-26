@@ -76,7 +76,7 @@ export default function MachinePage() {
               fontFamily: "monospace",
             }}
           >
-            ROLE C · {statusLine(machinesQuery, save.isError || applyStatus.isError)}
+            {statusLine(machinesQuery, save.error ?? applyStatus.error)}
           </p>
         </div>
         <select
@@ -149,12 +149,26 @@ export default function MachinePage() {
 
 function statusLine(
   query: { isLoading: boolean; isError: boolean },
-  mutationError: boolean
+  mutationError: unknown
 ): string {
   if (query.isLoading) return "讀取資料庫中…";
   if (query.isError) return "後端或 PostgreSQL 尚未啟動";
-  if (mutationError) return "操作失敗，請確認權限、ID 不重複且後端已啟動";
+  if (mutationError) {
+    const msg = extractApiError(mutationError);
+    return msg ? `操作失敗：${msg}` : "操作失敗，請確認權限、ID 不重複且後端已啟動";
+  }
   return "已連線 PostgreSQL";
+}
+
+function extractApiError(err: unknown): string | null {
+  if (typeof err === "object" && err !== null) {
+    const anyErr = err as {
+      response?: { data?: { error?: { message?: string } } };
+      message?: string;
+    };
+    return anyErr.response?.data?.error?.message ?? anyErr.message ?? null;
+  }
+  return null;
 }
 
 const selectStyle: React.CSSProperties = {

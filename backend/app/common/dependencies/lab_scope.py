@@ -1,10 +1,15 @@
-"""Lab/factory scoping for 組員 D's modules (experiment_runs / reports / closures).
+"""Lab/factory scoping for 組員 D's modules (experiment_runs / reports / closures)
+and 組員 C's modules (machines / dispatches).
 
-D operates on B's ``wips`` table, whose ``lab_name`` column stores the lab's
-display name (``labs.name``, e.g. ``電性測試實驗室``). The auth ``CurrentUser``
-only carries ``lab_id`` (UUID), so we resolve it once to the lab name and
-compare against ``wips.lab_name`` — mirroring how B's ``wip_service`` /
-``transfer_service`` scope visibility by ``lab_name``.
+D's tables (``wips`` etc.) store the lab's **display name** in ``lab_name``
+(``labs.name``, e.g. ``電性測試實驗室``).
+C's tables (``machines.lab``, ``dispatches.lab``) store the **short code**
+(``labs.code``, e.g. ``LAB-A``).
+
+The auth ``CurrentUser`` only carries ``lab_id`` (UUID), so we resolve it
+once to *both* the lab name and code and let each caller pick the one that
+matches its column. A single canonical column would have been preferable
+but is not where the legacy data sits.
 
 Scoping rule (satisfies the requested "非此 lab 看不到此單" lab isolation):
 
@@ -32,30 +37,40 @@ from app.db.models import Lab
 
 @dataclass(frozen=True)
 class LabScope:
-    """Resolved lab-visibility context for the current request."""
+    """Resolved lab-visibility context for the current request.
+
+    ``lab_name`` matches D's ``lab_name`` columns (Chinese display string).
+    ``lab_code`` matches C's ``lab`` columns (short code, e.g. ``LAB-A``).
+    """
 
     role: str
     lab_name: str | None
+    lab_code: str | None = None
 
     @classmethod
     def system(cls) -> LabScope:
         """An unrestricted scope for system/background contexts (e.g. Celery)."""
-        return cls(role="system_admin", lab_name=None)
+        return cls(role="system_admin", lab_name=None, lab_code=None)
 
     @property
     def sees_all_labs(self) -> bool:
         return self.role == "system_admin"
 
     def can_access_lab(self, target_lab: str | None) -> bool:
-        """Whether the user may see/operate on a row belonging to ``target_lab``."""
+        """Whether the user may see/operate on a row whose ``lab`` column matches.
+
+        Matches ``target_lab`` against EITHER ``lab_name`` or ``lab_code``, so the
+        same scope object works for D's ``lab_name``-keyed rows and C's
+        ``lab_code``-keyed rows without the caller having to pick.
+        """
         if self.sees_all_labs:
             return True
-        if not self.lab_name:
+        if not self.lab_name and not self.lab_code:
             return False
-        return target_lab == self.lab_name
+        return target_lab == self.lab_name or target_lab == self.lab_code
 
     def list_lab_filter(self) -> str | None:
-        """The ``lab_name`` to filter list queries by, or ``None`` for "all labs".
+        """The ``lab_name`` (D-style) to filter list queries by, or ``None`` for "all labs".
 
         Callers must first short-circuit to an empty result when the user is
         restricted but has no lab (``restricted_without_lab``); otherwise a
@@ -63,19 +78,33 @@ class LabScope:
         """
         return None if self.sees_all_labs else self.lab_name
 
+    def list_lab_code_filter(self) -> str | None:
+        """The ``lab_code`` (C-style) to filter list queries by, or ``None`` for "all labs"."""
+        return None if self.sees_all_labs else self.lab_code
+
     @property
     def restricted_without_lab(self) -> bool:
         """A non-admin who has no lab — they should see nothing."""
-        return not self.sees_all_labs and not self.lab_name
+        return not self.sees_all_labs and not self.lab_name and not self.lab_code
+
+
+async def resolve_lab(db: AsyncSession, lab_id: uuid.UUID | None) -> tuple[str | None, str | None]:
+    """Resolve a lab_id to (name, code). Returns (None, None) if not found."""
+    if lab_id is None:
+        return None, None
+    result = await db.execute(select(Lab.name, Lab.code).where(Lab.id == lab_id))
+    row = result.first()
+    if row is None:
+        return None, None
+    return row.name, row.code
 
 
 async def resolve_lab_name(db: AsyncSession, lab_id: uuid.UUID | None) -> str | None:
-    if lab_id is None:
-        return None
-    result = await db.execute(select(Lab.name).where(Lab.id == lab_id))
-    return result.scalars().first()
+    """Backwards-compat: name-only resolver retained for callers that only need name."""
+    name, _ = await resolve_lab(db, lab_id)
+    return name
 
 
 async def build_lab_scope(user: CurrentUser, db: AsyncSession) -> LabScope:
-    lab_name = await resolve_lab_name(db, user.lab_id)
-    return LabScope(role=user.role, lab_name=lab_name)
+    lab_name, lab_code = await resolve_lab(db, user.lab_id)
+    return LabScope(role=user.role, lab_name=lab_name, lab_code=lab_code)
