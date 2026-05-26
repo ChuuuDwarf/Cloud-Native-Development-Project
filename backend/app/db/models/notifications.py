@@ -7,7 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.common.enums import NotificationStatus, Severity
+from app.common.enums import NotificationChannel, NotificationStatus, Severity
 from app.db.base import Base, TimestampMixin
 
 
@@ -35,7 +35,14 @@ class Notification(Base, TimestampMixin):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False, default="")
     severity: Mapped[Severity] = mapped_column(String(20), nullable=False, default=Severity.MEDIUM)
-    channel: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    # Stored as plain String(40) (not a PG enum type) so we can add new
+    # channels via Python enum + sync_enums.py without an alembic migration.
+    channel: Mapped[NotificationChannel] = mapped_column(
+        String(40),
+        nullable=False,
+        default=NotificationChannel.IN_APP,
+        index=True,
+    )
 
     status: Mapped[NotificationStatus] = mapped_column(
         String(20),
