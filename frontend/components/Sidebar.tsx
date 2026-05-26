@@ -136,6 +136,13 @@ const nav: NavSection[] = [
         label: "異常與告警",
         roles: ["system_admin", "lab_supervisor", "lab_engineer"],
       },
+      {
+        id: "notifications",
+        href: "/notifications",
+        icon: "🔔",
+        label: "通知中心",
+        roles: ["system_admin", "lab_supervisor", "lab_engineer", "plant_user"],
+      },
     ],
   },
   {
