@@ -7,7 +7,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { masterDataApi } from "@/services/master-data-api";
 
-type RoleName = "system_admin" | "lab_supervisor" | "lab_engineer" | "plant_user";
+type RoleName =
+  | "system_admin"
+  | "general_supervisor"
+  | "lab_supervisor"
+  | "lab_engineer"
+  | "plant_user";
 
 interface NavItem {
   id: string;
@@ -32,7 +37,7 @@ const nav: NavSection[] = [
         href: "/",
         icon: "⬛",
         label: "主管儀表板",
-        roles: ["system_admin", "lab_supervisor"],
+        roles: ["system_admin", "general_supervisor", "lab_supervisor"],
       },
     ],
   },
@@ -51,7 +56,7 @@ const nav: NavSection[] = [
         href: "/approve",
         icon: "✅",
         label: "簽核管理",
-        roles: ["system_admin", "lab_supervisor"],
+        roles: ["system_admin", "general_supervisor", "lab_supervisor"],
       },
       {
         id: "sample",
@@ -59,15 +64,22 @@ const nav: NavSection[] = [
         icon: "🧪",
         label: "收樣管理",
         // Lab users receive samples here; plant users track samples created
-        // after confirming delivery from orders.
-        roles: ["system_admin", "lab_engineer", "lab_supervisor", "plant_user"],
+        // after confirming delivery from orders. general_supervisor sees
+        // cross-lab so they can spot-check anywhere.
+        roles: [
+          "system_admin",
+          "general_supervisor",
+          "lab_engineer",
+          "lab_supervisor",
+          "plant_user",
+        ],
       },
       {
         id: "wip",
         href: "/wip",
         icon: "🔬",
         label: "分貨 / WIP",
-        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
+        roles: ["system_admin", "general_supervisor", "lab_engineer", "lab_supervisor"],
       },
     ],
   },
@@ -79,21 +91,21 @@ const nav: NavSection[] = [
         href: "/dispatch",
         icon: "🗂️",
         label: "派工排程",
-        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
+        roles: ["system_admin", "general_supervisor", "lab_engineer", "lab_supervisor"],
       },
       {
         id: "machine",
         href: "/machine",
         icon: "⚙️",
         label: "機台管理",
-        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
+        roles: ["system_admin", "general_supervisor", "lab_engineer", "lab_supervisor"],
       },
       {
         id: "recipe",
         href: "/recipe",
         icon: "📐",
         label: "Recipe 管理",
-        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
+        roles: ["system_admin", "general_supervisor", "lab_engineer", "lab_supervisor"],
       },
       {
         id: "transfer",
@@ -101,7 +113,7 @@ const nav: NavSection[] = [
         icon: "🔄",
         label: "樣品交付",
         // Engineer-only workflow; see comment on `/sample` above.
-        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
+        roles: ["system_admin", "general_supervisor", "lab_engineer", "lab_supervisor"],
       },
       {
         id: "execution",
@@ -116,6 +128,7 @@ const nav: NavSection[] = [
     section: "結案與倉儲",
     items: [
       {
+<<<<<<< HEAD
         id: "report",
         href: "/report",
         icon: "📊",
@@ -128,20 +141,27 @@ const nav: NavSection[] = [
         icon: "📑",
         label: "結單管理",
         roles: ["system_admin", "lab_engineer", "lab_supervisor"],
+=======
+        id: "storage",
+        href: "/storage",
+        icon: "📦",
+        label: "倉儲取件",
+        roles: ["system_admin", "general_supervisor", "lab_engineer", "lab_supervisor"],
+>>>>>>> 44015c2 (feat: general_supervisor (大主管) role + level-2 escalation (Sprint 5))
       },
       {
         id: "issues",
         href: "/issues",
         icon: "⚠️",
         label: "異常與告警",
-        roles: ["system_admin", "lab_supervisor", "lab_engineer"],
+        roles: ["system_admin", "general_supervisor", "lab_supervisor", "lab_engineer"],
       },
       {
         id: "notifications",
         href: "/notifications",
         icon: "🔔",
         label: "通知中心",
-        roles: ["system_admin", "lab_supervisor", "lab_engineer"],
+        roles: ["system_admin", "general_supervisor", "lab_supervisor", "lab_engineer"],
       },
     ],
   },
@@ -187,6 +207,7 @@ export default function Sidebar() {
   const currentLab = masterQuery.data?.labs.find((lab) => lab.id === user?.labId);
   const roleLabelMap: Record<string, string> = {
     system_admin: "系統管理者",
+    general_supervisor: "大主管",
     lab_supervisor: "實驗室主管",
     lab_engineer: "實驗室人員",
     plant_user: "廠區使用者",

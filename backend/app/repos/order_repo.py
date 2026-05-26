@@ -107,23 +107,28 @@ class OrderRepository:
         ):
             actor = require_role(current_user, {"lab_supervisor"})
             lab_ids = set(actor.get("labIds", []))
+            all_labs = bool(actor.get("allLabs"))
 
-            if not lab_ids:
+            # Cross-lab roles (system_admin, general_supervisor) approve
+            # everywhere — no lab filter. Lab-bound roles with no lab fall
+            # through to the empty-list response (misconfigured account).
+            if not lab_ids and not all_labs:
                 return []
 
+            approvable_item_filters = [
+                OrderItemModel.order_id == OrderModel.id,
+                OrderItemModel.status.in_(
+                    [
+                        OrderStatus.PENDING_APPROVAL.value,
+                        OrderStatus.DRAFT.value,
+                    ]
+                ),
+            ]
+            if not all_labs:
+                approvable_item_filters.append(OrderItemModel.lab_id.in_(lab_ids))
+
             approvable_item_exists = (
-                select(OrderItemModel.id)
-                .where(
-                    OrderItemModel.order_id == OrderModel.id,
-                    OrderItemModel.lab_id.in_(lab_ids),
-                    OrderItemModel.status.in_(
-                        [
-                            OrderStatus.PENDING_APPROVAL.value,
-                            OrderStatus.DRAFT.value,
-                        ]
-                    ),
-                )
-                .exists()
+                select(OrderItemModel.id).where(*approvable_item_filters).exists()
             )
 
             stmt = stmt.where(approvable_item_exists)
@@ -295,10 +300,13 @@ class OrderRepository:
         elif payload.action in {OrderAction.APPROVE, OrderAction.RETURN, OrderAction.REJECT}:
             actor = require_role(current_user, {"lab_supervisor"})
             lab_ids = set(actor.get("labIds", []))
+            all_labs = bool(actor.get("allLabs"))
             target_items = [
                 item
                 for item in order.items
-                if item.lab_id in lab_ids
+                # Lab gate: cross-lab roles bypass; lab-bound roles only act
+                # on items in their own lab.
+                if (all_labs or item.lab_id in lab_ids)
                 and (payload.order_item_id is None or item.id == payload.order_item_id)
                 and (
                     item.status == OrderStatus.PENDING_APPROVAL.value

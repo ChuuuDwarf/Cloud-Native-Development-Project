@@ -25,6 +25,11 @@ function NotificationsPageContent() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["notifications"],
     queryFn: () => notificationApi.list(),
+    // Soft polling so a freshly created issue / escalation shows up
+    // without a manual refresh. SSE push (per Phase 4 plan) replaces
+    // this later; until then 15s is the eng-team tolerable cadence.
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   const markRead = useMutation({
