@@ -59,4 +59,4 @@ cookie.txt
 .zed
 .claude
 
-backend/celerybeat-schedule
+backend/celerybeat-schedule*

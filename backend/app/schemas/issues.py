@@ -94,3 +94,21 @@ class IssueListParams(BaseModel):
     page_size: int = Field(default=20, ge=1, le=100, alias="pageSize")
 
     model_config = {"populate_by_name": True}
+
+
+class IssueAcknowledgement(BaseModel):
+    """One entry in the "who confirmed this issue" list.
+
+    Backed by the ``notifications`` table — a notification with
+    ``status="read"`` and ``source_type="issue"`` constitutes an
+    acknowledgement by ``recipient_id``.
+    """
+
+    user_id: UUID = Field(alias="userId")
+    user_name: str = Field(alias="userName")
+    user_email: str = Field(alias="userEmail")
+    role: str | None  # primary role name, e.g. "lab_engineer" / "lab_supervisor"
+    channel: str
+    read_at: datetime = Field(alias="readAt")
+
+    model_config = {"populate_by_name": True}
