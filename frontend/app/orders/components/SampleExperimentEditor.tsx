@@ -17,6 +17,7 @@ export function SampleExperimentEditor({
   masterData,
   onSampleChange,
   onSampleNameChange,
+  onDependencyChange,
   onToggleExperiment,
   onMoveExperiment,
   onRemoveItem,
@@ -26,6 +27,11 @@ export function SampleExperimentEditor({
   masterData: Pick<MasterData, "labs" | "experiments">;
   onSampleChange: (group: SampleFormGroup, sampleId: string) => void;
   onSampleNameChange: (group: SampleFormGroup, sampleName: string) => void;
+  onDependencyChange: (
+    index: number,
+    field: "targetGroup" | "target",
+    value: string | number
+  ) => void;
   onToggleExperiment: (group: SampleFormGroup, experiment: Experiment, checked: boolean) => void;
   onMoveExperiment: (index: number, direction: -1 | 1) => void;
   onRemoveItem: (index: number) => void;
@@ -140,6 +146,39 @@ export function SampleExperimentEditor({
                         </button>
                       )}
                     </div>
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 120px",
+                      gap: 8,
+                      marginTop: 8,
+                    }}
+                  >
+                    <label style={{ display: "grid", gap: 4 }}>
+                      <span style={{ fontSize: 12, color: "var(--text3)" }}>Target Group</span>
+                      <input
+                        value={item.targetGroup}
+                        onChange={(event) =>
+                          onDependencyChange(index, "targetGroup", event.target.value)
+                        }
+                        placeholder="G1"
+                        style={inputStyle}
+                      />
+                    </label>
+
+                    <label style={{ display: "grid", gap: 4 }}>
+                      <span style={{ fontSize: 12, color: "var(--text3)" }}>Target</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={item.target}
+                        onChange={(event) =>
+                          onDependencyChange(index, "target", Number(event.target.value) || 1)
+                        }
+                        style={inputStyle}
+                      />
+                    </label>
                   </div>
                 </div>
               );

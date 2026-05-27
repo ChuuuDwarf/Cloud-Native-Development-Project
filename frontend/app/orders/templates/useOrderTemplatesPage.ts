@@ -143,6 +143,30 @@ export function useOrderTemplatesPage() {
     );
   }
 
+  function updateDependencyField(
+    index: number,
+    field: "targetGroup" | "target",
+    value: string | number
+  ) {
+    setItems((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+
+        if (field === "target") {
+          return {
+            ...item,
+            target: Math.max(1, Number(value) || 1),
+          };
+        }
+
+        return {
+          ...item,
+          targetGroup: String(value).trim() || "G1",
+        };
+      })
+    );
+  }
+
   function moveExperiment(index: number, direction: -1 | 1) {
     setItems((current) => {
       const targetIndex = index + direction;
@@ -222,6 +246,7 @@ export function useOrderTemplatesPage() {
     removeItem,
     updateSampleGroup,
     updateSampleNameGroup,
+    updateDependencyField,
     moveExperiment,
     toggleExperimentForSample,
   };

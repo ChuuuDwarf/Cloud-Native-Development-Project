@@ -86,6 +86,7 @@ export default function OrdersPage() {
             onAddSample={page.addSample}
             onSampleChange={page.updateSampleGroup}
             onSampleNameChange={page.updateSampleNameGroup}
+            onDependencyChange={page.updateDependencyField}
             onToggleExperiment={page.toggleExperimentForSample}
             onMoveExperiment={page.moveExperiment}
             onRemoveItem={page.removeItem}

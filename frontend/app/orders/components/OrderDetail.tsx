@@ -56,6 +56,9 @@ export function OrderDetail({
                     ["樣品名稱", item.sampleName || "-"],
                     ["實驗室", displayLabName(masterData, item.labId)],
                     ["實驗項目", displayExperimentName(masterData, item.experimentId)],
+                    ["Target Group", item.targetGroup || "G1"],
+                    ["Target", String(item.target || 1)],
+                    ["Check", item.check ? "true" : "false"],
                     [
                       "明細狀態",
                       statusLabel[getEffectiveItemStatus(order, item) as OrderStatus] ||

@@ -52,6 +52,9 @@ export type FormItem = {
   sampleName: string;
   labId: string;
   experimentId: string;
+  targetGroup: string;
+  target: number;
+  check: boolean;
 };
 
 export type OrderTemplate = {
@@ -68,6 +71,9 @@ export type OrderItem = {
   sampleName?: string | null;
   labId: string;
   experimentId: string;
+  targetGroup: string;
+  target: number;
+  check: boolean;
   status?: OrderStatus;
   approvedBy?: string | null;
   approvedAt?: string | null;

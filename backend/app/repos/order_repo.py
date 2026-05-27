@@ -176,6 +176,9 @@ class OrderRepository:
                     sampleName=item.sample_name,
                     labId=item.lab_id,
                     experimentId=item.experiment_id,
+                    targetGroup=item.target_group,
+                    target=item.target,
+                    check=item.dependency_check,
                 )
                 for item in order.items
             ]
@@ -216,6 +219,9 @@ class OrderRepository:
                                 sampleName=item_patch.sample_name,
                                 labId=item_patch.lab_id,
                                 experimentId=item_patch.experiment_id,
+                                targetGroup=item_patch.target_group,
+                                target=item_patch.target,
+                                check=item_patch.dependency_check,
                             )
                         ],
                     )
@@ -224,6 +230,9 @@ class OrderRepository:
                     target.sample_name = item_patch.sample_name
                     target.lab_id = item_patch.lab_id
                     target.experiment_id = item_patch.experiment_id
+                    target.target_group = item_patch.target_group
+                    target.target = item_patch.target
+                    target.dependency_check = item_patch.dependency_check
                     target.status = OrderStatus.DRAFT.value
                     target.return_reason = None
                     target.reject_reason = None
@@ -955,6 +964,9 @@ class OrderRepository:
             sample_name=payload.sample_name,
             lab_id=payload.lab_id,
             experiment_id=payload.experiment_id,
+            target_group=payload.target_group,
+            target=payload.target,
+            dependency_check=payload.dependency_check,
             status=OrderStatus.DRAFT.value,
             created_at=now,
             updated_at=now,

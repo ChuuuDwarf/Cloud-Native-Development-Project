@@ -237,6 +237,14 @@ export function useOrdersPage() {
       return `明細 ${invalidIndex + 1} 的樣品、實驗室、實驗項目都需要填寫`;
     }
 
+    const invalidDependencyIndex = items.findIndex(
+      (item) => !item.targetGroup.trim() || item.target < 1
+    );
+
+    if (invalidDependencyIndex >= 0) {
+      return `Item ${invalidDependencyIndex + 1} dependency group is required and target must be at least 1`;
+    }
+
     return null;
   }
 
@@ -289,12 +297,17 @@ export function useOrdersPage() {
     setPriority(getOrderPriority(order));
     setItems(
       orderItems.length
-        ? orderItems.map(({ sampleId, sampleName, labId, experimentId }) => ({
-            sampleId,
-            sampleName: sampleName ?? "",
-            labId,
-            experimentId,
-          }))
+        ? orderItems.map(
+            ({ sampleId, sampleName, labId, experimentId, targetGroup, target, check }) => ({
+              sampleId,
+              sampleName: sampleName ?? "",
+              labId,
+              experimentId,
+              targetGroup: targetGroup || "G1",
+              target: target || 1,
+              check: check ?? false,
+            })
+          )
         : [createDefaultItem(masterData)]
     );
     setFormModalOpen(true);
@@ -528,6 +541,30 @@ export function useOrdersPage() {
     );
   }
 
+  function updateDependencyField(
+    index: number,
+    field: "targetGroup" | "target",
+    value: string | number
+  ) {
+    setItems((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+
+        if (field === "target") {
+          return {
+            ...item,
+            target: Math.max(1, Number(value) || 1),
+          };
+        }
+
+        return {
+          ...item,
+          targetGroup: String(value).trim() || "G1",
+        };
+      })
+    );
+  }
+
   function moveExperiment(index: number, direction: -1 | 1) {
     setItems((current) => {
       const targetIndex = index + direction;
@@ -681,6 +718,7 @@ export function useOrdersPage() {
     removeItem,
     updateSampleGroup,
     updateSampleNameGroup,
+    updateDependencyField,
     moveExperiment,
     toggleExperimentForSample,
   };
