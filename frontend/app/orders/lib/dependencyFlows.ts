@@ -113,8 +113,8 @@ export function flattenDependencyFlowsToItems(
 ): FormItem[] {
   const flowItems = flows.flatMap((flow) => {
     const normalizedFlow = normalizeTargetsInFlow(flow);
-    const experimentItems = normalizedFlow
-      .items.filter(({ item }) => isExperimentItem(item))
+    const experimentItems = normalizedFlow.items
+      .filter(({ item }) => isExperimentItem(item))
       .map(({ item }) => item);
 
     if (experimentItems.length > 0) {
