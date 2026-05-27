@@ -72,15 +72,14 @@ export function getNextSampleIdFromOrders(orders: { items?: { sampleId?: string 
 }
 
 export function createDefaultItem(
-  masterData: Pick<MasterData, "labs" | "experiments">,
+  _masterData: Pick<MasterData, "labs" | "experiments">,
   sampleId = generateSampleId(1)
 ): FormItem {
-  const firstLab = masterData.labs[0]?.id || "";
   return {
     sampleId,
     sampleName: "",
-    labId: firstLab,
-    experimentId: firstLab ? getDefaultExperimentForLab(masterData, firstLab) : "",
+    labId: "",
+    experimentId: "",
     targetGroup: "G1",
     target: 1,
     check: false,

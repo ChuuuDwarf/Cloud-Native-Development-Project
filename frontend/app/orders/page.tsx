@@ -86,10 +86,7 @@ export default function OrdersPage() {
             onAddSample={page.addSample}
             onSampleChange={page.updateSampleGroup}
             onSampleNameChange={page.updateSampleNameGroup}
-            onDependencyChange={page.updateDependencyField}
-            onToggleExperiment={page.toggleExperimentForSample}
-            onMoveExperiment={page.moveExperiment}
-            onRemoveItem={page.removeItem}
+            onDependencyItemsChange={page.updateDependencyItems}
             onClose={page.closeFormModal}
             onCreate={(submitAfterCreate) => void page.createOrder(submitAfterCreate)}
             onUpdate={() => void page.updateOrder()}

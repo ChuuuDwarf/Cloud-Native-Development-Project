@@ -56,9 +56,8 @@ export function OrderDetail({
                     ["樣品名稱", item.sampleName || "-"],
                     ["實驗室", displayLabName(masterData, item.labId)],
                     ["實驗項目", displayExperimentName(masterData, item.experimentId)],
-                    ["Target Group", item.targetGroup || "G1"],
-                    ["Target", String(item.target || 1)],
-                    ["Check", item.check ? "true" : "false"],
+                    ["相依流程", getDependencyFlowLabel(order.items || [], item)],
+                    ["執行順序", getDependencyFlowOrder(order.items || [], item)],
                     [
                       "明細狀態",
                       statusLabel[getEffectiveItemStatus(order, item) as OrderStatus] ||
@@ -80,4 +79,29 @@ export function OrderDetail({
       </div>
     </div>
   );
+}
+
+function getDependencyFlowLabel(items: Order["items"], currentItem: NonNullable<Order["items"]>[number]) {
+  const targetGroup = currentItem.targetGroup || "";
+  const flowGroupIds = Array.from(
+    new Set(
+      (items || [])
+        .filter((item) => item.targetGroup && items?.some((other) => other !== item && other.targetGroup === item.targetGroup))
+        .map((item) => item.targetGroup)
+    )
+  );
+
+  const flowIndex = flowGroupIds.indexOf(targetGroup);
+  return flowIndex >= 0 ? `相依流程 ${flowIndex + 1}` : "單一實驗流程";
+}
+
+function getDependencyFlowOrder(
+  items: Order["items"],
+  currentItem: NonNullable<Order["items"]>[number]
+) {
+  const isFlowItem =
+    !!currentItem.targetGroup &&
+    (items || []).some((item) => item !== currentItem && item.targetGroup === currentItem.targetGroup);
+
+  return isFlowItem ? String(currentItem.target || 1) : "-";
 }
