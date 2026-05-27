@@ -81,6 +81,9 @@ export function createDefaultItem(
     sampleName: "",
     labId: firstLab,
     experimentId: firstLab ? getDefaultExperimentForLab(masterData, firstLab) : "",
+    targetGroup: "G1",
+    target: 1,
+    check: false,
   };
 }
 
@@ -104,6 +107,9 @@ export function toggleExperimentInGroup(
       sampleName: group.sampleName,
       labId: experiment.labId,
       experimentId: experiment.id,
+      targetGroup: `G${group.items.length + 1}`,
+      target: 1,
+      check: false,
     });
     return next;
   }

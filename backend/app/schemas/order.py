@@ -14,6 +14,9 @@ class OrderItemCreate(BaseModel):
     sample_name: str | None = Field(default=None, alias="sampleName")
     lab_id: str = Field(alias="labId", min_length=1)
     experiment_id: str = Field(alias="experimentId", min_length=1)
+    target_group: str = Field(default="G1", alias="targetGroup", min_length=1)
+    target: int = Field(default=1, ge=1)
+    dependency_check: bool = Field(default=False, alias="check")
 
     @field_validator("sample_name")
     @classmethod
@@ -22,6 +25,12 @@ class OrderItemCreate(BaseModel):
             return None
         stripped = value.strip()
         return stripped or None
+
+    @field_validator("target_group")
+    @classmethod
+    def normalize_target_group(cls, value: str) -> str:
+        stripped = value.strip()
+        return stripped or "G1"
 
     model_config = {"populate_by_name": True}
 
