@@ -4,6 +4,11 @@ import { userApi } from "@/services/user-api";
 import { actionLabel, emptyFormItem, emptyMasterData, orderStatusFilters } from "../constants";
 import { requestJson } from "../lib/api";
 import {
+  getEmptyDependencyFlowNames,
+  isExperimentItem,
+  normalizeDependencyItemsForSubmit,
+} from "../lib/dependencyFlows";
+import {
   createDefaultItem,
   getNextSampleId,
   getNextSampleIdFromOrders,
@@ -193,7 +198,7 @@ export function useOrdersPage() {
     const nextTemplate: OrderTemplate = {
       id: `${Date.now()}`,
       name,
-      items: items.map((item) => ({ ...item })),
+      items: normalizeDependencyItemsForSubmit(items).map((item) => ({ ...item })),
       createdAt: new Date().toISOString(),
     };
 
@@ -217,7 +222,7 @@ export function useOrdersPage() {
     const response = await requestJson<QuotaCheck>(
       `/api/quotas/check?departmentId=${encodeURIComponent(
         departmentId
-      )}&itemCount=${items.length}&priority=${priority}`
+      )}&itemCount=${normalizeDependencyItemsForSubmit(items).length}&priority=${priority}`
     );
 
     setQuotaCheck(response.data);
@@ -229,8 +234,16 @@ export function useOrdersPage() {
     if (!departmentId.trim()) return "部門不可為空";
     if (items.length === 0) return "至少需要一筆實驗明細";
 
+    const emptyFlowNames = getEmptyDependencyFlowNames(items);
+
+    if (emptyFlowNames.length > 0) {
+      return `${emptyFlowNames[0]} 尚未加入任何實驗，請先加入實驗或移除此流程`;
+    }
+
     const invalidIndex = items.findIndex(
-      (item) => !item.sampleId.trim() || !item.labId.trim() || !item.experimentId.trim()
+      (item) =>
+        isExperimentItem(item) &&
+        (!item.sampleId.trim() || !item.labId.trim() || !item.experimentId.trim())
     );
 
     if (invalidIndex >= 0) {
@@ -238,11 +251,11 @@ export function useOrdersPage() {
     }
 
     const invalidDependencyIndex = items.findIndex(
-      (item) => !item.targetGroup.trim() || item.target < 1
+      (item) => isExperimentItem(item) && (!item.targetGroup.trim() || item.target < 1)
     );
 
     if (invalidDependencyIndex >= 0) {
-      return `Item ${invalidDependencyIndex + 1} dependency group is required and target must be at least 1`;
+      return `第 ${invalidDependencyIndex + 1} 筆相依流程設定不完整`;
     }
 
     return null;
@@ -329,10 +342,11 @@ export function useOrdersPage() {
 
     try {
       setSubmitting(true);
+      const submitItems = normalizeDependencyItemsForSubmit(items);
 
       const response = await requestJson<Order>("/api/orders", {
         method: "POST",
-        body: JSON.stringify({ departmentId, priority, items }),
+        body: JSON.stringify({ departmentId, priority, items: submitItems }),
       });
 
       let check: QuotaCheck | null = null;
@@ -399,9 +413,10 @@ export function useOrdersPage() {
     }
 
     try {
+      const submitItems = normalizeDependencyItemsForSubmit(items);
       const response = await requestJson<Order>(`/api/orders/${editingOrderId}`, {
         method: "PATCH",
-        body: JSON.stringify({ departmentId, priority, items }),
+        body: JSON.stringify({ departmentId, priority, items: submitItems }),
       });
 
       setLog(JSON.stringify(response, null, 2));
@@ -541,26 +556,27 @@ export function useOrdersPage() {
     );
   }
 
-  function updateDependencyField(
-    index: number,
-    field: "targetGroup" | "target",
-    value: string | number
-  ) {
+  function updateDependencyItems(group: SampleFormGroup, nextItems: FormItem[]) {
+    const replacementItems =
+      nextItems.length > 0
+        ? nextItems
+        : [
+            {
+              sampleId: group.sampleId,
+              sampleName: group.sampleName,
+              labId: "",
+              experimentId: "",
+              targetGroup: "G1",
+              target: 1,
+              check: false,
+            },
+          ];
+
     setItems((current) =>
-      current.map((item, itemIndex) => {
-        if (itemIndex !== index) return item;
-
-        if (field === "target") {
-          return {
-            ...item,
-            target: Math.max(1, Number(value) || 1),
-          };
-        }
-
-        return {
-          ...item,
-          targetGroup: String(value).trim() || "G1",
-        };
+      current.flatMap((item, index) => {
+        if (index === group.startIndex) return replacementItems;
+        if (index > group.startIndex && index <= group.endIndex) return [];
+        return [item];
       })
     );
   }
@@ -718,7 +734,7 @@ export function useOrdersPage() {
     removeItem,
     updateSampleGroup,
     updateSampleNameGroup,
-    updateDependencyField,
+    updateDependencyItems,
     moveExperiment,
     toggleExperimentForSample,
   };

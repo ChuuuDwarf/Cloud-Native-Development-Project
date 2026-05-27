@@ -122,10 +122,7 @@ export default function OrderTemplatesPage() {
             masterData={page.masterData}
             onSampleChange={page.updateSampleGroup}
             onSampleNameChange={page.updateSampleNameGroup}
-            onDependencyChange={page.updateDependencyField}
-            onToggleExperiment={page.toggleExperimentForSample}
-            onMoveExperiment={page.moveExperiment}
-            onRemoveItem={page.removeItem}
+            onDependencyItemsChange={page.updateDependencyItems}
           />
 
           <div style={footerActionsStyle}>

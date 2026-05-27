@@ -3,6 +3,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { emptyMasterData } from "../constants";
 import { requestJson } from "../lib/api";
 import {
+  getEmptyDependencyFlowNames,
+  isExperimentItem,
+  normalizeDependencyItemsForSubmit,
+} from "../lib/dependencyFlows";
+import {
   createDefaultItem,
   getNextSampleId,
   groupItemsBySample,
@@ -71,8 +76,19 @@ export function useOrderTemplatesPage() {
       return;
     }
 
+    const emptyFlowNames = getEmptyDependencyFlowNames(items);
+
+    if (emptyFlowNames.length > 0) {
+      setMessage(`${emptyFlowNames[0]} 尚未加入任何實驗，請先加入實驗或移除此流程。`);
+      return;
+    }
+
     if (
-      items.some((item) => !item.sampleId.trim() || !item.labId.trim() || !item.experimentId.trim())
+      items.some(
+        (item) =>
+          isExperimentItem(item) &&
+          (!item.sampleId.trim() || !item.labId.trim() || !item.experimentId.trim())
+      )
     ) {
       setMessage("每個樣品與實驗都需要填寫樣品編號、實驗室與實驗項目。");
       return;
@@ -83,7 +99,12 @@ export function useOrderTemplatesPage() {
     if (selectedTemplateId) {
       const nextTemplates = templates.map((template) =>
         template.id === selectedTemplateId
-          ? { ...template, name, items: items.map((item) => ({ ...item })), updatedAt: now }
+          ? {
+              ...template,
+              name,
+              items: normalizeDependencyItemsForSubmit(items).map((item) => ({ ...item })),
+              updatedAt: now,
+            }
           : template
       );
       persistTemplates(nextTemplates);
@@ -94,7 +115,7 @@ export function useOrderTemplatesPage() {
     const nextTemplate: OrderTemplate = {
       id: `${Date.now()}`,
       name,
-      items: items.map((item) => ({ ...item })),
+      items: normalizeDependencyItemsForSubmit(items).map((item) => ({ ...item })),
       createdAt: now,
       updatedAt: now,
     };
@@ -143,26 +164,27 @@ export function useOrderTemplatesPage() {
     );
   }
 
-  function updateDependencyField(
-    index: number,
-    field: "targetGroup" | "target",
-    value: string | number
-  ) {
+  function updateDependencyItems(group: SampleFormGroup, nextItems: FormItem[]) {
+    const replacementItems =
+      nextItems.length > 0
+        ? nextItems
+        : [
+            {
+              sampleId: group.sampleId,
+              sampleName: group.sampleName,
+              labId: "",
+              experimentId: "",
+              targetGroup: "G1",
+              target: 1,
+              check: false,
+            },
+          ];
+
     setItems((current) =>
-      current.map((item, itemIndex) => {
-        if (itemIndex !== index) return item;
-
-        if (field === "target") {
-          return {
-            ...item,
-            target: Math.max(1, Number(value) || 1),
-          };
-        }
-
-        return {
-          ...item,
-          targetGroup: String(value).trim() || "G1",
-        };
+      current.flatMap((item, index) => {
+        if (index === group.startIndex) return replacementItems;
+        if (index > group.startIndex && index <= group.endIndex) return [];
+        return [item];
       })
     );
   }
@@ -246,7 +268,7 @@ export function useOrderTemplatesPage() {
     removeItem,
     updateSampleGroup,
     updateSampleNameGroup,
-    updateDependencyField,
+    updateDependencyItems,
     moveExperiment,
     toggleExperimentForSample,
   };
