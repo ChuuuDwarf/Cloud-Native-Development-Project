@@ -81,12 +81,19 @@ export function OrderDetail({
   );
 }
 
-function getDependencyFlowLabel(items: Order["items"], currentItem: NonNullable<Order["items"]>[number]) {
+function getDependencyFlowLabel(
+  items: Order["items"],
+  currentItem: NonNullable<Order["items"]>[number]
+) {
   const targetGroup = currentItem.targetGroup || "";
   const flowGroupIds = Array.from(
     new Set(
       (items || [])
-        .filter((item) => item.targetGroup && items?.some((other) => other !== item && other.targetGroup === item.targetGroup))
+        .filter(
+          (item) =>
+            item.targetGroup &&
+            items?.some((other) => other !== item && other.targetGroup === item.targetGroup)
+        )
         .map((item) => item.targetGroup)
     )
   );
@@ -101,7 +108,9 @@ function getDependencyFlowOrder(
 ) {
   const isFlowItem =
     !!currentItem.targetGroup &&
-    (items || []).some((item) => item !== currentItem && item.targetGroup === currentItem.targetGroup);
+    (items || []).some(
+      (item) => item !== currentItem && item.targetGroup === currentItem.targetGroup
+    );
 
   return isFlowItem ? String(currentItem.target || 1) : "-";
 }

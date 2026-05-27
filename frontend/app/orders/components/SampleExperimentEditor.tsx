@@ -238,7 +238,9 @@ function DependencyFlowEditor({
               }}
             >
               <div style={{ fontWeight: 800, fontSize: 13 }}>{flow.name}</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <div
+                style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}
+              >
                 <select
                   aria-label="選擇要加入的實驗"
                   value={selectedExperimentByFlow[flow.id] || availableExperiments[0]?.id || ""}
