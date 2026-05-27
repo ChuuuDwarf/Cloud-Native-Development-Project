@@ -33,3 +33,17 @@ def send_notification_email(to: str, subject: str, body: str) -> dict:
         fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
     logger.info("Email queued to %s subject=%r", to, subject)
     return {"status": "queued", "to": to}
+
+
+@celery_app.task(name="app.workers.email_sender.send_pickup_reminder_email")
+def send_pickup_reminder_email(to: str, order_id: str, applicant: str | None = None) -> dict:
+    """Remind an order's requester that their samples are ready for pickup.
+
+    Enqueued by the closures service when an order transitions to ``待取件 /
+    WAITING_PICKUP``. Reuses :func:`send_notification_email` for delivery so the
+    file/SMTP backend behaviour stays in one place.
+    """
+    greeting = f"{applicant} 您好，" if applicant else ""
+    subject = f"【LIMS】委託單 {order_id} 樣品待取件通知"
+    body = f"{greeting}您委託的單號 {order_id} 已完成處理，樣品已可取件，請至實驗室倉儲辦理取件。"
+    return send_notification_email.run(to=to, subject=subject, body=body)

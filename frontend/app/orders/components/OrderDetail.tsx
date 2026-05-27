@@ -28,7 +28,7 @@ export function OrderDetail({
         <InfoGrid
           rows={[
             ["委託單編號", order.orderNo],
-            ["目前狀態", statusLabel[order.status]],
+            ["目前狀態", statusLabel[order.status] ?? order.status],
             ["申請人", displayUserName(order.applicantId, usersById, currentUser)],
             ["部門 / 廠區", displayDepartmentName(masterData, order.departmentId)],
             ["優先程度", priorityLabel[order.priority || "normal"]],

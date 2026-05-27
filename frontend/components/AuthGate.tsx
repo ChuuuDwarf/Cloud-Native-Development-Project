@@ -88,6 +88,18 @@ const routeRoleRules: Array<{
     path: "/orders",
     allowedRoles: ["system_admin", "plant_user"],
   },
+  {
+    path: "/closure",
+    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+  },
+  {
+    path: "/report",
+    allowedRoles: ["system_admin", "lab_supervisor"],
+  },
+  {
+    path: "/execution",
+    allowedRoles: ["system_admin", "lab_supervisor", "lab_engineer"],
+  },
 ];
 
 function getAllowedRolesForPath(pathname: string) {

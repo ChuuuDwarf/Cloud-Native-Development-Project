@@ -89,17 +89,10 @@ async def get_order_reports(
     return ApiResponse(data=data)
 
 
-@router.get("/reports")
-async def list_reports(
-    order_id: int | None = Query(default=None, alias="orderId"),
-    service: OrderService = Depends(get_order_service),
-) -> ApiResponse:
-    if order_id is not None:
-        return await get_order_reports(order_id, service)
-    data: list[dict[str, Any]] = []
-    for order in await service.list_orders():
-        data.extend((await get_order_reports(order.id, service)).data or [])
-    return ApiResponse(data=data)
+# NOTE: GET /api/reports is now served by D's real reports router
+# (app/routes/reports.py). The former order-derived stub here was removed to
+# avoid a duplicate route. The order-scoped view above
+# (GET /api/orders/{order_id}/reports) is kept. See [[cd-yields-to-ab-models]].
 
 
 @router.get("/orders/{order_id}/issues")

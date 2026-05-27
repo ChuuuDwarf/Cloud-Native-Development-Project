@@ -49,8 +49,10 @@ services:
         # Playwright runs on the same runner.
         NEXT_PUBLIC_API_URL: http://localhost:8000/api
     environment:
-      # Fix the dev/Dockerfile mismatch -- Next.js standalone server reads
-      # PORT, default in the image is 3030; force 3000 so the compose port
-      # mapping (3000:3000) actually works in CI.
-      PORT: "3000"
+      # Let Next.js standalone keep the image default PORT=3030 (see
+      # frontend/Dockerfile). The base compose publishes host 3000 ->
+      # container 3030, so localhost:3000 reaches the app in CI just like
+      # in dev. (Previously this forced PORT=3000, which contradicted the
+      # base's 3000:3030 mapping and left nothing listening on 3030 ->
+      # Playwright hit ERR_CONNECTION_RESET on localhost:3000.)
       NEXT_PUBLIC_API_URL: http://localhost:8000/api

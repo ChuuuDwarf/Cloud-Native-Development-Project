@@ -99,8 +99,15 @@ const nav: NavSection[] = [
         id: "transfer",
         href: "/transfer",
         icon: "🔄",
-        label: "樣品交接",
+        label: "樣品交付",
         // Engineer-only workflow; see comment on `/sample` above.
+        roles: ["system_admin", "lab_engineer", "lab_supervisor"],
+      },
+      {
+        id: "execution",
+        href: "/execution",
+        icon: "🧫",
+        label: "實驗執行",
         roles: ["system_admin", "lab_engineer", "lab_supervisor"],
       },
     ],
@@ -109,10 +116,17 @@ const nav: NavSection[] = [
     section: "結案與倉儲",
     items: [
       {
-        id: "storage",
-        href: "/storage",
-        icon: "📦",
-        label: "倉儲取件",
+        id: "report",
+        href: "/report",
+        icon: "📊",
+        label: "實驗報告管理",
+        roles: ["system_admin", "lab_supervisor"],
+      },
+      {
+        id: "closure",
+        href: "/closure",
+        icon: "📑",
+        label: "結單管理",
         roles: ["system_admin", "lab_engineer", "lab_supervisor"],
       },
       {

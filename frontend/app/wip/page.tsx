@@ -485,8 +485,24 @@ export default function WipPage() {
     window.location.href = "/sample";
   }
 
-  function goToSchedulePage() {
-    window.location.href = "/schedule";
+  async function goToSchedulePage() {
+    // 先用 B 自己的 send_to_schedule 把本 Lab、此樣品中尚在 created 的 WIP 送入待派工，
+    // 讓它們出現在 C 派工頁的「待派工 WIP」挑單清單；再導去派工頁。
+    try {
+      setSubmitting(true);
+      const toSchedule = selectedWips.filter((wip) => wip.status === "created");
+      for (const wip of toSchedule) {
+        await apiPost(`/api/wips/${wip.id}/actions`, {
+          action: "send_to_schedule",
+          operator_name: currentOperatorName,
+        });
+      }
+    } catch (err) {
+      setError(getErrorMessage(err, "送入待派工失敗"));
+      setSubmitting(false);
+      return;
+    }
+    window.location.href = "/dispatch";
   }
 
   useEffect(() => {

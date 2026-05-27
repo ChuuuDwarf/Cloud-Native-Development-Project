@@ -32,12 +32,25 @@ export const statusLabel: Record<OrderStatus, string> = {
   sample_received: "已收樣",
   ready_for_pickup: "待取件",
   closed: "已結案",
+  // 跨模組下游狀態（C 排程 / D 執行・結案寫入），A 僅顯示。
+  waiting_sample: "待送樣",
+  received: "已收樣",
+  split: "已分貨",
+  scheduled: "排程中",
+  in_progress: "實驗中",
+  waiting_result_confirm: "待結果確認",
+  completed: "實驗完成",
+  waiting_report_return: "待報告回傳",
+  waiting_pickup: "待送件",
 };
 
 export const priorityLabel: Record<PriorityLevel, string> = {
   normal: "一般",
   urgent: "急件",
   critical: "特急件",
+  low: "低",
+  medium: "中",
+  high: "高",
 };
 
 export const actionLabel: Record<OrderAction, string> = {
@@ -60,6 +73,16 @@ export const allowedActions: Record<OrderStatus, OrderAction[]> = {
   closed: [],
   rejected: [],
   cancelled: [],
+  // 跨模組下游狀態：A 不在這些階段提供操作。
+  waiting_sample: [],
+  received: [],
+  split: [],
+  scheduled: [],
+  in_progress: [],
+  waiting_result_confirm: [],
+  completed: [],
+  waiting_report_return: [],
+  waiting_pickup: [],
 };
 
 export const orderStatusFilters: { value: OrderStatusFilter; label: string }[] = [

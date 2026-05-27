@@ -18,6 +18,7 @@ from app.common.enums.order_status import OrderStatus
 from app.common.enums.report_action import ReportAction
 from app.common.enums.report_status import ReportStatus
 from app.common.enums.severity import Severity
+from app.common.enums.storage_status import StorageStatus
 from app.common.enums.user_status import UserStatus
 from app.common.enums.wip_action import WipAction
 from app.common.enums.wip_status import WipStatus
@@ -34,6 +35,7 @@ __all__ = [
     "ReportAction",
     "ReportStatus",
     "Severity",
+    "StorageStatus",
     "UserStatus",
     "WipAction",
     "WipStatus",

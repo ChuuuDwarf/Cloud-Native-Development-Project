@@ -85,9 +85,9 @@ beat:
 dev:
 	@echo "在不同 shell 分別執行： make infra && make dev-backend && make dev-frontend && make worker && make beat"
 
-# ---------------------------------------------------------------------------
-# DB
-# ---------------------------------------------------------------------------
+lint:
+	cd frontend && npm run lint
+	$(BACKEND_RUFF) check backend
 
 migrate:
 	cd backend && alembic upgrade head
