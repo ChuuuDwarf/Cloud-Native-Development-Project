@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+spec:
+  backoffLimit: 3
+  # Clean up finished migration jobs after 10 min to avoid clutter.
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: lims-backend
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: lims-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: lims-secrets
+                  key: DATABASE_URL

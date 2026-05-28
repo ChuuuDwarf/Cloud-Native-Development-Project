@@ -1,0 +1,55 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Staging environment. Namespace created out-of-band:
+#   kubectl create namespace lims-staging
+namespace: lims-staging
+
+resources:
+  - ../../base
+
+# Staging deploys on the same VM/IP as prod, distinguished by the nip.io
+# subdomain `staging.<IP>.nip.io`. CD points these at the -rc image tags.
+images:
+  - name: lims-backend
+    newName: asia-east1-docker.pkg.dev/lims-497613/lims/backend
+    newTag: latest
+  - name: lims-frontend
+    newName: asia-east1-docker.pkg.dev/lims-497613/lims/frontend
+    newTag: latest
+
+# Fewer replicas in staging to leave room on the single VM.
+patches:
+  - target:
+      kind: Deployment
+      name: backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  # Host-based TLS for staging. REPLACE_IP filled with the VM static IP in
+  # Phase 3 -> host staging.<IP>.nip.io, its own cert in lims-tls.
+  - target:
+      kind: Ingress
+      name: lims
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+      - op: add
+        path: /spec/tls
+        value:
+          - hosts:
+              - staging.34.80.119.4.nip.io
+            secretName: lims-tls
+      - op: add
+        path: /spec/rules/0/host
+        value: staging.34.80.119.4.nip.io

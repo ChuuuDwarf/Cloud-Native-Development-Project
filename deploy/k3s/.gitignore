@@ -1,0 +1,7 @@
+
+secret.yaml
+secret.*.yaml
+!secret.example.yaml
+*.key
+*-sa.json
+kubeconfig*
