@@ -38,7 +38,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.enums import (
@@ -387,14 +387,19 @@ class DashboardRepository:
 
         # awaiting_handoff: completed + report returned + order NOT in
         # (waiting_pickup, closed). Report.wip_id holds the business wip_no.
+        # Use EXISTS instead of JOIN so a WIP with multiple RETURNED reports
+        # (allowed by the ReportVersion model) counts exactly once.
+        report_returned_exists = exists().where(
+            Report.wip_id == Wip.wip_no,
+            Report.status == _REPORT_RETURNED_ZH,
+        )
         ah_stmt = (
             select(func.count())
             .select_from(Wip)
-            .join(Report, Report.wip_id == Wip.wip_no)
             .join(OrderModel, OrderModel.order_no == Wip.order_no)
             .where(
                 Wip.status == _WIP_COMPLETED,
-                Report.status == _REPORT_RETURNED_ZH,
+                report_returned_exists,
                 OrderModel.status.notin_(
                     [OrderStatus.WAITING_PICKUP.value, OrderStatus.CLOSED.value]
                 ),
@@ -406,11 +411,10 @@ class DashboardRepository:
         done_stmt = (
             select(func.count())
             .select_from(Wip)
-            .join(Report, Report.wip_id == Wip.wip_no)
             .join(OrderModel, OrderModel.order_no == Wip.order_no)
             .where(
                 Wip.status == _WIP_COMPLETED,
-                Report.status == _REPORT_RETURNED_ZH,
+                report_returned_exists,
                 OrderModel.status.in_([OrderStatus.WAITING_PICKUP.value, OrderStatus.CLOSED.value]),
             )
         )
@@ -558,20 +562,23 @@ class DashboardRepository:
         is a heads-up panel for lab_supervisor's Col 3).
 
         Returns ``(wip_no, order_no, lab_name, returned_at)`` rows newest
-        first. Lab scoping passes lab codes; the join walks
-        ``Report.wip_id (=wip_no) → Wip.lab_name → Lab.name == lab_code``.
+        first, **deduped per wip_no** — a WIP with multiple RETURNED reports
+        shows up once with the latest returned timestamp. Lab scoping passes
+        lab codes; the join walks ``Report.wip_id (=wip_no) → Wip.lab_name``.
 
         ``Report.created_at`` is a naive TIMESTAMP — cutoff is naive too.
         """
         cutoff = _now_naive() - timedelta(minutes=30)
+        latest_returned_at = func.max(Report.created_at).label("returned_at")
         stmt = (
-            select(Report.wip_id, Wip.order_no, Wip.lab_name, Report.created_at)
+            select(Report.wip_id, Wip.order_no, Wip.lab_name, latest_returned_at)
             .join(Wip, Wip.wip_no == Report.wip_id)
             .where(
                 Report.status == _REPORT_RETURNED_ZH,
                 Report.created_at >= cutoff,
             )
-            .order_by(Report.created_at.desc())
+            .group_by(Report.wip_id, Wip.order_no, Wip.lab_name)
+            .order_by(latest_returned_at.desc())
             .limit(limit)
         )
         if lab_codes is not None:
@@ -615,16 +622,20 @@ class DashboardRepository:
         ).all()
         completed_by_lab: dict[str, int] = {r[0]: int(r[1]) for r in completed_rows}
 
-        # Awaiting handoff per lab_name.
+        # Awaiting handoff per lab_name. Use EXISTS so a wip with multiple
+        # RETURNED reports counts once (mirrors wip_pipeline_counts).
+        report_returned_exists = exists().where(
+            Report.wip_id == Wip.wip_no,
+            Report.status == _REPORT_RETURNED_ZH,
+        )
         awaiting_rows = (
             await self._session.execute(
                 select(Wip.lab_name, func.count())
                 .select_from(Wip)
-                .join(Report, Report.wip_id == Wip.wip_no)
                 .join(OrderModel, OrderModel.order_no == Wip.order_no)
                 .where(
                     Wip.status == _WIP_COMPLETED,
-                    Report.status == _REPORT_RETURNED_ZH,
+                    report_returned_exists,
                     OrderModel.status.notin_(
                         [OrderStatus.WAITING_PICKUP.value, OrderStatus.CLOSED.value]
                     ),
