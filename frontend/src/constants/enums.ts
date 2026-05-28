@@ -82,17 +82,19 @@ export const IssueActionValues: readonly IssueAction[] = [
   "reopen",
 ] as const;
 
-export type IssueStatus = "open" | "assigned" | "escalated" | "closed";
+export type IssueStatus = "open" | "assigned" | "escalated" | "acknowledged" | "closed";
 export const IssueStatus = {
   Open: "open",
   Assigned: "assigned",
   Escalated: "escalated",
+  Acknowledged: "acknowledged",
   Closed: "closed",
 } as const;
 export const IssueStatusValues: readonly IssueStatus[] = [
   "open",
   "assigned",
   "escalated",
+  "acknowledged",
   "closed",
 ] as const;
 

@@ -28,16 +28,37 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot migration runner. Idempotent (alembic upgrade head is a no-op
+  # when schema is current) so it can sit on the critical path of every
+  # `docker compose up`. backend / celery-worker / celery-beat block until
+  # this exits 0 so they never start against an unmigrated DB.
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     build: ./backend
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
       - "${BACKEND_PORT:-8000}:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    # env_file pulls everything in backend/.env (CHT_*, DEMO_PHONE, future
+    # SMTP creds, etc.) so we don't have to mirror each key in `environment`.
+    # `environment` below overrides anything that needs container-internal
+    # hostnames (postgres / redis service names instead of localhost).
+    env_file:
+      - path: ./backend/.env
+        required: false
     environment:
       ENV: ${ENV:-development}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
@@ -59,9 +80,31 @@ services:
     networks:
       - default
       - lims_devnet
+    # Python-based healthcheck so we don't have to add curl to the slim image.
+    # Hits the FastAPI /health route; frontend waits on this before starting.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=2).status==200 else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   celery-worker:
     build: ./backend
     command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info"]
+    # Same env_file as backend so phone_sender (Sprint 3d) sees CHT_API_KEY /
+    # CHT_SERVICE_NUMBER. Without these the task logs "not configured" and
+    # silently no-ops — broken CHT pipeline is invisible.
+    env_file:
+      - path: ./backend/.env
+        required: false
     environment:
       ENV: ${ENV:-development}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
@@ -86,10 +129,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   celery-beat:
     build: ./backend
     command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
+    env_file:
+      - path: ./backend/.env
+        required: false
     environment:
       ENV: ${ENV:-development}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
@@ -107,6 +155,29 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Opt-in seed runner. `docker compose --profile seed up seed` populates
+  # roles / users / labs / departments + (if DEMO_PHONE is set in .env)
+  # writes the demo phone into every User.phone so the TAS pipeline can be
+  # exercised end-to-end. Profile-gated so prod / CI don't accidentally seed
+  # demo data over real rows.
+  seed:
+    build: ./backend
+    command: ["python", "-m", "scripts.seed_dev"]
+    profiles: ["seed"]
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
 
   frontend:
     build:
@@ -118,8 +189,11 @@ services:
       # The standalone runner image listens on 3030 (see frontend/Dockerfile:
       # ENV PORT=3030 / EXPOSE 3030), so publish host 3000 -> container 3030.
       - "3000:3030"
+    # Wait for backend to be /health-200, not just running, so the first
+    # request from the browser doesn't race a half-booted API.
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
       # NOTE: do NOT set PORT here — the Dockerfile sets PORT=3030 and the port
@@ -150,3 +224,9 @@ volumes:
   redisdata:
   uploads:
   pgadmindata:
+
+networks:
+  # Project-local. If you need to share this with another compose project
+  # (e.g. a sibling D-team stack), change to `external: true` and pre-create
+  # the network with: docker network create lims_devnet
+  lims_devnet: {}
