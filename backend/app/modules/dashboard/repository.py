@@ -101,27 +101,36 @@ MACHINE_STATUS_CN_TO_EN: dict[str, str] = {
 }
 
 
-def _today_start() -> datetime:
-    """Today at 00:00 UTC, tz-aware. Use for columns declared as
+def _now_aware() -> datetime:
+    """``datetime.now(UTC)``-aware. Use for columns declared as
     ``DateTime(timezone=True)`` — e.g. ``Issue.created_at`` / ``updated_at``,
     ``OrderModel.created_at``.
     """
-    now = datetime.now(UTC)
-    return now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-
-def _today_start_naive() -> datetime:
-    """Today at 00:00 UTC, **naive** (no tzinfo). Use for columns declared as
-    plain ``TIMESTAMP`` — e.g. ``Wip.completed_at`` (B's migration) and
-    ``Report.created_at`` (D's migration). Mixing a tz-aware datetime against
-    a naive column triggers asyncpg ``DataError`` at execute time.
-    """
-    return _today_start().replace(tzinfo=None)
+    return datetime.now(UTC)
 
 
 def _now_naive() -> datetime:
-    """``datetime.utcnow``-equivalent for naive TIMESTAMP columns."""
+    """tz-naive ``now``. Use for columns declared as plain ``TIMESTAMP`` —
+    e.g. ``Wip.completed_at`` (B's migration) and ``Report.created_at``
+    (D's migration). Mixing a tz-aware datetime against a naive column
+    triggers asyncpg ``DataError`` at execute time.
+    """
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _rolling_windows(*, naive: bool = False) -> tuple[datetime, datetime, datetime]:
+    """Return ``(now, today_lower, yday_lower)`` for the spec's rolling 24h
+    delta calculation:
+
+    * ``today`` window  = ``[today_lower, now)``  — last 24h
+    * ``yesterday`` window = ``[yday_lower, today_lower)`` — the 24h before that
+
+    Set ``naive=True`` for columns declared as plain ``TIMESTAMP``.
+    """
+    now = _now_naive() if naive else _now_aware()
+    today_lower = now - timedelta(hours=24)
+    yday_lower = now - timedelta(hours=48)
+    return now, today_lower, yday_lower
 
 
 class DashboardRepository:
@@ -151,26 +160,32 @@ class DashboardRepository:
 
     async def kpi_new_orders(self, lab_codes: list[str] | None) -> tuple[int, int]:
         """``(today_count, yesterday_count)`` — orders whose ``created_at`` falls
-        in today's 24h window vs. the previous 24h window. Yesterday window is
-        a sliding 24h block, NOT calendar-yesterday — matches the spec's
-        "rolling 24h" delta calculation.
+        in the trailing 24h window vs. the 24h before that. Both windows are
+        rolling: ``[now-24h, now)`` and ``[now-48h, now-24h)``. Matches the
+        spec's rolling-24h delta calculation; the old calendar-day approach
+        compared partial-today vs full-yesterday and read as negative all
+        morning.
 
         Scoping walks ``OrderItemModel.lab_id`` (a short String code like
         ``"LAB-A"``) — see ``backend/app/repos/order_repo.py``. Going through
         Wip.lab_name would under-count orders that have not yet been split
         into WIPs (notably PENDING_APPROVAL).
         """
-        ts = _today_start()
-        ys = ts - _DAY
+        now, today_lower, yday_lower = _rolling_windows()
 
         if lab_codes is None:
             today = await self._session.scalar(
-                select(func.count()).select_from(OrderModel).where(OrderModel.created_at >= ts)
+                select(func.count())
+                .select_from(OrderModel)
+                .where(OrderModel.created_at >= today_lower, OrderModel.created_at < now)
             )
             yday = await self._session.scalar(
                 select(func.count())
                 .select_from(OrderModel)
-                .where(OrderModel.created_at >= ys, OrderModel.created_at < ts)
+                .where(
+                    OrderModel.created_at >= yday_lower,
+                    OrderModel.created_at < today_lower,
+                )
             )
             return int(today or 0), int(yday or 0)
 
@@ -181,9 +196,14 @@ class DashboardRepository:
             .join(OrderItemModel, OrderItemModel.order_id == OrderModel.id)
             .where(OrderItemModel.lab_id.in_(lab_codes))
         )
-        today = await self._session.scalar(base.where(OrderModel.created_at >= ts))
+        today = await self._session.scalar(
+            base.where(OrderModel.created_at >= today_lower, OrderModel.created_at < now)
+        )
         yday = await self._session.scalar(
-            base.where(OrderModel.created_at >= ys, OrderModel.created_at < ts)
+            base.where(
+                OrderModel.created_at >= yday_lower,
+                OrderModel.created_at < today_lower,
+            )
         )
         return int(today or 0), int(yday or 0)
 
@@ -192,20 +212,23 @@ class DashboardRepository:
 
         ``Wip.completed_at`` is a naive TIMESTAMP — use naive bounds.
         """
-        ts = _today_start_naive()
-        ys = ts - _DAY
+        now, today_lower, yday_lower = _rolling_windows(naive=True)
         base_today = (
             select(func.count())
             .select_from(Wip)
-            .where(Wip.status == _WIP_COMPLETED, Wip.completed_at >= ts)
+            .where(
+                Wip.status == _WIP_COMPLETED,
+                Wip.completed_at >= today_lower,
+                Wip.completed_at < now,
+            )
         )
         base_yday = (
             select(func.count())
             .select_from(Wip)
             .where(
                 Wip.status == _WIP_COMPLETED,
-                Wip.completed_at >= ys,
-                Wip.completed_at < ts,
+                Wip.completed_at >= yday_lower,
+                Wip.completed_at < today_lower,
             )
         )
         if lab_codes is not None:
@@ -228,20 +251,23 @@ class DashboardRepository:
         only quickly transition. The column is a naive TIMESTAMP — use naive
         bounds.
         """
-        ts = _today_start_naive()
-        ys = ts - _DAY
+        now, today_lower, yday_lower = _rolling_windows(naive=True)
         base_today = (
             select(func.count())
             .select_from(Report)
-            .where(Report.status == _REPORT_RETURNED_ZH, Report.created_at >= ts)
+            .where(
+                Report.status == _REPORT_RETURNED_ZH,
+                Report.created_at >= today_lower,
+                Report.created_at < now,
+            )
         )
         base_yday = (
             select(func.count())
             .select_from(Report)
             .where(
                 Report.status == _REPORT_RETURNED_ZH,
-                Report.created_at >= ys,
-                Report.created_at < ts,
+                Report.created_at >= yday_lower,
+                Report.created_at < today_lower,
             )
         )
         if lab_codes is not None:
@@ -607,8 +633,9 @@ class DashboardRepository:
         Utilization comes from ``Machine.utilization`` (per-machine 0-100%)
         averaged per lab; 0 for labs with no machines.
         """
-        # Wip.completed_at is naive — use naive bounds.
-        ts = _today_start_naive()
+        # Wip.completed_at is naive — use naive bounds. ``completed_today``
+        # uses the same rolling 24h window the KPI bar uses.
+        _, today_lower, _ = _rolling_windows(naive=True)
 
         # Get every active lab as the driver so labs without WIPs still appear.
         labs = (
@@ -617,11 +644,11 @@ class DashboardRepository:
             )
         ).all()
 
-        # Completed today per lab_name.
+        # Completed today per lab_name (rolling last 24h).
         completed_rows = (
             await self._session.execute(
                 select(Wip.lab_name, func.count())
-                .where(Wip.status == _WIP_COMPLETED, Wip.completed_at >= ts)
+                .where(Wip.status == _WIP_COMPLETED, Wip.completed_at >= today_lower)
                 .group_by(Wip.lab_name)
             )
         ).all()
