@@ -44,6 +44,8 @@ from app.common.recipients import recipients_for_global_role, recipients_for_rol
 from app.core.celery_app import celery_app
 from app.core.database import AsyncSessionLocal
 from app.db.models.issues import Issue
+from app.db.models.labs import Lab
+from app.modules.dashboard.publisher import publish_new_escalation
 from app.services.notifications import NotificationService
 
 logger = logging.getLogger(__name__)
@@ -155,6 +157,16 @@ async def _escalate_one_issue(
         new_level,
         len(recipient_ids),
     )
+
+    # Best-effort dashboard SSE fanout — failures here must not abort the
+    # escalation (notify() already committed above). Publisher swallows its
+    # own Redis errors; we wrap the lab lookup for the same reason.
+    try:
+        lab_name = await session.scalar(select(Lab.name).where(Lab.id == issue.lab_id))
+        await publish_new_escalation(lab_name)
+    except Exception:
+        logger.exception("dashboard publish_new_escalation failed issue=%s", issue.id)
+
     return True
 
 
