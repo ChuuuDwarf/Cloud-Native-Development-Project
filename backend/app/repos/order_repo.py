@@ -24,6 +24,7 @@ from app.db.models.order_management import (
     QuotaSettingModel,
     QuotaUsageModel,
 )
+from app.modules.dashboard.publisher import publish_new_pending_approval
 from app.repos.order_mappers import history_to_schema, order_to_schema
 from app.schemas.order import (
     Order,
@@ -426,6 +427,14 @@ class OrderRepository:
             quota_override=payload.quota_override,
         )
         await self.db.commit()
+
+        # Best-effort dashboard SSE fanout for a fresh PENDING_APPROVAL.
+        # Order items may span multiple labs (or be lab-less if items are
+        # not yet attached), so this is a global event. Publisher swallows
+        # Redis errors; we belt-and-suspenders the call too.
+        if payload.action == OrderAction.SUBMIT:
+            await publish_new_pending_approval(None)
+
         return await self.get_order(order.id)
 
     async def get_history(self, order_id: int) -> list[OrderHistory]:
