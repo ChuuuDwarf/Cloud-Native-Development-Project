@@ -29,6 +29,7 @@ from app.db.models import (
     Wip,
     WipExecution,
 )
+from app.modules.dashboard.publisher import publish_report_returned
 from app.modules.reports.fake_data import generate_for_items
 from app.modules.reports.repository import ReportRepository
 from app.modules.reports.serializers import report_dict, template_dict
@@ -280,6 +281,16 @@ class ReportService:
             OrderStatus.WAITING_PICKUP.value,
         )
         await self._repo.commit()
+
+        # Best-effort dashboard SSE fanout. lab_name is the WIP's display
+        # name (Chinese) since publisher channels are keyed by display name.
+        # Publisher swallows Redis errors; we wrap the wip lookup too.
+        try:
+            wip = await self._repo.get_wip(rpt.wip_id) if rpt.wip_id else None
+            await publish_report_returned(wip.lab_name if wip else None)
+        except Exception:
+            logger.exception("dashboard publish_report_returned failed report=%s", rpt.report_id)
+
         return report_dict(rpt)
 
     @staticmethod
