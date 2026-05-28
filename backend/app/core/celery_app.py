@@ -4,7 +4,6 @@ Beat-scheduled tasks (e.g. issue escalation) live under ``app.workers``.
 """
 
 from celery import Celery
-from celery.schedules import crontab
 
 from app.core.config import get_settings
 
@@ -34,9 +33,12 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
-    "escalate-open-issues-every-minute": {
+    "escalate-open-issues": {
         "task": "app.workers.escalation.scan_and_escalate",
-        "schedule": crontab(minute="*"),
+        # Safety net only — ETA tasks (escalate_specific_issue) are the
+        # primary driver (Option C). This sweep catches issues whose ETA
+        # task was dropped (worker restart, lost broker message, etc.).
+        "schedule": 60.0,
     },
     # 進度自動推進：每 2 秒檢查一次，依各 WIP 的 next_progress_at（隨機 3/5/8 秒）+1%。
     "tick-experiment-progress": {

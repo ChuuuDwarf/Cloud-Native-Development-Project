@@ -89,9 +89,36 @@ export interface RecentEscalation {
   updatedAt: string;
 }
 
+// Sprint 6: machine + order widgets on the supervisor dashboard.
+
+export interface MachineLabBreakdown {
+  labCode: string;
+  byStatus: Record<string, number>; // canonical English MachineStatus values
+}
+
+export interface MachinesSummary {
+  total: number;
+  byStatus: Record<string, number>;
+  avgUtilization: number;
+  byLab: MachineLabBreakdown[];
+}
+
+export interface OrderLabBreakdown {
+  labCode: string;
+  byBucket: Record<string, number>;
+}
+
+export interface OrdersSummary {
+  total: number;
+  byBucket: Record<string, number>;
+  byLab: OrderLabBreakdown[];
+}
+
 export interface DashboardSnapshot {
   issues: IssuesSummary;
   unreadNotifications: number;
   byLab: LabBreakdown[];
   recentEscalations: RecentEscalation[];
+  machines: MachinesSummary;
+  orders: OrdersSummary;
 }

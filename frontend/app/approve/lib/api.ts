@@ -1,25 +1,35 @@
 import type { ApiResponse } from "../types";
-
-const apiBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(
-  /\/api\/?$/,
-  ""
-);
+import { httpClient } from "@/api/httpClient";
+import { AxiosError, Method } from "axios";
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<ApiResponse<T>> {
-  const response = await fetch(`${apiBase}${path}`, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-    ...init,
-  });
-
-  const payload = await response.json();
-
-  if (!response.ok) {
-    throw new Error(payload.detail || payload.message || "API request failed");
+  const url = path.replace(/^\/api/, "");
+  let data: unknown = undefined;
+  if (init?.body != null) {
+    data = typeof init.body === "string" ? JSON.parse(init.body) : init.body;
   }
 
-  return payload as ApiResponse<T>;
+  try {
+    const res = await httpClient.request<ApiResponse<T>>({
+      url,
+      method: (init?.method as Method | undefined) ?? "GET",
+      data,
+      headers: init?.headers as Record<string, string> | undefined,
+    });
+    return res.data;
+  } catch (err) {
+    const axErr = err as AxiosError<{
+      detail?: string;
+      message?: string;
+      error?: { message?: string };
+    }>;
+    const body = axErr.response?.data;
+    const message =
+      body?.detail ??
+      body?.message ??
+      body?.error?.message ??
+      axErr.message ??
+      "API request failed";
+    throw new Error(message);
+  }
 }

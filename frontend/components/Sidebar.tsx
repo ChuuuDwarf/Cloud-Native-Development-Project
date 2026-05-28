@@ -128,7 +128,6 @@ const nav: NavSection[] = [
     section: "結案與倉儲",
     items: [
       {
-<<<<<<< HEAD
         id: "report",
         href: "/report",
         icon: "📊",
@@ -141,13 +140,6 @@ const nav: NavSection[] = [
         icon: "📑",
         label: "結單管理",
         roles: ["system_admin", "lab_engineer", "lab_supervisor"],
-=======
-        id: "storage",
-        href: "/storage",
-        icon: "📦",
-        label: "倉儲取件",
-        roles: ["system_admin", "general_supervisor", "lab_engineer", "lab_supervisor"],
->>>>>>> 44015c2 (feat: general_supervisor (大主管) role + level-2 escalation (Sprint 5))
       },
       {
         id: "issues",

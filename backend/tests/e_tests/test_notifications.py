@@ -363,3 +363,137 @@ async def test_mark_read_non_issue_source_leaves_issues_alone(
     # Untouched: still armed, never handled.
     assert refreshed.next_escalation_time is not None
     assert refreshed.handled_at is None
+
+
+# ---------------------------------------------------------------------------
+# Ack side effect: machine-targeted issues restore the machine to 閒置.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mark_read_restores_faulty_machine_to_idle(
+    engineer_a_client: AsyncClient,
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """When the acked issue targets a 故障中 machine, the side effect flips
+    the machine back to 閒置 in the same transaction.
+    """
+    from sqlalchemy import select
+
+    from app.common.enums import IssueStatus, IssueType
+    from app.db.models.issues import Issue
+    from app.db.models.machines import Machine
+
+    eng_a_id = await _me_id(engineer_a_client)
+    lab_a_id = await _lab_id(admin_client, "LAB-A")
+
+    machine = Machine(
+        machine_id="SEM-TEST",
+        name="SEM Test",
+        lab="LAB-A",
+        status="故障中",
+        supported_items=[],
+        utilization=0,
+        owner="",
+    )
+    db_session.add(machine)
+    await db_session.flush()
+
+    issue = Issue(
+        type=IssueType.ABNORMAL,
+        target_type="machine",
+        target_id="SEM-TEST",  # business code, not UUID
+        lab_id=lab_a_id,
+        title="machine fault",
+        status=IssueStatus.OPEN,
+    )
+    db_session.add(issue)
+    await db_session.flush()
+    issue_id = issue.id
+
+    service = NotificationService(db_session)
+    rows = await service.notify(
+        recipient_ids=[eng_a_id],
+        lab_id=lab_a_id,
+        source_type="issue",
+        source_id=str(issue_id),
+        title="machine alert",
+    )
+    notif_ids = [r.id for r in rows]
+
+    resp = await engineer_a_client.post(
+        "/api/notifications/actions",
+        json={"ids": [str(nid) for nid in notif_ids]},
+    )
+    assert resp.status_code == 200, resp.text
+
+    db_session.expire_all()
+    refreshed = (
+        await db_session.execute(select(Machine).where(Machine.machine_id == "SEM-TEST"))
+    ).scalar_one()
+    assert refreshed.status == "閒置"
+
+
+@pytest.mark.asyncio
+async def test_mark_read_does_not_touch_machines_in_other_status(
+    engineer_a_client: AsyncClient,
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A 保養中 machine stays 保養中 — the ack restore only undoes 故障中."""
+    from sqlalchemy import select
+
+    from app.common.enums import IssueStatus, IssueType
+    from app.db.models.issues import Issue
+    from app.db.models.machines import Machine
+
+    eng_a_id = await _me_id(engineer_a_client)
+    lab_a_id = await _lab_id(admin_client, "LAB-A")
+
+    machine = Machine(
+        machine_id="SEM-MAINT",
+        name="SEM Maintenance",
+        lab="LAB-A",
+        status="保養中",
+        supported_items=[],
+        utilization=0,
+        owner="",
+    )
+    db_session.add(machine)
+    await db_session.flush()
+
+    issue = Issue(
+        type=IssueType.ABNORMAL,
+        target_type="machine",
+        target_id="SEM-MAINT",
+        lab_id=lab_a_id,
+        title="should not affect maintenance",
+        status=IssueStatus.OPEN,
+    )
+    db_session.add(issue)
+    await db_session.flush()
+    issue_id = issue.id
+
+    service = NotificationService(db_session)
+    rows = await service.notify(
+        recipient_ids=[eng_a_id],
+        lab_id=lab_a_id,
+        source_type="issue",
+        source_id=str(issue_id),
+        title="alert",
+    )
+    notif_ids = [r.id for r in rows]
+
+    resp = await engineer_a_client.post(
+        "/api/notifications/actions",
+        json={"ids": [str(nid) for nid in notif_ids]},
+    )
+    assert resp.status_code == 200, resp.text
+
+    db_session.expire_all()
+    refreshed = (
+        await db_session.execute(select(Machine).where(Machine.machine_id == "SEM-MAINT"))
+    ).scalar_one()
+    # Guarded: still 保養中, not 閒置.
+    assert refreshed.status == "保養中"

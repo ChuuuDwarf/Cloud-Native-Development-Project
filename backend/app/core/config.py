@@ -25,7 +25,8 @@ class Settings(BaseSettings):
 
     jwt_secret: str = Field(default="change-me-in-prod-please")
     jwt_algorithm: str = Field(default="HS256")
-    jwt_expires_minutes: int = Field(default=60 * 24)
+    jwt_access_expires_minutes: int = Field(default=60)
+    jwt_refresh_expires_days: int = Field(default=7)
 
     cors_origins: str = Field(default="http://localhost:3000")
 

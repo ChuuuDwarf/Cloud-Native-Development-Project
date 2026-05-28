@@ -21,6 +21,7 @@ from app.common.dependencies import CurrentUser
 from app.common.enums import IssueStatus, NotificationChannel, NotificationStatus, Severity
 from app.core.database import get_db
 from app.db.models.issues import Issue
+from app.db.models.machines import Machine
 from app.db.models.notifications import Notification
 from app.db.models.users import User
 from app.repos.notifications import NotificationRepository
@@ -238,6 +239,36 @@ class NotificationService:
             len(issue_ids),
             user.id,
         )
+        # Side effect: if any of the acked issues targets a machine, flip
+        # that machine from 故障中 back to 閒置. The status guard ensures
+        # we only undo the simulate-issue button — a machine that's
+        # legitimately 保養中 / 停用 / 使用中 stays put.
+        #
+        # Machine.status stores Chinese strings (C 組 schema); MachineStatus
+        # enum's English values aren't used at the DB layer here.
+
+        machine_targets_stmt = (
+            select(Issue.target_id)
+            .where(Issue.id.in_(issue_ids), Issue.target_type == "machine")
+            .distinct()
+        )
+        machine_ids = list((await self._session.execute(machine_targets_stmt)).scalars().all())
+
+        if machine_ids:
+            restore_stmt = (
+                update(Machine)
+                .where(
+                    Machine.machine_id.in_(machine_ids),
+                    Machine.status == "故障中",
+                )
+                .values(status="閒置")
+                .execution_options(synchronize_session=False)
+            )
+            await self._session.execute(restore_stmt)
+            logger.info(
+                "restored %d machine(s) to 閒置 after issue ack",
+                len(machine_ids),
+            )
 
 
 async def get_notification_service(

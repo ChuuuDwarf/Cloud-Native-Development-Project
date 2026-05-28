@@ -16,6 +16,7 @@ from app.db.models.issues import Issue
 from app.repos.issues import IssueRepository
 from app.schemas.issues import IssueCreate, IssueListParams, IssueUpdate
 from app.services.notifications import NotificationService
+from app.workers.escalation import escalate_specific_issue
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +38,16 @@ class IssueService:
         # post-flush triggers a second UPDATE which expires updated_at via
         # the server-side onupdate trigger and breaks downstream serialization
         # under async (MissingGreenlet).
+        eta = datetime.now(UTC) + INITIAL_ESCALATION_DELAY
         issue = await self._repo.create_issue(
             payload,
-            next_escalation_time=datetime.now(UTC) + INITIAL_ESCALATION_DELAY,
+            next_escalation_time=eta,
         )
         await self._session.commit()
+        # Option C: schedule a per-issue ETA task that fires precisely at the
+        # first escalation deadline. The Beat scan (every 60s) is only a
+        # safety net for dropped tasks (worker restart, lost broker message).
+        escalate_specific_issue.apply_async(args=[str(issue.id)], eta=eta)
 
         # Level-0 initial fan-out: engineers are first responders. If they
         # don't close the issue within INITIAL_ESCALATION_DELAY, the Celery
