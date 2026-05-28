@@ -161,9 +161,12 @@ async def _escalate_one_issue(
     # Best-effort dashboard SSE fanout — failures here must not abort the
     # escalation (notify() already committed above). Publisher swallows its
     # own Redis errors; we wrap the lab lookup for the same reason.
+    # NOTE: publisher channels are keyed by Lab.code (ASCII), not Lab.name
+    # (display name), so the SSE handler — which subscribes off
+    # CurrentUser.lab_code — actually receives the event.
     try:
-        lab_name = await session.scalar(select(Lab.name).where(Lab.id == issue.lab_id))
-        await publish_new_escalation(lab_name)
+        lab_code = await session.scalar(select(Lab.code).where(Lab.id == issue.lab_id))
+        await publish_new_escalation(lab_code)
     except Exception:
         logger.exception("dashboard publish_new_escalation failed issue=%s", issue.id)
 
