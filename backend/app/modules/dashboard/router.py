@@ -72,14 +72,24 @@ async def stream_dashboard(
     yields event-name strings; the FE only needs the *signal*, not the
     payload, since it re-fetches the full snapshot after each one.
     """
-    channels = ["dashboard:events:global"]
-    patterns: list[str] = []
     if user.role == "lab_supervisor" and user.lab_code is not None:
-        channels.append(f"dashboard:events:{user.lab_code}")
+        # lab_supervisor: explicit subscribe to global + own lab. No PSUB
+        # wildcard, so events on other labs are correctly filtered out.
+        channels = ["dashboard:events:global", f"dashboard:events:{user.lab_code}"]
+        patterns: list[str] = []
     elif "*" in user.permissions or user.role in ("system_admin", "general_supervisor"):
-        # Cross-lab viewers: see every lab via wildcard pattern (no double
-        # publish to global needed).
-        patterns.append("dashboard:events:*")
+        # Cross-lab viewers: ``dashboard:events:*`` (PSUBSCRIBE) already
+        # matches ``dashboard:events:global``, so an explicit SUBSCRIBE to
+        # global would double-deliver every global event (one ``message``
+        # frame + one ``pmessage`` frame).
+        channels = []
+        patterns = ["dashboard:events:*"]
+    else:
+        # Permission gate already restricts this endpoint to dashboard:read
+        # roles, so we don't expect to land here. Safety fallback: only
+        # global events, so unexpected roles don't get cross-lab leakage.
+        channels = ["dashboard:events:global"]
+        patterns = []
 
     async def event_gen():
         async for ev in listen(channels, patterns=patterns):

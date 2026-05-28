@@ -10,7 +10,12 @@ Channels:
 * ``dashboard:events:global`` — every event is also published here for
   general_supervisor / system_admin who watch the whole plant.
 * ``dashboard:events:{lab_code}`` — per-lab fanout so a lab_supervisor only
-  receives invalidations relevant to their own lab.
+  receives invalidations relevant to their own lab. ``lab_code`` is the
+  ASCII lab identifier (e.g. ``LAB-A``), **not** the display name (e.g.
+  ``電性測試實驗室``). The SSE handler keys its subscription off
+  ``CurrentUser.lab_code``; publishers must translate any lab display name
+  back to a code before calling these helpers, otherwise lab_supervisor
+  channels will silently never match.
 
 All publishes are best-effort: failures are logged and swallowed so a Redis
 outage doesn't take down the writer.
@@ -30,8 +35,12 @@ logger = logging.getLogger(__name__)
 _GLOBAL_CHANNEL = "dashboard:events:global"
 
 
-def _lab_channel(lab_name: str | None) -> str:
-    return f"dashboard:events:{lab_name}" if lab_name else _GLOBAL_CHANNEL
+def _lab_channel(lab_code: str | None) -> str:
+    """Return the per-lab channel for ``lab_code`` (ASCII, e.g. ``LAB-A``).
+
+    Falls back to the global channel when ``lab_code`` is ``None``.
+    """
+    return f"dashboard:events:{lab_code}" if lab_code else _GLOBAL_CHANNEL
 
 
 _redis: aioredis.Redis | None = None
@@ -56,32 +65,35 @@ async def _publish(channel: str, event: str) -> None:
         logger.exception("dashboard publish failed channel=%s event=%s", channel, event)
 
 
-async def publish_new_escalation(lab_name: str | None) -> None:
+async def publish_new_escalation(lab_code: str | None) -> None:
     """Called from the escalation worker after an issue is bumped a level.
 
-    If ``lab_name`` is given, the event lands on the per-lab channel only —
-    cross-lab viewers (general_supervisor / system_admin) are subscribed to
-    every lab channel via the snapshot endpoint, so a separate global
+    ``lab_code`` is the ASCII lab identifier (``Lab.code``, e.g. ``LAB-A``),
+    **not** the display name. If given, the event lands on the per-lab
+    channel only — cross-lab viewers (general_supervisor / system_admin)
+    pick it up via ``dashboard:events:*`` (PSUBSCRIBE), so a separate global
     publish would double-deliver to lab_supervisor (who subscribes to both
     global and their own lab). Pass ``None`` for truly global events.
     """
-    await _publish(_lab_channel(lab_name), "new_escalation")
+    await _publish(_lab_channel(lab_code), "new_escalation")
 
 
-async def publish_new_pending_approval(lab_name: str | None) -> None:
+async def publish_new_pending_approval(lab_code: str | None) -> None:
     """Called from order service when an order transitions to pending_approval.
 
-    See :func:`publish_new_escalation` for channel-selection rationale.
+    See :func:`publish_new_escalation` for ``lab_code`` semantics and
+    channel-selection rationale.
     """
-    await _publish(_lab_channel(lab_name), "new_pending_approval")
+    await _publish(_lab_channel(lab_code), "new_pending_approval")
 
 
-async def publish_report_returned(lab_name: str | None) -> None:
+async def publish_report_returned(lab_code: str | None) -> None:
     """Called from reports service when a report transitions to RETURNED.
 
-    See :func:`publish_new_escalation` for channel-selection rationale.
+    See :func:`publish_new_escalation` for ``lab_code`` semantics and
+    channel-selection rationale.
     """
-    await _publish(_lab_channel(lab_name), "report_returned")
+    await _publish(_lab_channel(lab_code), "report_returned")
 
 
 async def listen(channels: list[str], *, patterns: list[str] | None = None) -> AsyncIterator[str]:

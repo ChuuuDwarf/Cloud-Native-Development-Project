@@ -373,7 +373,9 @@ class DashboardRepository:
 
         * ``waiting_dispatch`` — WIP at ``waiting_schedule`` with no Dispatch row.
         * ``dispatched``        — WIP at ``scheduled`` / ``dispatched``.
-        * ``in_progress``       — WIP at ``running`` / ``unloaded`` / ``waiting_confirm``.
+        * ``in_progress``       — WIP at ``running`` / ``paused``
+          (the DB CHECK vocab; the ``UNLOADED`` / ``WAITING_CONFIRM`` values
+          in the WipStatus enum never land in the DB).
         * ``awaiting_handoff``  — WIP ``completed`` AND report RETURNED AND order
           not yet in WAITING_PICKUP / CLOSED (== spec's "待傳" stage).
         * ``done``              — WIP ``completed`` AND order in
@@ -604,6 +606,11 @@ class DashboardRepository:
         shows up once with the latest returned timestamp. Lab scoping passes
         lab codes; the join walks ``Report.wip_id (=wip_no) → Wip.lab_name``.
 
+        ``Wip.lab_name`` is nullable; rows with a NULL lab_name are excluded
+        rather than surfaced as orphans, because ``CompletionRow.lab_name``
+        is non-optional and an orphan completion isn't meaningfully
+        actionable on the supervisor dashboard anyway.
+
         ``Report.created_at`` is a naive TIMESTAMP — cutoff is naive too.
         """
         cutoff = _now_naive() - timedelta(minutes=30)
@@ -614,6 +621,7 @@ class DashboardRepository:
             .where(
                 Report.status == _REPORT_RETURNED_ZH,
                 Report.created_at >= cutoff,
+                Wip.lab_name.is_not(None),
             )
             .group_by(Report.wip_id, Wip.order_no, Wip.lab_name)
             .order_by(latest_returned_at.desc())
