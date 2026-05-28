@@ -3,10 +3,6 @@
 // so frontend mirrors snake_case 1:1.
 
 import type { Severity } from "@/constants/enums";
-import type { MachineStatus } from "./machines";
-import type { WipStatus } from "./dispatches";
-
-export type { MachineStatus, WipStatus };
 
 // ---------- Current snapshot types (Phase A backend) ----------
 
