@@ -101,13 +101,15 @@ async def test_machines_status_translated_to_english(db_session) -> None:
 
 
 async def test_machines_scoped_subset(db_session) -> None:
+    """LAB-A is the seeded code for 材料分析實驗室; machines() returns the
+    lab's display name (not code) so every widget labels labs the same way.
+    """
     repo = DashboardRepository(db_session)
     full = await repo.machines(lab_codes=None)
     scoped = await repo.machines(lab_codes=["LAB-A"])
     assert len(scoped) <= len(full)
-    # All scoped rows must belong to LAB-A.
     for r in scoped:
-        assert r[2] == "LAB-A"
+        assert r[2] == "材料分析實驗室"
 
 
 # ----------------------------------------------------------- WIP pipeline

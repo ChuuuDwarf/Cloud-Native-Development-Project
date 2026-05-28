@@ -326,8 +326,14 @@ class DashboardRepository:
     # --------------------------------------------------------------- machines
 
     async def machines(self, lab_codes: list[str] | None) -> Sequence[Any]:
-        """Return ``(machine_id, machine_no, lab_code, status_en, today_hours,
+        """Return ``(machine_id, machine_no, lab_name, status_en, today_hours,
         current_recipe, current_operator, est_completion_at)`` rows.
+
+        ``lab_name`` is the lab's display name (e.g. ``材料分析實驗室``),
+        resolved via ``Machine.lab → Lab.code`` so every dashboard widget
+        labels labs the same way (Wip.lab_name already stores the display
+        name). Machines whose ``lab`` code has no matching ``labs`` row fall
+        back to the raw code rather than disappearing.
 
         ``today_hours`` is a best-effort proxy from ``Machine.utilization``
         (a 0-100 percent) — converted to "hours of an 8h day" so the service
@@ -339,9 +345,10 @@ class DashboardRepository:
             Machine.id,
             Machine.machine_id,
             Machine.lab,
+            Lab.name,
             Machine.status,
             Machine.utilization,
-        )
+        ).outerjoin(Lab, Lab.code == Machine.lab)
         if lab_codes is not None:
             stmt = stmt.where(Machine.lab.in_(lab_codes))
         rows = (await self._session.execute(stmt)).all()
@@ -349,9 +356,9 @@ class DashboardRepository:
             (
                 str(r[0]),
                 r[1],
-                r[2],
-                MACHINE_STATUS_CN_TO_EN.get(r[3], r[3]),
-                float(r[4] or 0) / 100.0 * 8.0,  # crude % → hours-of-day
+                r[3] or r[2],  # prefer Lab.name; fall back to raw code
+                MACHINE_STATUS_CN_TO_EN.get(r[4], r[4]),
+                float(r[5] or 0) / 100.0 * 8.0,  # crude % → hours-of-day
                 None,
                 None,
                 None,
@@ -508,9 +515,11 @@ class DashboardRepository:
         notification for that issue whose status is READ. Mirrors the read
         logic in ``app.repos.issues.list_acknowledgements``.
 
-        Returns ``(issue_id, status, severity, escalation_level, lab_code,
+        Returns ``(issue_id, status, severity, escalation_level, lab_name,
         title, created_at)`` rows, sorted: escalated first, then critical
-        first, then newest first.
+        first, then newest first. ``lab_name`` is the lab's display name
+        (``Lab.name``), keeping every widget's ``lab_name`` column
+        consistent with the others.
         """
         # Subquery: issue_ids the user has acked via reading a notification.
         acked_subq = (
@@ -529,7 +538,7 @@ class DashboardRepository:
                 Issue.status,
                 Issue.severity,
                 Issue.escalation_level,
-                Lab.code,
+                Lab.name,
                 Issue.title,
                 Issue.created_at,
             )
@@ -561,14 +570,15 @@ class DashboardRepository:
         level transition, so it's the closest available signal without
         introducing a dedicated audit table.
 
-        Returns ``(issue_id, lab_code, severity, escalation_level, title,
-        escalated_at)``.
+        Returns ``(issue_id, lab_name, severity, escalation_level, title,
+        escalated_at)``. ``lab_name`` is the display name (Lab.name) so it
+        matches every other widget's ``lab_name`` column.
         """
         cutoff = datetime.now(UTC) - _DAY
         stmt = (
             select(
                 Issue.id,
-                Lab.code,
+                Lab.name,
                 Issue.severity,
                 Issue.escalation_level,
                 Issue.title,

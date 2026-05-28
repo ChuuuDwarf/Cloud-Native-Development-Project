@@ -109,13 +109,15 @@ async def test_lab_supervisor_sees_completions_and_no_leaderboard(db_session) ->
 
 
 async def test_lab_supervisor_machines_are_scoped_to_own_lab(db_session) -> None:
+    """LAB-A's seeded display name is 材料分析實驗室. Every widget's
+    ``lab_name`` is the display name, so the supervisor's machine grid
+    should only contain that one name."""
     user = await _user_by_email(db_session, "supervisor@example.com")  # LAB-A
     svc = DashboardService(db_session)
     snap = await svc.compute_snapshot(user)
-    # Every machine row's lab_name should be LAB-A.
     for machines in snap.machines.by_lab.values():
         for grid in machines:
-            assert grid.lab_name == "LAB-A"
+            assert grid.lab_name == "材料分析實驗室"
 
 
 # --------------------------------------------------------------- system_admin
