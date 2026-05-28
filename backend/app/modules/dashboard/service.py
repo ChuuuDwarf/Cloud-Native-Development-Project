@@ -43,7 +43,9 @@ from app.modules.dashboard.schemas import (
 # - 待簽 > 5 → orange
 # - 未結告警 > 0 → orange
 # (no red threshold defined yet; we leave room for one if tuned later)
+# TODO: read from system_settings.alertRules so admins can tune without code edits.
 _PENDING_APPROVAL_ORANGE_AT = 6
+# TODO: read from system_settings.alertRules.
 _OPEN_ISSUES_ORANGE_AT = 1
 
 
