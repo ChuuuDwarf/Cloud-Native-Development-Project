@@ -9,16 +9,18 @@ order approval, etc.) to dispatch notifications across recipients x channels.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.dependencies import CurrentUser
-from app.common.enums import NotificationChannel, Severity
+from app.common.enums import IssueStatus, NotificationChannel, NotificationStatus, Severity
 from app.core.database import get_db
+from app.db.models.issues import Issue
 from app.db.models.notifications import Notification
 from app.db.models.users import User
 from app.repos.notifications import NotificationRepository
@@ -157,9 +159,85 @@ class NotificationService:
         notification_ids: list[UUID],
         user: CurrentUser,
     ) -> tuple[int, list[UUID]]:
-        result = await self._repo.mark_read(notification_ids, user)
+        """Mark notifications as read AND acknowledge their source issues.
+
+        Side effect: any of the just-flipped notifications whose
+        ``source_type == "issue"`` triggers an ack on the corresponding
+        Issue row — ``next_escalation_time`` is cleared so the Beat worker
+        stops escalating, and ``handled_at`` is stamped the first time
+        (subsequent reads don't overwrite).
+
+        Both happen in the same transaction so a recipient marking
+        their alert read is the canonical "I see this, stop paging
+        people" signal. Phone-pickup-as-ack would need the CHT TAS
+        MQTT callback wired up (out of scope).
+        """
+        marked_count, skipped = await self._repo.mark_read(notification_ids, user)
+        if marked_count > 0:
+            await self._ack_source_issues(notification_ids, user)
         await self._session.commit()
-        return result
+        return marked_count, skipped
+
+    async def _ack_source_issues(
+        self,
+        notification_ids: list[UUID],
+        user: CurrentUser,
+    ) -> None:
+        """Stop escalation for any issue whose notification was just read.
+
+        Reads back from the same session (the repo's UPDATE...RETURNING
+        already flipped the rows but hasn't committed). For each unique
+        ``source_id`` where ``source_type == "issue"``, set the Issue's
+        ``next_escalation_time`` to NULL and ``handled_at`` to now
+        (coalesce so we keep the first ack timestamp).
+        """
+        if not notification_ids:
+            return
+
+        source_id_stmt = (
+            select(Notification.source_id)
+            .where(
+                Notification.id.in_(notification_ids),
+                Notification.recipient_id == user.id,
+                Notification.source_type == "issue",
+                Notification.status == NotificationStatus.READ,
+            )
+            .distinct()
+        )
+        source_ids = list((await self._session.execute(source_id_stmt)).scalars().all())
+        if not source_ids:
+            return
+
+        # Notification.source_id is String (polymorphic across resource
+        # types); Issue.id is UUID. Convert defensively — a stray
+        # non-UUID source_id from a bad notify() call shouldn't 500 the
+        # whole mark-read.
+        try:
+            issue_ids = [UUID(s) for s in source_ids]
+        except (TypeError, ValueError):
+            logger.exception("non-uuid source_id in notification batch: %s", source_ids)
+            return
+
+        now = datetime.now(UTC)
+        ack_stmt = (
+            update(Issue)
+            # Skip CLOSED so a stray read on a fully-resolved issue doesn't
+            # downgrade its status back to ACKNOWLEDGED.
+            .where(Issue.id.in_(issue_ids), Issue.status != IssueStatus.CLOSED)
+            .values(
+                status=IssueStatus.ACKNOWLEDGED,
+                next_escalation_time=None,
+                handled_at=func.coalesce(Issue.handled_at, now),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        await self._session.execute(ack_stmt)
+
+        logger.info(
+            "acked %d issue(s) via notification read by user=%s",
+            len(issue_ids),
+            user.id,
+        )
 
 
 async def get_notification_service(

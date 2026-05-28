@@ -240,3 +240,126 @@ async def test_mark_read_empty_ids_is_422(engineer_a_client: AsyncClient) -> Non
     """Schema enforces min_length=1 before the endpoint body runs."""
     resp = await engineer_a_client.post("/api/notifications/actions", json={"ids": []})
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Ack-on-read: marking an issue notification read stops escalation.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mark_read_clears_next_escalation_on_source_issue(
+    engineer_a_client: AsyncClient,
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Reading an issue-sourced notification stops further escalation.
+
+    Sets up an Issue with a future ``next_escalation_time``, seeds a
+    notification pointing at it, marks read, and asserts the Issue's
+    ``next_escalation_time`` is now NULL and ``handled_at`` is set.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.common.enums import IssueStatus, IssueType
+    from app.db.models.issues import Issue
+
+    eng_a_id = await _me_id(engineer_a_client)
+    lab_a_id = await _lab_id(admin_client, "LAB-A")
+
+    # An Issue armed to escalate in 1h — long enough to outlive the test.
+    future = datetime.now(UTC) + timedelta(hours=1)
+    issue = Issue(
+        type=IssueType.ABNORMAL,
+        target_type="machine",
+        target_id="M-TEST",
+        lab_id=lab_a_id,
+        title="ack-test issue",
+        status=IssueStatus.OPEN,
+        next_escalation_time=future,
+    )
+    db_session.add(issue)
+    await db_session.flush()
+    issue_id = issue.id
+
+    # Seed a notification whose source_id points at the issue.
+    service = NotificationService(db_session)
+    rows = await service.notify(
+        recipient_ids=[eng_a_id],
+        lab_id=lab_a_id,
+        source_type="issue",
+        source_id=str(issue_id),
+        title="alert from ack-test",
+    )
+    notif_ids = [r.id for r in rows]
+
+    resp = await engineer_a_client.post(
+        "/api/notifications/actions",
+        json={"ids": [str(nid) for nid in notif_ids]},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["markedCount"] == len(notif_ids)
+
+    # Re-fetch the issue from the DB and verify the ack side-effects landed.
+    db_session.expire_all()
+    refreshed = (await db_session.execute(select(Issue).where(Issue.id == issue_id))).scalar_one()
+    assert refreshed.next_escalation_time is None
+    assert refreshed.handled_at is not None
+    assert refreshed.status == IssueStatus.ACKNOWLEDGED
+
+
+@pytest.mark.asyncio
+async def test_mark_read_non_issue_source_leaves_issues_alone(
+    engineer_a_client: AsyncClient,
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A notification with source_type != "issue" must not touch the issues table."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.common.enums import IssueStatus, IssueType
+    from app.db.models.issues import Issue
+
+    eng_a_id = await _me_id(engineer_a_client)
+    lab_a_id = await _lab_id(admin_client, "LAB-A")
+
+    future = datetime.now(UTC) + timedelta(hours=1)
+    issue = Issue(
+        type=IssueType.ABNORMAL,
+        target_type="machine",
+        target_id="M-OTHER",
+        lab_id=lab_a_id,
+        title="should not be acked",
+        status=IssueStatus.OPEN,
+        next_escalation_time=future,
+    )
+    db_session.add(issue)
+    await db_session.flush()
+    issue_id = issue.id
+
+    # Notification whose source_type is "order" — must NOT clear any issue.
+    service = NotificationService(db_session)
+    rows = await service.notify(
+        recipient_ids=[eng_a_id],
+        lab_id=lab_a_id,
+        source_type="order",
+        source_id=str(issue_id),  # same id, wrong type — must be ignored
+        title="order update, not an issue ack",
+    )
+    notif_ids = [r.id for r in rows]
+
+    resp = await engineer_a_client.post(
+        "/api/notifications/actions",
+        json={"ids": [str(nid) for nid in notif_ids]},
+    )
+    assert resp.status_code == 200
+
+    db_session.expire_all()
+    refreshed = (await db_session.execute(select(Issue).where(Issue.id == issue_id))).scalar_one()
+    # Untouched: still armed, never handled.
+    assert refreshed.next_escalation_time is not None
+    assert refreshed.handled_at is None

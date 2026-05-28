@@ -103,6 +103,7 @@ export const IssueStatusLabel: Record<IssueStatus, string> = {
   open: "未處理",
   assigned: "已指派",
   escalated: "已升級",
+  acknowledged: "已處理",
   closed: "已關閉",
 };
 
