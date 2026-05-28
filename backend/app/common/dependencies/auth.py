@@ -36,6 +36,7 @@ class CurrentUser(BaseModel):
     role: str
     permissions: list[str]
     lab_id: uuid.UUID | None = None
+    lab_code: str | None = None
     department_id: uuid.UUID | None = None
 
 
@@ -86,6 +87,7 @@ async def get_current_user(
         role=role,
         permissions=permissions,
         lab_id=user.lab_id,
+        lab_code=user.lab.code if user.lab else None,
         department_id=user.department_id,
     )
 

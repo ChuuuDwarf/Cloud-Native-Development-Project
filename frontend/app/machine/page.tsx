@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 import KpiCard from "@/components/ui/KpiCard";
 import {
   machinesApi,
@@ -17,7 +18,9 @@ const STATUSES: MachineStatus[] = ["閒置", "使用中", "保養中", "故障�
 const BLOCKED: MachineStatus[] = ["保養中", "故障中", "停用"];
 
 export default function MachinePage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const userLabCode = user?.role === "lab_supervisor" ? user.labCode : null;
   const [selectedStatus, setSelectedStatus] = useState<MachineStatus>("閒置");
   const [editing, setEditing] = useState<Machine | null>(null);
   // Bump to remount MachineForm so it clears after a successful create.
@@ -150,6 +153,7 @@ export default function MachinePage() {
           initial={editing}
           submitting={save.isPending}
           onSubmit={(payload) => save.mutate(payload)}
+          userLabCode={userLabCode}
         />
         <MachineTable
           machines={machines}

@@ -55,13 +55,19 @@ export default function MachineForm({
   initial,
   submitting,
   onSubmit,
+  userLabCode,
 }: {
   /** Machine being edited, or null for a fresh create form. */
   initial: Machine | null;
   submitting: boolean;
   onSubmit: (payload: MachinePayload) => void;
+  /** When set, the lab field is locked to this value (lab_supervisor scope). */
+  userLabCode?: string | null;
 }) {
-  const [form, setForm] = useState<FormState>(initial ? toFormState(initial) : EMPTY);
+  const lockedLab = !initial && userLabCode ? userLabCode : null;
+  const [form, setForm] = useState<FormState>(
+    initial ? toFormState(initial) : lockedLab ? { ...EMPTY, lab: lockedLab } : EMPTY
+  );
 
   const isEdit = initial !== null;
   const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
@@ -113,7 +119,12 @@ export default function MachineForm({
           onChange={(e) => set({ name: e.target.value })}
           style={inputStyle}
         />
-        <select value={form.lab} onChange={(e) => set({ lab: e.target.value })} style={inputStyle}>
+        <select
+          value={form.lab}
+          onChange={(e) => set({ lab: e.target.value })}
+          disabled={!!lockedLab}
+          style={{ ...inputStyle, ...(lockedLab ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}
+        >
           <option value="">選擇實驗室</option>
           {LABS.map((lab) => (
             <option key={lab} value={lab}>
