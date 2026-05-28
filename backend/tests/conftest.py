@@ -211,6 +211,19 @@ async def supervisor_a_client() -> AsyncIterator[AsyncClient]:
 
 
 @pytest.fixture
+async def director_client() -> AsyncIterator[AsyncClient]:
+    """Authenticated client for the seeded general_supervisor (大主管).
+
+    Unlike admin (system_admin / wildcard ``*``), the director is the
+    operations role: cross-lab visibility but no system-management
+    permissions. Use this when a test specifically needs
+    ``role == general_supervisor`` rather than ``system_admin``.
+    """
+    async for c in _build_authed_client("director@example.com", "Direc1234"):
+        yield c
+
+
+@pytest.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     """An AsyncSession against the test database.
 
