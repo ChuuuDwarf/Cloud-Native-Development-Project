@@ -344,3 +344,105 @@ async def test_completed_wip_with_multiple_reports_counted_once(db_session) -> N
     )
     # And the multi-report wip itself contributes >=1 to awaiting_handoff.
     assert counts["awaiting_handoff"][0] >= 1
+
+
+# ------------------------------------------------------- regression: B3
+#
+# B3: WIPs in every CHECK-allowed status must land in the documented bucket.
+# The previous in_progress constant referenced WipStatus.UNLOADED /
+# WAITING_CONFIRM which are NOT in the DB CHECK vocabulary, and ``paused``
+# (which IS allowed) was silently dropped from every bucket.
+
+
+async def test_all_valid_wip_statuses_land_in_correct_bucket(db_session) -> None:
+    """Seed Wips with each DB-CHECK status and verify bucket allocation."""
+    now = datetime.now(UTC)
+    naive_now = now.replace(tzinfo=None)
+    lab = "材料分析實驗室"
+    suite_id = uuid.uuid4().hex[:8]
+    order_pending_pickup_no = f"REG-B3a-{suite_id}"
+    order_pickup_no = f"REG-B3b-{suite_id}"
+    db_session.add_all(
+        [
+            OrderModel(
+                order_no=order_pending_pickup_no,
+                applicant_id="reg-applicant",
+                department_id="DEPT-RD",
+                apply_date=now,
+                status=OrderStatus.IN_PROGRESS.value,
+                priority="normal",
+                total_items=1,
+            ),
+            OrderModel(
+                order_no=order_pickup_no,
+                applicant_id="reg-applicant",
+                department_id="DEPT-RD",
+                apply_date=now,
+                status=OrderStatus.WAITING_PICKUP.value,
+                priority="normal",
+                total_items=1,
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    # Build one Wip per CHECK status. "completed" appears twice — one per
+    # order status so it lands in awaiting_handoff vs done.
+    seeded = [
+        ("waiting_schedule", order_pending_pickup_no),
+        ("scheduled", order_pending_pickup_no),
+        ("dispatched", order_pending_pickup_no),
+        ("running", order_pending_pickup_no),
+        ("paused", order_pending_pickup_no),
+        ("completed", order_pending_pickup_no),  # → awaiting_handoff (after report)
+        ("completed", order_pickup_no),  # → done (after report)
+        ("terminated", order_pending_pickup_no),
+    ]
+    wip_nos: list[str] = []
+    for status, order_no in seeded:
+        wip_no = f"WIP-B3-{status[:4]}-{uuid.uuid4().hex[:6]}"
+        wip_nos.append(wip_no)
+        db_session.add(
+            Wip(
+                wip_no=wip_no,
+                sample_id=uuid.uuid4(),
+                order_no=order_no,
+                lab_name=lab,
+                experiment_item="reg",
+                priority="normal",
+                status=status,
+                progress=100 if status == "completed" else 0,
+                completed_at=naive_now if status == "completed" else None,
+            )
+        )
+
+    returned_zh = REPORT_ZH[ReportStatus.RETURNED]
+    completed_indices = [i for i, (s, _) in enumerate(seeded) if s == "completed"]
+    for idx in completed_indices:
+        db_session.add(
+            Report(
+                report_id=f"RPT-B3-{uuid.uuid4().hex[:8]}",
+                order_id=seeded[idx][1],
+                wip_id=wip_nos[idx],
+                title="r",
+                status=returned_zh,
+                created_by="reg",
+            )
+        )
+    await db_session.commit()
+
+    # Resolve which buckets the seed must contribute to. Each non-completed
+    # status seeds exactly +1; "completed" with a RETURNED report and a
+    # non-pickup order → awaiting_handoff; "completed" + pickup → done.
+    repo = DashboardRepository(db_session)
+    counts = await repo.wip_pipeline_counts(lab_codes=None)
+    # The "waiting_schedule" seed has no dispatch row → waiting_dispatch.
+    assert counts["waiting_dispatch"][0] >= 1
+    # scheduled + dispatched land here.
+    assert counts["dispatched"][0] >= 2
+    # running + paused must both count — paused was missing from the
+    # original _WIP_IN_PROGRESS_STATES constant.
+    assert counts["in_progress"][0] >= 2
+    assert counts["awaiting_handoff"][0] >= 1
+    assert counts["done"][0] >= 1
+    assert counts["terminated"][0] >= 1
