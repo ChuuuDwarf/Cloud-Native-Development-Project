@@ -1,6 +1,3 @@
-# Celery Beat is the singleton scheduler. It MUST stay at exactly 1 replica —
-# two beats = duplicate scheduled tasks (the escalation scan would fire twice).
-# Recreate (not RollingUpdate) so a deploy never briefly runs two beats.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

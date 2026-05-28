@@ -1,12 +1,3 @@
-# fluent-bit DaemonSet -> Google Cloud Logging.
-# Tails every pod's container logs (k3s/containerd CRI format), enriches them
-# with Kubernetes metadata (namespace, pod, container, labels), and ships to
-# Cloud Logging via the `stackdriver` output. Auth is automatic on GCE: the
-# plugin uses the VM service account through the metadata server, so NO key is
-# needed (the SA just needs roles/logging.logWriter, granted in Phase 3).
-#
-# In Cloud Logging you can then filter by resource.labels (k8s_container) and
-# the namespace_name to separate lims-prod vs lims-staging logs.
 apiVersion: v1
 kind: ServiceAccount
 metadata:

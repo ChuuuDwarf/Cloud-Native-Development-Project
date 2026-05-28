@@ -1,8 +1,3 @@
-# Shared file storage for backend + celery-worker.
-# ReadWriteOnce is fine on single-node k3s: both pods land on the same node,
-# and RWO allows multiple pods *on the same node* to mount the volume.
-# NOTE: this is the one thing that blocks multi-node scaling later — to go
-# multi-node, switch to object storage (GCS/S3/MinIO) or RWX (Longhorn/NFS).
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

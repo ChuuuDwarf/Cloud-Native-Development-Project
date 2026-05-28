@@ -1,12 +1,3 @@
-# Single entrypoint via k3s's built-in Traefik.
-#   /api  -> backend  (longest-prefix match wins, so it takes priority over /)
-#   /     -> frontend
-# Same-origin: the browser loads the app from / and calls /api on the same host,
-# so the httpOnly JWT cookie (SameSite=lax) and SSE both work without CORS.
-#
-# SSE note: Traefik streams responses by default (no response buffering), so
-# /api/dashboard/stream and /api/notifications/stream work out of the box. No
-# special annotation needed for buffering; long-lived connections are fine.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

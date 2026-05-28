@@ -3,7 +3,6 @@ kind: Service
 metadata:
   name: postgres
 spec:
-  # Headless: stable DNS for the single StatefulSet pod (postgres.lims.svc).
   clusterIP: None
   selector:
     app: postgres
