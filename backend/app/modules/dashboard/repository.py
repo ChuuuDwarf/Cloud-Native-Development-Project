@@ -47,7 +47,6 @@ from app.common.enums import (
     NotificationStatus,
     ReportStatus,
     Severity,
-    WipStatus,
 )
 from app.common.enums.order_status import OrderStatus
 from app.common.enums.role_d_zh import REPORT_ZH
@@ -61,16 +60,22 @@ from app.db.models.wips import Wip
 
 _DAY = timedelta(hours=24)
 
-# DB-side WIP status values (B's CHECK constraint vocabulary).
+# DB-side WIP status values (B's CHECK constraint vocabulary — see
+# ``app/db/models/wips.py``: 'created', 'waiting_schedule', 'scheduled',
+# 'dispatched', 'running', 'paused', 'completed', 'terminated', 'cancelled').
+# Status literals are hardcoded here because ``app.common.enums.WipStatus``
+# was authored before B's CHECK constraint landed and now uses values
+# (``unloaded``, ``waiting_confirm``, ``waiting_dispatch``, …) that the DB
+# never stores — relying on those constants silently produced empty buckets.
+#
+# ``created`` and ``cancelled`` are deliberately NOT placed in any bucket:
+# the spec's WIP pipeline starts at "waiting for dispatch" and ends at
+# completed/terminated. Cancelled WIPs are a write-off, not a delivery state.
 _WIP_WAITING_DISPATCH = "waiting_schedule"
 _WIP_SCHEDULED_STATES = ("scheduled", "dispatched")
-_WIP_IN_PROGRESS_STATES = (
-    WipStatus.RUNNING.value,
-    WipStatus.UNLOADED.value,
-    WipStatus.WAITING_CONFIRM.value,
-)
-_WIP_COMPLETED = WipStatus.COMPLETED.value
-_WIP_TERMINATED = WipStatus.TERMINATED.value
+_WIP_IN_PROGRESS_STATES = ("running", "paused")
+_WIP_COMPLETED = "completed"
+_WIP_TERMINATED = "terminated"
 
 # Reports persist Chinese status strings (D-team convention).
 _REPORT_RETURNED_ZH = REPORT_ZH[ReportStatus.RETURNED]
