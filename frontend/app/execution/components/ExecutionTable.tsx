@@ -71,9 +71,6 @@ function RowActions({ w, canOperate, isChief, offline, open, run, flashError }: 
           >
             下機
           </Btn>
-          <Btn small variant="primary" disabled={disabled} onClick={() => open("result", w)}>
-            上傳結果
-          </Btn>
           <Btn small variant="danger" disabled={disabled} onClick={() => open("abort", w)}>
             中止申請
           </Btn>
@@ -82,9 +79,6 @@ function RowActions({ w, canOperate, isChief, offline, open, run, flashError }: 
     case "已下機":
       return (
         <>
-          <Btn small variant="primary" disabled={disabled} onClick={() => open("result", w)}>
-            上傳結果
-          </Btn>
           <Btn small variant="danger" disabled={disabled} onClick={() => open("abort", w)}>
             中止申請
           </Btn>

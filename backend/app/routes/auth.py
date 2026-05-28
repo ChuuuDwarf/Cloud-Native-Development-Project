@@ -156,6 +156,7 @@ async def get_me(
             role=user.role,
             permissions=user.permissions,
             labId=user.lab_id,
+            labCode=user.lab_code,
             departmentId=user.department_id,
         ),
     )

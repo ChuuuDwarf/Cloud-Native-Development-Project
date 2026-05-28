@@ -33,4 +33,5 @@ class MeResponse(BaseModel):
     role: str
     permissions: list[str]
     lab_id: uuid.UUID | None = Field(default=None, alias="labId")
+    lab_code: str | None = Field(default=None, alias="labCode")
     department_id: uuid.UUID | None = Field(default=None, alias="departmentId")

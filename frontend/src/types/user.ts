@@ -25,6 +25,7 @@ export interface MeResponse {
   role: string;
   permissions: string[];
   labId: string | null;
+  labCode: string | null;
   departmentId: string | null;
 }
 
