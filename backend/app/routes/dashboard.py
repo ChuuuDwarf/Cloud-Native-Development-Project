@@ -1,25 +1,15 @@
-"""HTTP routes for /api/dashboard.
+"""Routing-layer entrypoint for ``/api/dashboard``.
 
-One endpoint. Returns a snapshot of every widget; scope is applied
-server-side based on the caller's role.
+Re-exports the router defined in :mod:`app.modules.dashboard.router` so the
+central registry (``app.routes.registry.ALL_ROUTERS``) can pick it up via
+the existing module pattern.
+
+The old service-based implementation lives in
+``app/services/dashboard.py`` + ``app/schemas/dashboard.py`` and is no longer
+mounted on the app; those files are kept for now and will be removed in a
+follow-up cleanup commit once the FE has cut over.
 """
 
-from typing import Annotated
+from app.modules.dashboard.router import router
 
-from fastapi import APIRouter, Depends
-
-from app.common.dependencies import CurrentUser, require_permission
-from app.common.schemas import ApiResponse
-from app.schemas.dashboard import DashboardSnapshot
-from app.services.dashboard import DashboardService, get_dashboard_service
-
-router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
-
-
-@router.get("", response_model=ApiResponse[DashboardSnapshot])
-async def get_dashboard(
-    service: Annotated[DashboardService, Depends(get_dashboard_service)],
-    user: Annotated[CurrentUser, Depends(require_permission("dashboard:read"))],
-) -> ApiResponse[DashboardSnapshot]:
-    snapshot = await service.get_snapshot(user)
-    return ApiResponse(data=DashboardSnapshot.model_validate(snapshot))
+__all__ = ["router"]
