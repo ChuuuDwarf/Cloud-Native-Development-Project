@@ -7,7 +7,9 @@
   the full snapshot.
 
 The endpoint is gated by ``dashboard:read``; the seeded ``general_supervisor``,
-``lab_supervisor``, and ``system_admin`` roles all hold it.
+``lab_supervisor``, and ``system_admin`` roles all hold it. ``lab_engineer``
+does NOT have ``dashboard:read``, so per-lab subscription only needs to be
+arranged for ``lab_supervisor``.
 """
 
 from __future__ import annotations
@@ -15,13 +17,10 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
 from app.common.dependencies import CurrentUser, get_current_user, require_permission
 from app.common.schemas import ApiResponse
-from app.core.database import AsyncSessionLocal
-from app.db.models.labs import Lab
 from app.modules.dashboard.dependencies import get_dashboard_service
 from app.modules.dashboard.publisher import listen
 from app.modules.dashboard.schemas import DashboardSnapshot
@@ -55,24 +54,19 @@ async def stream_dashboard(
     Channels:
 
     * ``dashboard:events:global`` — every caller listens here so global
-      events (e.g. an escalation in any lab) always reach the page.
-    * ``dashboard:events:{lab_code}`` — added for lab_bound roles so
+      events (e.g. a new pending_approval order that isn't lab-bound)
+      always reach the page.
+    * ``dashboard:events:{lab_code}`` — added for ``lab_supervisor`` so
       per-lab fanouts are received without flooding global subscribers.
 
-    The handler yields event-name strings; the FE only needs the *signal*,
-    not the payload, since it re-fetches the full snapshot after each one.
+    ``CurrentUser`` already carries ``lab_code`` (resolved in
+    ``get_current_user``); no extra DB lookup is needed here. The handler
+    yields event-name strings; the FE only needs the *signal*, not the
+    payload, since it re-fetches the full snapshot after each one.
     """
     channels = ["dashboard:events:global"]
-    if user.role in ("lab_supervisor", "lab_engineer") and user.lab_id is not None:
-        # Resolve the user's lab code so we subscribe to the right per-lab
-        # channel. Using a one-shot session here (not the request session)
-        # because the SSE generator outlives the request scope.
-        async with AsyncSessionLocal() as session:
-            code = (
-                await session.execute(select(Lab.code).where(Lab.id == user.lab_id))
-            ).scalar_one_or_none()
-        if code:
-            channels.append(f"dashboard:events:{code}")
+    if user.role == "lab_supervisor" and user.lab_code is not None:
+        channels.append(f"dashboard:events:{user.lab_code}")
 
     async def event_gen():
         async for ev in listen(channels):
