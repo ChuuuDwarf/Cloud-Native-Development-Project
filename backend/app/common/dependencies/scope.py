@@ -27,10 +27,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Select
+from sqlalchemy import Select, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.dependencies.auth import CurrentUser
 from app.common.errors import ForbiddenError
+from app.db.models.labs import Lab
 
 
 def apply_lab_scope(
@@ -93,4 +95,37 @@ def apply_lab_scope(
     raise ForbiddenError(f"Role {role!r} is not permitted to view this resource")
 
 
-__all__ = ["apply_lab_scope"]
+async def resolve_user_lab_codes(session: AsyncSession, user: CurrentUser) -> list[str] | None:
+    """Return the list of lab codes (e.g. ``["LAB-A"]``) this user may see,
+    or ``None`` to mean "all labs / no filter".
+
+    For models whose lab column is a String code (Machine.lab,
+    OrderItemModel.lab_id, Wip.lab_name, Dispatch.lab) — apply_lab_scope
+    can't help because it expects a UUID FK. Caller does::
+
+        codes = await resolve_user_lab_codes(session, user)
+        if codes is not None:
+            stmt = stmt.where(Machine.lab.in_(codes))
+
+    Returns ``None`` for system_admin / general_supervisor (cross-lab).
+    Returns a single-element list for lab_supervisor / lab_engineer.
+    Raises ForbiddenError for plant_user (never has lab-scoped access to
+    machine / order data through this helper).
+    """
+    if "*" in user.permissions or user.role in ("system_admin", "general_supervisor"):
+        return None
+
+    if user.role in ("lab_supervisor", "lab_engineer"):
+        if user.lab_id is None:
+            raise ForbiddenError(f"User has role {user.role!r} but no lab assignment")
+        code = (
+            await session.execute(select(Lab.code).where(Lab.id == user.lab_id))
+        ).scalar_one_or_none()
+        if code is None:
+            raise ForbiddenError(f"Lab {user.lab_id} not found")
+        return [code]
+
+    raise ForbiddenError(f"Role {user.role!r} is not permitted to view this resource")
+
+
+__all__ = ["apply_lab_scope", "resolve_user_lab_codes"]
