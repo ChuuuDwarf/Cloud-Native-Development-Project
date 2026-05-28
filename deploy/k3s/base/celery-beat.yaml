@@ -1,0 +1,43 @@
+# Celery Beat is the singleton scheduler. It MUST stay at exactly 1 replica —
+# two beats = duplicate scheduled tasks (the escalation scan would fire twice).
+# Recreate (not RollingUpdate) so a deploy never briefly runs two beats.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: celery-beat
+  template:
+    metadata:
+      labels:
+        app: celery-beat
+    spec:
+      containers:
+        - name: celery-beat
+          image: lims-backend
+          command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: lims-config
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lims-secrets
+                  key: JWT_SECRET
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: lims-secrets
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi

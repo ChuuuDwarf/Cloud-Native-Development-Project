@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Default namespace for standalone base use; each overlay overrides this
+# (lims-prod / lims-staging). Namespaces themselves are created out-of-band in
+# Phase 3 (kubectl create namespace) to avoid kustomize Namespace-rename quirks.
+namespace: lims
+
+resources:
+  - config.yaml
+  - uploads-pvc.yaml
+  - postgres.yaml
+  - redis.yaml
+  - backend.yaml
+  - celery-worker.yaml
+  - celery-beat.yaml
+  - frontend.yaml
+  - migrate-job.yaml
+  - ingress.yaml
+  # NOTE: secret.example.yaml is intentionally NOT included — the real
+  # lims-secrets Secret is created out-of-band so secrets never live in git.
+
+# Placeholder image names; the prod overlay rewrites these to the real
+# Artifact Registry path + tag (CD runs `kustomize edit set image`).
+images:
+  - name: lims-backend
+    newName: lims-backend
+  - name: lims-frontend
+    newName: lims-frontend
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: lims
+    includeSelectors: false

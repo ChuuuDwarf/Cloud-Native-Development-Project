@@ -1,0 +1,31 @@
+# One-shot DB migration. Runs `alembic upgrade head` (SINGULAR — the migration
+# chain is linear; do NOT use `heads`). alembic's env.py reads DATABASE_URL from
+# the environment, same as CI.
+#
+# A Job's pod spec is immutable, so re-applying with a new image fails. The CD
+# deploy script therefore does `kubectl delete job db-migrate --ignore-not-found`
+# before applying, then `kubectl wait --for=condition=complete job/db-migrate`.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+spec:
+  backoffLimit: 3
+  # Clean up finished migration jobs after 10 min to avoid clutter.
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: lims-backend
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: lims-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: lims-secrets
+                  key: DATABASE_URL

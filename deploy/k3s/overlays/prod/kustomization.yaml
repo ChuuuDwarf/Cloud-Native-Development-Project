@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production environment. Namespace created out-of-band:
+#   kubectl create namespace lims-prod
+namespace: lims-prod
+
+resources:
+  - ../../base
+
+# Real images in GCP Artifact Registry (project lims-497613, repo `lims`,
+# region asia-east1). CD overrides the tag per release via:
+#   kustomize edit set image \
+#     lims-backend=asia-east1-docker.pkg.dev/lims-497613/lims/backend:vX.Y.Z \
+#     lims-frontend=asia-east1-docker.pkg.dev/lims-497613/lims/frontend:vX.Y.Z
+images:
+  - name: lims-backend
+    newName: asia-east1-docker.pkg.dev/lims-497613/lims/backend
+    newTag: latest
+  - name: lims-frontend
+    newName: asia-east1-docker.pkg.dev/lims-497613/lims/frontend
+    newTag: latest
+
+# Host-based TLS for prod. REPLACE_IP is filled with the VM's reserved static
+# IP in Phase 3 (e.g. 34.80.1.2 -> host 34.80.1.2.nip.io). cert-manager issues
+# a Let's Encrypt cert into the lims-tls secret via the letsencrypt-prod issuer.
+patches:
+  - target:
+      kind: Ingress
+      name: lims
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+      - op: add
+        path: /spec/tls
+        value:
+          - hosts:
+              - 34.80.119.4.nip.io
+            secretName: lims-tls
+      - op: add
+        path: /spec/rules/0/host
+        value: 34.80.119.4.nip.io

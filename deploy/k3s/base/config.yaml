@@ -1,0 +1,28 @@
+# Non-secret runtime config shared by backend / celery worker / beat.
+# Secret values (JWT_SECRET, DB password) live in the Secret, NOT here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lims-config
+data:
+  # production: enables the Secure flag on the JWT cookie (auth.py gates it on
+  # env == "production"). Correct here because we serve over HTTPS (nip.io +
+  # Let's Encrypt). This is the APP behavior flag — NOT the deploy environment
+  # name; both the lims-staging and lims-prod namespaces run the app in this
+  # mode since both are HTTPS.
+  ENV: "production"
+  REDIS_URL: "redis://redis:6379/0"
+  JWT_ALGORITHM: "HS256"
+  JWT_EXPIRES_MINUTES: "1440"
+  # Same-origin: browser hits /api on the same host, so CORS isn't exercised.
+  # Kept for safety / non-browser clients; overlay can point it at the real URL.
+  CORS_ORIGINS: "http://localhost"
+  EMAIL_BACKEND: "file"
+  EMAIL_FROM: "noreply@lims.local"
+  UPLOADS_DIR: "/app/uploads"
+  # DB connection (non-secret parts). Password is injected from the Secret via
+  # the Deployment env; the full DATABASE_URL is assembled there.
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "lims"
+  POSTGRES_USER: "lims"
