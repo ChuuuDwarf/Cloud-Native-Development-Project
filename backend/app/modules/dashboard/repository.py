@@ -55,7 +55,7 @@ from app.db.models.issues import Issue
 from app.db.models.labs import Lab
 from app.db.models.machines import Dispatch, Machine
 from app.db.models.notifications import Notification
-from app.db.models.order_management import OrderModel
+from app.db.models.order_management import OrderItemModel, OrderModel
 from app.db.models.reports import Report
 from app.db.models.wips import Wip
 
@@ -149,6 +149,11 @@ class DashboardRepository:
         in today's 24h window vs. the previous 24h window. Yesterday window is
         a sliding 24h block, NOT calendar-yesterday — matches the spec's
         "rolling 24h" delta calculation.
+
+        Scoping walks ``OrderItemModel.lab_id`` (a short String code like
+        ``"LAB-A"``) — see ``backend/app/repos/order_repo.py``. Going through
+        Wip.lab_name would under-count orders that have not yet been split
+        into WIPs (notably PENDING_APPROVAL).
         """
         ts = _today_start()
         ys = ts - _DAY
@@ -164,15 +169,12 @@ class DashboardRepository:
             )
             return int(today or 0), int(yday or 0)
 
-        # Scoped: count distinct orders whose Wips land in the caller's labs.
-        lab_names = await self.lab_names_for_codes(lab_codes)
-        if not lab_names:
-            return 0, 0
+        # Scoped: count distinct orders whose items target the caller's labs.
         base = (
-            select(func.count(func.distinct(OrderModel.order_no)))
+            select(func.count(func.distinct(OrderModel.id)))
             .select_from(OrderModel)
-            .join(Wip, Wip.order_no == OrderModel.order_no)
-            .where(Wip.lab_name.in_(lab_names))
+            .join(OrderItemModel, OrderItemModel.order_id == OrderModel.id)
+            .where(OrderItemModel.lab_id.in_(lab_codes))
         )
         today = await self._session.scalar(base.where(OrderModel.created_at >= ts))
         yday = await self._session.scalar(
@@ -253,23 +255,25 @@ class DashboardRepository:
         return int(today or 0), int(yday or 0)
 
     async def kpi_pending_approval(self, lab_codes: list[str] | None) -> int:
-        """Current count of orders awaiting supervisor approval."""
+        """Current count of orders awaiting supervisor approval.
+
+        Scoped via ``OrderItemModel.lab_id`` (lab code) rather than ``Wip``,
+        because PENDING_APPROVAL orders have not been split into WIPs yet
+        — joining through Wip would silently report 0 for every lab.
+        """
         base = (
             select(func.count())
             .select_from(OrderModel)
             .where(OrderModel.status == OrderStatus.PENDING_APPROVAL.value)
         )
         if lab_codes is not None:
-            lab_names = await self.lab_names_for_codes(lab_codes)
-            if not lab_names:
-                return 0
             base = (
-                select(func.count(func.distinct(OrderModel.order_no)))
+                select(func.count(func.distinct(OrderModel.id)))
                 .select_from(OrderModel)
-                .join(Wip, Wip.order_no == OrderModel.order_no)
+                .join(OrderItemModel, OrderItemModel.order_id == OrderModel.id)
                 .where(
                     OrderModel.status == OrderStatus.PENDING_APPROVAL.value,
-                    Wip.lab_name.in_(lab_names),
+                    OrderItemModel.lab_id.in_(lab_codes),
                 )
             )
         return int(await self._session.scalar(base) or 0)
@@ -429,20 +433,34 @@ class DashboardRepository:
     ) -> Sequence[Any]:
         """Oldest pending-approval orders first — they need a supervisor's eyes
         most urgently. Returns ``(order_no, applicant_id, created_at)`` rows.
+
+        Scoped via ``OrderItemModel.lab_id`` (lab code) so PENDING_APPROVAL
+        orders without WIPs still surface for the right lab supervisor.
         """
+        if lab_codes is None:
+            stmt = (
+                select(OrderModel.order_no, OrderModel.applicant_id, OrderModel.created_at)
+                .where(OrderModel.status == OrderStatus.PENDING_APPROVAL.value)
+                .order_by(OrderModel.created_at.asc())
+                .limit(limit)
+            )
+            return (await self._session.execute(stmt)).all()
+
+        # Group by order id so an order with multiple items in the caller's
+        # labs only appears once.
         stmt = (
             select(OrderModel.order_no, OrderModel.applicant_id, OrderModel.created_at)
-            .where(OrderModel.status == OrderStatus.PENDING_APPROVAL.value)
+            .join(OrderItemModel, OrderItemModel.order_id == OrderModel.id)
+            .where(
+                OrderModel.status == OrderStatus.PENDING_APPROVAL.value,
+                OrderItemModel.lab_id.in_(lab_codes),
+            )
+            .group_by(
+                OrderModel.id, OrderModel.order_no, OrderModel.applicant_id, OrderModel.created_at
+            )
             .order_by(OrderModel.created_at.asc())
             .limit(limit)
         )
-        if lab_codes is not None:
-            lab_names = await self.lab_names_for_codes(lab_codes)
-            if not lab_names:
-                return []
-            stmt = stmt.join(Wip, Wip.order_no == OrderModel.order_no).where(
-                Wip.lab_name.in_(lab_names)
-            )
         return (await self._session.execute(stmt)).all()
 
     async def triage_unack_issues(

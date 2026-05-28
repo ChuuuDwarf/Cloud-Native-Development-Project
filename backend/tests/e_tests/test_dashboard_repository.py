@@ -9,8 +9,13 @@ counts, which would otherwise couple the test to seed churn.
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime
+
 import pytest
 
+from app.common.enums.order_status import OrderStatus
+from app.db.models.order_management import OrderItemModel, OrderModel
 from app.modules.dashboard.repository import DashboardRepository
 
 pytestmark = pytest.mark.asyncio
@@ -192,3 +197,46 @@ async def test_lab_leaderboard_contains_seeded_labs(db_session) -> None:
     assert "材料分析實驗室" in lab_names
     assert "電性測試實驗室" in lab_names
     assert "可靠度實驗室" in lab_names
+
+
+# ------------------------------------------------------- regression: B1
+#
+# B1: Order lab-scoping must walk OrderItemModel.lab_id, NOT Wip.lab_name.
+# Pending-approval orders have no WIPs yet, so a Wip-join would under-count
+# them to zero in a lab_supervisor's view.
+
+
+async def test_pending_approval_order_scoped_via_items_no_wips(db_session) -> None:
+    """An order at PENDING_APPROVAL with an OrderItem in LAB-A and NO Wip rows
+    must still appear in the LAB-A supervisor's KPI + triage list."""
+    now = datetime.now(UTC)
+    order = OrderModel(
+        order_no=f"REG-B1-{uuid.uuid4().hex[:8]}",
+        applicant_id="reg-applicant",
+        department_id="DEPT-RD",
+        apply_date=now,
+        status=OrderStatus.PENDING_APPROVAL.value,
+        priority="normal",
+        total_items=1,
+    )
+    db_session.add(order)
+    await db_session.flush()
+    db_session.add(
+        OrderItemModel(
+            order_id=order.id,
+            sample_id="SMP-B1",
+            sample_name="B1 sample",
+            lab_id="LAB-A",
+            experiment_id="EXP-B1",
+            status=OrderStatus.PENDING_APPROVAL.value,
+        )
+    )
+    await db_session.commit()
+
+    repo = DashboardRepository(db_session)
+    pending = await repo.kpi_pending_approval(lab_codes=["LAB-A"])
+    assert pending >= 1, "lab_supervisor in LAB-A should see the pending-approval order"
+
+    triage = await repo.triage_pending_approvals(lab_codes=["LAB-A"], limit=20)
+    order_nos = [r[0] for r in triage]
+    assert order.order_no in order_nos
