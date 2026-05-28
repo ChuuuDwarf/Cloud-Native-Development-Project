@@ -35,6 +35,7 @@ from app.modules.dashboard.schemas import (
     MachineHeatmap,
     ThresholdColor,
     TriageItem,
+    TriageType,
     WipPipeline,
 )
 
@@ -117,14 +118,29 @@ class DashboardService:
             (self._repo.lab_leaderboard(limit=5) if cross_lab else _none_async()),
         )
 
-        kpi = self._build_kpi(new_orders, completed, returned, pending_appr, open_issues_count)
-        machines = self._build_machines(machine_rows)
-        pipeline = self._build_pipeline(pipeline_counts)
-        triage = self._build_triage(triage_approvals, triage_issues)
-        escalations = self._build_escalations(esc_rows)
-        completions = self._build_completions(comp_rows) if comp_rows is not None else None
+        # mypy infers ``asyncio.gather`` results as a union and can't narrow
+        # them per-position; the runtime types are guaranteed by the awaited
+        # methods, so we silence per-arg here.
+        kpi = self._build_kpi(
+            new_orders,  # type: ignore[arg-type]
+            completed,  # type: ignore[arg-type]
+            returned,  # type: ignore[arg-type]
+            pending_appr,  # type: ignore[arg-type]
+            open_issues_count,  # type: ignore[arg-type]
+        )
+        machines = self._build_machines(machine_rows)  # type: ignore[arg-type]
+        pipeline = self._build_pipeline(pipeline_counts)  # type: ignore[arg-type]
+        triage = self._build_triage(triage_approvals, triage_issues)  # type: ignore[arg-type]
+        escalations = self._build_escalations(esc_rows)  # type: ignore[arg-type]
+        completions = (
+            self._build_completions(comp_rows)  # type: ignore[arg-type]
+            if comp_rows is not None
+            else None
+        )
         leaderboard = (
-            self._build_leaderboard(leaderboard_rows) if leaderboard_rows is not None else None
+            self._build_leaderboard(leaderboard_rows)  # type: ignore[arg-type]
+            if leaderboard_rows is not None
+            else None
         )
 
         # viewer_lab is the lab_code the caller is scoped to; null for
@@ -238,10 +254,10 @@ class DashboardService:
             )
         for r in issues:
             iid, status, severity, _level, lab_code, title, created_at = r
-            t = "escalated_issue" if status == "escalated" else "open_issue"
+            triage_type: TriageType = "escalated_issue" if status == "escalated" else "open_issue"
             items.append(
                 TriageItem(
-                    type=t,
+                    type=triage_type,
                     ref_id=str(iid),
                     label=title,
                     lab_name=lab_code,
