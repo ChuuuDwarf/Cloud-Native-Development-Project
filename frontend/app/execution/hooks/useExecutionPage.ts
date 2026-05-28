@@ -31,7 +31,7 @@ export function useExecutionPage() {
   const [target, setTarget] = useState<Wip | null>(null);
   const [msg, setMsg] = useState<Banner | null>(null);
 
-  // 操作（上機/下機/進度/結果/確認/中止申請）需 experiments:operate；
+  // 操作（上機/下機/進度/確認/中止申請）需 experiments:operate；
   // 審核中止需 experiments:review。權限來自登入者（cookie 驗證）。
   const canOperate = hasPermission("experiments:operate");
   const isChief = hasPermission("experiments:review");
