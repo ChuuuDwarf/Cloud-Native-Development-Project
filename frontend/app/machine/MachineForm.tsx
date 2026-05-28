@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import Btn from "@/components/ui/Btn";
 import Panel from "@/components/ui/Panel";
 import { formatLab } from "@/components/labDisplay";
@@ -8,15 +9,17 @@ import type { Machine, MachinePayload } from "@/types/machines";
 
 const LABS = ["LAB-A", "LAB-B", "LAB-C"];
 
-const DEMO: FormState = {
-  machineId: "AFM-004",
-  name: "原子力顯微鏡",
-  lab: "LAB-A",
-  supportedItems: "表面形貌分析, 粗糙度量測",
-  owner: "林育誠",
-  utilization: "18",
-  lastMaintenance: "2026-05-20",
-};
+function demoTemplate(lab: string): FormState {
+  return {
+    machineId: "AFM-004",
+    name: "原子力顯微鏡",
+    lab,
+    supportedItems: "表面形貌分析, 粗糙度量測",
+    owner: "林育誠",
+    utilization: "18",
+    lastMaintenance: "2026-05-20",
+  };
+}
 
 const EMPTY: FormState = {
   machineId: "",
@@ -92,7 +95,7 @@ export default function MachineForm({
       title={isEdit ? "編輯機台" : "新增機台"}
       action={
         !isEdit && (
-          <Btn small onClick={() => setForm(DEMO)}>
+          <Btn small onClick={() => setForm(demoTemplate(lockedLab ?? "LAB-A"))}>
             快速填入
           </Btn>
         )
