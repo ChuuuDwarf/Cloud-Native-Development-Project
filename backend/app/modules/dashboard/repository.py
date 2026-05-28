@@ -80,9 +80,7 @@ _WIP_TERMINATED = "terminated"
 # Reports persist Chinese status strings (D-team convention).
 _REPORT_RETURNED_ZH = REPORT_ZH[ReportStatus.RETURNED]
 
-# Issue statuses that count as "open" — same logic as
-# ``app.services.dashboard.OPEN_ISSUE_STATUSES`` so the new and legacy
-# endpoints stay consistent until the legacy one is retired.
+# Issue statuses that count as "open" for the KPI bar and triage list.
 _OPEN_ISSUE_STATUSES = (
     IssueStatus.OPEN.value,
     IssueStatus.ASSIGNED.value,
@@ -90,8 +88,7 @@ _OPEN_ISSUE_STATUSES = (
 )
 _HIGH_CRITICAL = (Severity.HIGH.value, Severity.CRITICAL.value)
 
-# Machine status (Chinese) ↔ canonical English (mirrors
-# ``app.services.dashboard.MACHINE_STATUS_CN_TO_EN``).
+# Machine status (Chinese) ↔ canonical English.
 MACHINE_STATUS_CN_TO_EN: dict[str, str] = {
     "閒置": MachineStatus.IDLE.value,
     "使用中": MachineStatus.IN_USE.value,

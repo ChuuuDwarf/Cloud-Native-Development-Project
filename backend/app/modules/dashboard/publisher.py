@@ -57,41 +57,61 @@ async def _publish(channel: str, event: str) -> None:
 
 
 async def publish_new_escalation(lab_name: str | None) -> None:
-    """Called from the escalation worker after an issue is bumped a level."""
+    """Called from the escalation worker after an issue is bumped a level.
+
+    If ``lab_name`` is given, the event lands on the per-lab channel only —
+    cross-lab viewers (general_supervisor / system_admin) are subscribed to
+    every lab channel via the snapshot endpoint, so a separate global
+    publish would double-deliver to lab_supervisor (who subscribes to both
+    global and their own lab). Pass ``None`` for truly global events.
+    """
     await _publish(_lab_channel(lab_name), "new_escalation")
-    if lab_name:
-        await _publish(_GLOBAL_CHANNEL, "new_escalation")
 
 
 async def publish_new_pending_approval(lab_name: str | None) -> None:
-    """Called from order service when an order transitions to pending_approval."""
+    """Called from order service when an order transitions to pending_approval.
+
+    See :func:`publish_new_escalation` for channel-selection rationale.
+    """
     await _publish(_lab_channel(lab_name), "new_pending_approval")
-    if lab_name:
-        await _publish(_GLOBAL_CHANNEL, "new_pending_approval")
 
 
 async def publish_report_returned(lab_name: str | None) -> None:
-    """Called from reports service when a report transitions to RETURNED."""
+    """Called from reports service when a report transitions to RETURNED.
+
+    See :func:`publish_new_escalation` for channel-selection rationale.
+    """
     await _publish(_lab_channel(lab_name), "report_returned")
-    if lab_name:
-        await _publish(_GLOBAL_CHANNEL, "report_returned")
 
 
-async def listen(channels: list[str]) -> AsyncIterator[str]:
+async def listen(channels: list[str], *, patterns: list[str] | None = None) -> AsyncIterator[str]:
     """Async-generator yielding event names as they arrive on any of
-    ``channels``.
+    ``channels`` or matching any of ``patterns`` (Redis PSUBSCRIBE globs).
 
     Caller (the SSE handler) must consume via ``async for``. We clean up the
     pubsub subscription in the ``finally`` block to avoid leaking the
     Redis pubsub connection across requests.
+
+    Patterns are typically used by cross-lab viewers (general_supervisor /
+    system_admin) to subscribe to ``dashboard:events:*`` without enumerating
+    every lab. Per-channel ``message`` events and per-pattern ``pmessage``
+    events are both surfaced.
     """
+    patterns = patterns or []
     pubsub = _get_redis().pubsub()
-    await pubsub.subscribe(*channels)
+    if channels:
+        await pubsub.subscribe(*channels)
+    if patterns:
+        await pubsub.psubscribe(*patterns)
     try:
         async for message in pubsub.listen():
-            if message.get("type") != "message":
+            mtype = message.get("type")
+            if mtype not in ("message", "pmessage"):
                 continue
             yield message.get("data") or ""
     finally:
-        await pubsub.unsubscribe(*channels)
+        if channels:
+            await pubsub.unsubscribe(*channels)
+        if patterns:
+            await pubsub.punsubscribe(*patterns)
         await pubsub.aclose()

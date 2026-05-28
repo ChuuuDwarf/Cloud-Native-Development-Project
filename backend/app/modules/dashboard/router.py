@@ -53,11 +53,19 @@ async def stream_dashboard(
 
     Channels:
 
-    * ``dashboard:events:global`` — every caller listens here so global
-      events (e.g. a new pending_approval order that isn't lab-bound)
+    * ``dashboard:events:global`` — every caller listens here so truly
+      cross-lab events (e.g. a new pending_approval order with no lab yet)
       always reach the page.
     * ``dashboard:events:{lab_code}`` — added for ``lab_supervisor`` so
-      per-lab fanouts are received without flooding global subscribers.
+      per-lab fanouts are received.
+
+    Patterns:
+
+    * ``dashboard:events:*`` — used by cross-lab viewers
+      (``general_supervisor`` / ``system_admin``) so they pick up every
+      lab's per-lab events without subscribing to each lab channel by name
+      and without the publisher having to mirror per-lab events into the
+      global channel (which would double-deliver to lab_supervisor).
 
     ``CurrentUser`` already carries ``lab_code`` (resolved in
     ``get_current_user``); no extra DB lookup is needed here. The handler
@@ -65,11 +73,16 @@ async def stream_dashboard(
     payload, since it re-fetches the full snapshot after each one.
     """
     channels = ["dashboard:events:global"]
+    patterns: list[str] = []
     if user.role == "lab_supervisor" and user.lab_code is not None:
         channels.append(f"dashboard:events:{user.lab_code}")
+    elif "*" in user.permissions or user.role in ("system_admin", "general_supervisor"):
+        # Cross-lab viewers: see every lab via wildcard pattern (no double
+        # publish to global needed).
+        patterns.append("dashboard:events:*")
 
     async def event_gen():
-        async for ev in listen(channels):
+        async for ev in listen(channels, patterns=patterns):
             yield {"event": "dashboard", "data": ev}
 
     return EventSourceResponse(event_gen())

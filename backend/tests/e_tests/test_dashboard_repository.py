@@ -15,9 +15,19 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import select
 
-from app.common.enums import ReportStatus
+from app.common.enums import (
+    IssueStatus,
+    NotificationChannel,
+    NotificationStatus,
+    ReportStatus,
+    Severity,
+)
 from app.common.enums.order_status import OrderStatus
 from app.common.enums.role_d_zh import REPORT_ZH
+from app.db.models import User
+from app.db.models.issues import Issue
+from app.db.models.labs import Lab
+from app.db.models.notifications import Notification
 from app.db.models.order_management import OrderItemModel, OrderModel
 from app.db.models.reports import Report
 from app.db.models.wips import Wip
@@ -448,3 +458,59 @@ async def test_all_valid_wip_statuses_land_in_correct_bucket(db_session) -> None
     assert counts["awaiting_handoff"][0] >= 1
     assert counts["done"][0] >= 1
     assert counts["terminated"][0] >= 1
+
+
+# ------------------------------------------------------- regression: Y8
+#
+# Y8: An issue acked by the caller (notification with status=READ for that
+# issue) must be excluded from ``triage_unack_issues`` for that caller, but
+# remain visible to a different caller who hasn't read it.
+
+
+async def test_triage_unack_issues_excludes_acked_by_user(db_session) -> None:
+    """Seed an Issue + a READ Notification — issue must NOT appear for the
+    notification's recipient, but should still appear for other users."""
+    lab = (await db_session.execute(select(Lab).where(Lab.code == "LAB-A"))).scalar_one()
+    recipient_id = (
+        await db_session.execute(select(User.id).where(User.email == "admin@example.com"))
+    ).scalar_one()
+
+    issue = Issue(
+        type="warning",
+        target_type="machine",
+        target_id=f"M-Y8-{uuid.uuid4().hex[:6]}",
+        lab_id=lab.id,
+        title=f"Y8 acked issue {uuid.uuid4().hex[:6]}",
+        description="",
+        severity=Severity.CRITICAL,
+        status=IssueStatus.OPEN,
+        escalation_level=0,
+    )
+    db_session.add(issue)
+    await db_session.flush()
+    db_session.add(
+        Notification(
+            recipient_id=recipient_id,
+            lab_id=lab.id,
+            source_type="issue",
+            source_id=str(issue.id),
+            title="ack",
+            body="",
+            severity=Severity.CRITICAL,
+            channel=NotificationChannel.IN_APP,
+            status=NotificationStatus.READ,
+        )
+    )
+    await db_session.commit()
+
+    repo = DashboardRepository(db_session)
+
+    acked = await repo.triage_unack_issues(lab_codes=None, user_id=recipient_id, limit=50)
+    assert str(issue.id) not in {
+        str(r[0]) for r in acked
+    }, "READ notification should hide the issue for its recipient"
+
+    other = await repo.triage_unack_issues(lab_codes=None, user_id=uuid.uuid4(), limit=50)
+    assert str(issue.id) in {
+        str(r[0]) for r in other
+    }, "issue must still surface for a user who has not acked it"
