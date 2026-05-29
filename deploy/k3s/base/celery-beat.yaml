@@ -14,6 +14,8 @@ spec:
       labels:
         app: celery-beat
     spec:
+      imagePullSecrets:
+        - name: artifact-registry
       containers:
         - name: celery-beat
           image: lims-backend

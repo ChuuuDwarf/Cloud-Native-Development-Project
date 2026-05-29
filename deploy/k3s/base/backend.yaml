@@ -27,6 +27,8 @@ spec:
       # (uid/gid 1000 from the Dockerfile's `useradd app`).
       securityContext:
         fsGroup: 1000
+      imagePullSecrets:
+        - name: artifact-registry
       containers:
         - name: backend
           image: lims-backend
