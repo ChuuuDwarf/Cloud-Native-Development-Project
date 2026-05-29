@@ -23,6 +23,8 @@ spec:
       labels:
         app: frontend
     spec:
+      imagePullSecrets:
+        - name: artifact-registry
       containers:
         - name: frontend
           # Next.js standalone runner. NEXT_PUBLIC_API_URL is baked at BUILD time
