@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { dashboardApi } from "@/services/dashboard-api";
 import KpiBar from "@/app/_dashboard/KpiBar";
-import MachineHeatmap from "@/app/_dashboard/MachineHeatmap";
+import MachineUtilization from "@/app/_dashboard/MachineUtilization";
 import WipPipeline from "@/app/_dashboard/WipPipeline";
 import AlertsPanel from "@/app/_dashboard/AlertsPanel";
 import ThroughputChart from "@/app/_dashboard/ThroughputChart";
@@ -75,7 +75,7 @@ function DashboardContent() {
           marginBottom: 16,
         }}
       >
-        <MachineHeatmap data={data.machines} showLabPrefix={isCrossLab} />
+        <MachineUtilization data={data.machines} showLabPrefix={isCrossLab} />
         <WipPipeline data={data.wip_pipeline} />
       </div>
 
