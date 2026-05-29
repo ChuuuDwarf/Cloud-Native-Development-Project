@@ -34,6 +34,7 @@ from app.modules.dashboard.schemas import (
     MachineGrid,
     MachineHeatmap,
     ThresholdColor,
+    ThroughputPoint,
     TriageItem,
     TriageType,
     WipPipeline,
@@ -92,6 +93,14 @@ class DashboardService:
         # Fire widget queries in parallel — each is independent. Conditional
         # widgets resolve to None via ``_none_async`` to keep the gather call
         # uniform.
+        #
+        # Phase H additions:
+        # - 3 hourly_buckets calls feed KPI sparklines (only the flow KPIs:
+        #   new_orders / completed / returned — state KPIs have no history).
+        # - ``throughput_24h`` only fires for lab_supervisor; cross-lab viewers
+        #   get the leaderboard instead, so we'd waste the query.
+        # - ``per_lab_util`` always fires — feeds MachineHeatmap mini bars
+        #   for both roles.
         (
             new_orders,
             completed,
@@ -105,6 +114,11 @@ class DashboardService:
             esc_rows,
             comp_rows,
             leaderboard_rows,
+            sparkline_new_orders,
+            sparkline_completed,
+            sparkline_returned,
+            throughput_rows,
+            per_lab_util,
         ) = await asyncio.gather(
             self._repo.kpi_new_orders(lab_codes),
             self._repo.kpi_completed_today(lab_codes),
@@ -118,6 +132,11 @@ class DashboardService:
             self._repo.recent_escalations(lab_codes, limit=5),
             (_none_async() if cross_lab else self._repo.recent_completions(lab_codes, limit=5)),
             (self._repo.lab_leaderboard(limit=5) if cross_lab else _none_async()),
+            self._repo.hourly_buckets_new_orders(lab_codes),
+            self._repo.hourly_buckets_completed(lab_codes),
+            self._repo.hourly_buckets_returned(lab_codes),
+            (_none_async() if cross_lab else self._repo.throughput_24h(lab_codes)),
+            self._repo.per_lab_util(lab_codes),
         )
 
         # mypy infers ``asyncio.gather`` results as a union and can't narrow
@@ -129,8 +148,14 @@ class DashboardService:
             returned,  # type: ignore[arg-type]
             pending_appr,  # type: ignore[arg-type]
             open_issues_count,  # type: ignore[arg-type]
+            sparkline_new_orders=sparkline_new_orders,  # type: ignore[arg-type]
+            sparkline_completed=sparkline_completed,  # type: ignore[arg-type]
+            sparkline_returned=sparkline_returned,  # type: ignore[arg-type]
         )
-        machines = self._build_machines(machine_rows)  # type: ignore[arg-type]
+        machines = self._build_machines(
+            machine_rows,  # type: ignore[arg-type]
+            per_lab_util=per_lab_util,  # type: ignore[arg-type]
+        )
         pipeline = self._build_pipeline(pipeline_counts)  # type: ignore[arg-type]
         triage = self._build_triage(triage_approvals, triage_issues)  # type: ignore[arg-type]
         escalations = self._build_escalations(esc_rows)  # type: ignore[arg-type]
@@ -142,6 +167,11 @@ class DashboardService:
         leaderboard = (
             self._build_leaderboard(leaderboard_rows)  # type: ignore[arg-type]
             if leaderboard_rows is not None
+            else None
+        )
+        throughput = (
+            self._build_throughput(throughput_rows)  # type: ignore[arg-type]
+            if throughput_rows is not None
             else None
         )
 
@@ -158,6 +188,7 @@ class DashboardService:
             wip_pipeline=pipeline,
             triage=triage,
             recent_escalations=escalations,
+            throughput_24h=throughput,
             recent_completions=completions,
             lab_leaderboard=leaderboard,
         )
@@ -171,11 +202,30 @@ class DashboardService:
         returned: tuple[int, int],
         pending_appr: int,
         open_issues_count: int,
+        *,
+        sparkline_new_orders: list[int],
+        sparkline_completed: list[int],
+        sparkline_returned: list[int],
     ) -> KpiBar:
         return KpiBar(
-            new_orders=KpiCard(value=new_orders[0], delta_24h=_delta(*new_orders)),
-            completed=KpiCard(value=completed[0], delta_24h=_delta(*completed)),
-            returned=KpiCard(value=returned[0], delta_24h=_delta(*returned)),
+            new_orders=KpiCard(
+                value=new_orders[0],
+                delta_24h=_delta(*new_orders),
+                sparkline_24h=sparkline_new_orders,
+            ),
+            completed=KpiCard(
+                value=completed[0],
+                delta_24h=_delta(*completed),
+                sparkline_24h=sparkline_completed,
+            ),
+            returned=KpiCard(
+                value=returned[0],
+                delta_24h=_delta(*returned),
+                sparkline_24h=sparkline_returned,
+            ),
+            # State-type KPIs have no hourly history — the FE conditionally
+            # renders the background <LineChart> only when sparkline_24h is
+            # non-null (see Phase H spec Section 1).
             pending_approval=KpiCard(
                 value=pending_appr,
                 delta_24h=0,  # not tracked over 24h yet
@@ -184,6 +234,7 @@ class DashboardService:
                     orange_at=_PENDING_APPROVAL_ORANGE_AT,
                     red_at=None,
                 ),
+                sparkline_24h=None,
             ),
             open_critical_high_issues=KpiCard(
                 value=open_issues_count,
@@ -193,10 +244,16 @@ class DashboardService:
                     orange_at=_OPEN_ISSUES_ORANGE_AT,
                     red_at=None,
                 ),
+                sparkline_24h=None,
             ),
         )
 
-    def _build_machines(self, rows: list[Any]) -> MachineHeatmap:
+    def _build_machines(
+        self,
+        rows: list[Any],
+        *,
+        per_lab_util: dict[str, int],
+    ) -> MachineHeatmap:
         by_lab: dict[str, list[MachineGrid]] = {}
         in_use = 0
         total = 0
@@ -220,11 +277,18 @@ class DashboardService:
             sum_today_hours += today_hours
         # avg util = sum_today_hours / (total * 8h) * 100, clamped 0–100.
         avg_util = int(min(100, max(0, (sum_today_hours / (total * 8)) * 100))) if total else 0
+        # Limit ``per_lab_util_pct`` to labs that surface a machine grid so the
+        # FE doesn't see stray keys for labs absent from ``by_lab`` (e.g. when
+        # a scoped query yields no machines for the lab_supervisor's lab).
+        per_lab_util_filtered = {
+            lab_name: per_lab_util[lab_name] for lab_name in by_lab if lab_name in per_lab_util
+        }
         return MachineHeatmap(
             by_lab=by_lab,
             avg_utilization_pct=avg_util,
             in_use_count=in_use,
             total_count=total,
+            per_lab_util_pct=per_lab_util_filtered,
         )
 
     def _build_pipeline(self, counts: dict[str, tuple[int, int]]) -> WipPipeline:
@@ -289,6 +353,9 @@ class DashboardService:
         return [
             CompletionRow(wip_no=r[0], order_no=r[1], lab_name=r[2], returned_at=r[3]) for r in rows
         ]
+
+    def _build_throughput(self, rows: list[tuple[int, int, int]]) -> list[ThroughputPoint]:
+        return [ThroughputPoint(hour_offset=r[0], completed=r[1], returned=r[2]) for r in rows]
 
     def _build_leaderboard(self, rows: list[Any]) -> list[LabRow]:
         return [
