@@ -267,6 +267,12 @@ class ExperimentRunService:
         if not exec_row.data_verified:
             raise ValidationError("數據完整性尚未驗證，無法確認結果")
         _set_status(wip, exec_row, WipStatus.COMPLETED)
+        # Stamp wips.completed_at so KPI 完工 / dashboard 24h windows pick
+        # the WIP up. Without this the row sits at status=completed with a
+        # NULL completed_at and disappears from every "completed today"
+        # bucket. ``Wip.completed_at`` is a naive TIMESTAMP (B's migration);
+        # use the same naive ``_now()`` the rest of this module uses.
+        wip.completed_at = _now()
         _event(wip, "確認結果", operator, "")
         await self._repo.commit()
         await self._refresh_order_after_confirm(wip.order_no)
@@ -334,6 +340,11 @@ class ExperimentRunService:
             raise ConflictError("此 WIP 無待審核的中止申請")
         if approve:
             _set_status(wip, exec_row, WipStatus.TERMINATED)
+            # Mirror confirm_result: stamp wips.terminated_at when the coarse
+            # status flips to terminated, so dashboard / KPI windows that
+            # filter on terminated_at find the row. Naive TIMESTAMP — use
+            # the same naive ``_now()`` everywhere else in this module uses.
+            wip.terminated_at = _now()
             exec_row.abort_status = "已終止"
             exec_row.abort_resolution = note or ""
             exec_row.next_progress_at = None  # 已終止，停止推進
