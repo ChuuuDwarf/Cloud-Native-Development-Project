@@ -27,6 +27,14 @@ class KpiCard(BaseModel):
         description="value − value_at(now-24h); positive=up, 0=flat, negative=down"
     )
     threshold_color: ThresholdColor = "neutral"
+    sparkline_24h: list[int] | None = Field(
+        default=None,
+        description=(
+            "24 hourly counts ending at the current hour, oldest first. "
+            "``None`` for state-type KPIs (待簽 / 告警) that have no hourly "
+            "history — the FE skips ``<LineChart>`` rendering in that case."
+        ),
+    )
 
 
 class KpiBar(BaseModel):
@@ -53,6 +61,14 @@ class MachineHeatmap(BaseModel):
     avg_utilization_pct: int = Field(ge=0, le=100)
     in_use_count: int
     total_count: int
+    per_lab_util_pct: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "Per-lab utilization percent (0..100), keyed by lab display name "
+            "to match ``by_lab`` keys. Lab supervisors see one entry (their "
+            "own lab); cross-lab viewers see every lab present in ``by_lab``."
+        ),
+    )
 
 
 class WipPipeline(BaseModel):
@@ -91,6 +107,18 @@ class CompletionRow(BaseModel):
     order_no: str
     lab_name: str
     returned_at: datetime
+
+
+class ThroughputPoint(BaseModel):
+    """One bucket of the lab_supervisor's 24h throughput chart.
+
+    ``hour_offset`` is the bucket index (0 = the hour starting at ``now-24h``,
+    23 = the current hour). The two counts are scoped to the caller's lab.
+    """
+
+    hour_offset: int = Field(ge=0, le=23)
+    completed: int = Field(ge=0)
+    returned: int = Field(ge=0)
 
 
 TrendArrow = Literal["up", "flat", "down"]
