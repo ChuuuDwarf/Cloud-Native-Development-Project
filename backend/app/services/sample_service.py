@@ -533,16 +533,29 @@ async def _validate_sample_action_permission(
     sample: dict,
     action: str,
 ) -> None:
-    can_operate = can_manage_sample(current_user, sample)
-    can_pickup = action == "pickup_confirmed" and can_confirm_pickup(current_user, sample)
+    # ``pickup_confirmed`` is the requester's own action — only the original
+    # plant_user applicant signs off that they physically picked up their
+    # sample. Lab roles do NOT have a fallback path through ``can_operate``
+    # here even though they manage the sample location during transfer; the
+    # earlier ``can_operate OR can_pickup`` short-circuit let a lab supervisor
+    # flip the sample to ``picked_up`` before the user had actually picked it
+    # up, which the closure flow then accepted as a free pass.
+    if action == "pickup_confirmed":
+        if not can_confirm_pickup(current_user, sample):
+            raise HTTPException(
+                status_code=403,
+                detail="僅原委託使用者可確認取件",
+            )
+        return
 
-    if not can_operate and not can_pickup:
+    can_operate = can_manage_sample(current_user, sample)
+    if not can_operate:
         raise HTTPException(
             status_code=403,
             detail="You do not have permission to operate this sample",
         )
 
-    if is_factory_role(current_user.get("role")) and action != "pickup_confirmed":
+    if is_factory_role(current_user.get("role")):
         raise HTTPException(
             status_code=403,
             detail="廠區使用者只能在待取件狀態確認取件",

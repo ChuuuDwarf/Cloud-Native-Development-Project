@@ -2,6 +2,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.services.sample_service import (
+    _validate_sample_action_permission,
     build_sample_visibility_filter,
     can_confirm_pickup,
     can_manage_sample,
@@ -87,6 +88,51 @@ async def test_sample_permissions_match_factory_and_lab_rules():
     assert await can_view_sample(other_factory, sample_in_lab_a) is False
     assert can_confirm_pickup(owner, sample_in_lab_a) is True
     assert can_confirm_pickup(other_factory, sample_in_lab_a) is False
+
+
+@pytest.mark.asyncio
+async def test_pickup_confirmed_action_is_locked_to_original_requester():
+    """Regression: lab roles previously could press 確認使用者已取件 even
+    before the user had actually picked up. The validator's ``can_operate OR
+    can_pickup`` short-circuit let any sample manager flip a sample to
+    ``picked_up`` (which then unlocked close_order). Now ``pickup_confirmed``
+    is reserved for the plant_user applicant; lab role + non-applicant
+    factory user → 403.
+    """
+    sample_in_lab_a = {
+        "id": "sample-1",
+        "applicant_name": "王小明",
+        "status": "outbound",
+        "current_location": "Lab A 待取件區",
+    }
+    lab_a_supervisor = {"role": "lab_supervisor", "lab_name": "Lab A", "department": "Lab A"}
+    owner = {"role": "plant_user", "name": "王小明"}
+    other_factory = {"role": "plant_user", "name": "陳大華"}
+
+    # Lab supervisor: previously allowed via can_operate path → now 403.
+    with pytest.raises(HTTPException) as exc:
+        await _validate_sample_action_permission(
+            lab_a_supervisor, sample_in_lab_a, "pickup_confirmed"
+        )
+    assert exc.value.status_code == 403
+    assert "原委託使用者" in exc.value.detail
+
+    # Original requester: should still pass.
+    await _validate_sample_action_permission(owner, sample_in_lab_a, "pickup_confirmed")
+
+    # Different plant_user (not the applicant) → 403.
+    with pytest.raises(HTTPException) as exc:
+        await _validate_sample_action_permission(other_factory, sample_in_lab_a, "pickup_confirmed")
+    assert exc.value.status_code == 403
+
+    # Lab supervisor doing other actions (e.g., inbound) still passes — only
+    # pickup_confirmed got locked down.
+    sample_for_inbound = {
+        **sample_in_lab_a,
+        "status": "transferring",
+        "current_location": "Lab A 收樣區",
+    }
+    await _validate_sample_action_permission(lab_a_supervisor, sample_for_inbound, "inbound")
 
 
 def test_validate_uuid_rejects_invalid_values():
