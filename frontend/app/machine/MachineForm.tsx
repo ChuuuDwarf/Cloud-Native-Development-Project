@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import Btn from "@/components/ui/Btn";
 import Panel from "@/components/ui/Panel";
 import { formatLab } from "@/components/labDisplay";
-import type { Machine, MachinePayload } from "@/types/machines";
+import type { Machine, MachinePayload, MachineStatus } from "@/types/machines";
 
 const LABS = ["LAB-A", "LAB-B", "LAB-C"];
 
@@ -14,6 +14,7 @@ function demoTemplate(lab: string): FormState {
     machineId: "AFM-004",
     name: "原子力顯微鏡",
     lab,
+    status: "閒置",
     supportedItems: "表面形貌分析, 粗糙度量測",
     owner: "林育誠",
     utilization: "18",
@@ -25,6 +26,7 @@ const EMPTY: FormState = {
   machineId: "",
   name: "",
   lab: "",
+  status: "閒置",
   supportedItems: "",
   owner: "",
   utilization: "0",
@@ -36,6 +38,7 @@ type FormState = {
   machineId: string;
   name: string;
   lab: string;
+  status: MachineStatus;
   supportedItems: string;
   owner: string;
   utilization: string;
@@ -47,6 +50,7 @@ function toFormState(machine: Machine): FormState {
     machineId: machine.machineId,
     name: machine.name,
     lab: machine.lab,
+    status: machine.status,
     supportedItems: machine.supportedItems.join(", "),
     owner: machine.owner,
     utilization: String(machine.utilization),
@@ -80,6 +84,7 @@ export default function MachineForm({
       machineId: form.machineId,
       name: form.name,
       lab: form.lab,
+      status: form.status,
       supportedItems: form.supportedItems
         .split(",")
         .map((item) => item.trim())
@@ -134,6 +139,17 @@ export default function MachineForm({
               {formatLab(lab)}
             </option>
           ))}
+        </select>
+        <select
+          value={form.status}
+          onChange={(e) => set({ status: e.target.value as MachineStatus })}
+          style={inputStyle}
+        >
+          <option value="閒置">閒置</option>
+          <option value="使用中">使用中</option>
+          <option value="保養中">保養中</option>
+          <option value="故障中">故障中</option>
+          <option value="停用">停用</option>
         </select>
         <input
           placeholder="支援項目，用逗號分隔"

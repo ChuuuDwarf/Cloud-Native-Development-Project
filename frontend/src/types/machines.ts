@@ -15,6 +15,7 @@ export interface MachinePayload {
   machineId: string;
   name: string;
   lab: string;
+  status: MachineStatus;
   supportedItems: string[];
   owner: string;
   utilization: number;
