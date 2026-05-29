@@ -38,7 +38,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import String, and_, case, cast, exists, func, select
+from sqlalchemy import String, and_, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.enums import (
@@ -392,11 +392,19 @@ class DashboardRepository:
         * ``in_progress``       — WIP at ``running`` / ``paused``
           (the DB CHECK vocab; the ``UNLOADED`` / ``WAITING_CONFIRM`` values
           in the WipStatus enum never land in the DB).
-        * ``awaiting_handoff``  — WIP ``completed`` AND report RETURNED AND order
-          not yet in WAITING_PICKUP / CLOSED (== spec's "待傳" stage).
+        * ``awaiting_handoff``  — WIP ``completed`` AND order not yet in
+          WAITING_PICKUP / CLOSED (== spec's "待傳" stage).
         * ``done``              — WIP ``completed`` AND order in
           WAITING_PICKUP / CLOSED.
         * ``terminated``        — WIP at ``terminated``.
+
+        Note: previously both ``awaiting_handoff`` and ``done`` ALSO required
+        a RETURNED ``Report`` row for the WIP. That dropped completed WIPs
+        whose report had not yet been published out of every bucket — they
+        vanished from the pipeline between "completed" and "report returned".
+        The fix removes the report dependency: the awaiting_handoff → done
+        transition is driven purely by the order status moving to
+        WAITING_PICKUP / CLOSED.
         """
         lab_names = await self.lab_names_for_codes(lab_codes) if lab_codes is not None else None
         if lab_codes is not None and not lab_names:
@@ -438,21 +446,17 @@ class DashboardRepository:
         t_stmt = select(func.count()).select_from(Wip).where(Wip.status == _WIP_TERMINATED)
         terminated_now = int(await self._session.scalar(_apply_wip_scope(t_stmt)) or 0)
 
-        # awaiting_handoff: completed + report returned + order NOT in
-        # (waiting_pickup, closed). Report.wip_id holds the business wip_no.
-        # Use EXISTS instead of JOIN so a WIP with multiple RETURNED reports
-        # (allowed by the ReportVersion model) counts exactly once.
-        report_returned_exists = exists().where(
-            Report.wip_id == Wip.wip_no,
-            Report.status == _REPORT_RETURNED_ZH,
-        )
+        # awaiting_handoff: completed + order NOT in (waiting_pickup, closed).
+        # Previously also required EXISTS(report RETURNED for this wip) — that
+        # caused completed WIPs without a published report to disappear from
+        # every bucket. Drop the report dependency entirely; the bucket
+        # transition is now driven purely by the order status flip below.
         ah_stmt = (
             select(func.count())
             .select_from(Wip)
             .join(OrderModel, OrderModel.order_no == Wip.order_no)
             .where(
                 Wip.status == _WIP_COMPLETED,
-                report_returned_exists,
                 OrderModel.status.notin_(
                     [OrderStatus.WAITING_PICKUP.value, OrderStatus.CLOSED.value]
                 ),
@@ -460,14 +464,14 @@ class DashboardRepository:
         )
         awaiting_handoff_now = int(await self._session.scalar(_apply_wip_scope(ah_stmt)) or 0)
 
-        # done: completed + report returned + order in (waiting_pickup, closed).
+        # done: completed + order in (waiting_pickup, closed). Symmetric with
+        # awaiting_handoff — no report-status gate.
         done_stmt = (
             select(func.count())
             .select_from(Wip)
             .join(OrderModel, OrderModel.order_no == Wip.order_no)
             .where(
                 Wip.status == _WIP_COMPLETED,
-                report_returned_exists,
                 OrderModel.status.in_([OrderStatus.WAITING_PICKUP.value, OrderStatus.CLOSED.value]),
             )
         )
@@ -649,12 +653,9 @@ class DashboardRepository:
         ).all()
         completed_by_lab: dict[str, int] = {r[0]: int(r[1]) for r in completed_rows}
 
-        # Awaiting handoff per lab_name. Use EXISTS so a wip with multiple
-        # RETURNED reports counts once (mirrors wip_pipeline_counts).
-        report_returned_exists = exists().where(
-            Report.wip_id == Wip.wip_no,
-            Report.status == _REPORT_RETURNED_ZH,
-        )
+        # Awaiting handoff per lab_name. Mirrors wip_pipeline_counts: bucket
+        # is driven purely by Wip.status==completed AND the order not yet at
+        # waiting_pickup / closed — no Report.RETURNED dependency anymore.
         awaiting_rows = (
             await self._session.execute(
                 select(Wip.lab_name, func.count())
@@ -662,7 +663,6 @@ class DashboardRepository:
                 .join(OrderModel, OrderModel.order_no == Wip.order_no)
                 .where(
                     Wip.status == _WIP_COMPLETED,
-                    report_returned_exists,
                     OrderModel.status.notin_(
                         [OrderStatus.WAITING_PICKUP.value, OrderStatus.CLOSED.value]
                     ),
