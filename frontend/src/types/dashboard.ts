@@ -14,6 +14,10 @@ export interface KpiCardData {
   value: number;
   delta_24h: number;
   threshold_color: ThresholdColor;
+  // 24 hourly counts ending at the current hour, oldest first.
+  // null for state-type KPIs (待簽 / 告警) that have no hourly history —
+  // the FE skips <LineChart> rendering in that case.
+  sparkline_24h: number[] | null;
 }
 
 export interface KpiBar {
@@ -40,6 +44,9 @@ export interface MachineHeatmap {
   avg_utilization_pct: number;
   in_use_count: number;
   total_count: number;
+  // Per-lab utilization percent (0..100), keyed by lab display name
+  // to match by_lab keys.
+  per_lab_util_pct: Record<string, number>;
 }
 
 // Pydantic `tuple[int, int]` serializes as a JSON array `[number, number]`.
@@ -73,11 +80,11 @@ export interface EscalationRow {
   escalated_at: string;
 }
 
-export interface CompletionRow {
-  wip_no: string;
-  order_no: string;
-  lab_name: string;
-  returned_at: string;
+export interface ThroughputPoint {
+  // hour_offset 0..23, 0 = the hour starting at (now-24h), 23 = the current hour.
+  hour_offset: number;
+  completed: number;
+  returned: number;
 }
 
 export interface LabRow {
@@ -100,8 +107,8 @@ export interface DashboardSnapshot {
   triage: TriageItem[];
   recent_escalations: EscalationRow[];
   // Mutually exclusive based on role:
-  //   lab_supervisor → recent_completions, lab_leaderboard = null
-  //   general_supervisor → lab_leaderboard, recent_completions = null
-  recent_completions: CompletionRow[] | null;
+  //   lab_supervisor → throughput_24h (24 points), lab_leaderboard = null
+  //   general_supervisor → lab_leaderboard, throughput_24h = null
+  throughput_24h: ThroughputPoint[] | null;
   lab_leaderboard: LabRow[] | null;
 }
