@@ -602,45 +602,6 @@ class DashboardRepository:
             stmt = stmt.where(Lab.code.in_(lab_codes))
         return (await self._session.execute(stmt)).all()
 
-    # ------------------------------------------------------------- completions
-
-    async def recent_completions(self, lab_codes: list[str] | None, limit: int) -> Sequence[Any]:
-        """Last 30min of RETURNED reports (per the spec — "Recent Completions"
-        is a heads-up panel for lab_supervisor's Col 3).
-
-        Returns ``(wip_no, order_no, lab_name, returned_at)`` rows newest
-        first, **deduped per wip_no** — a WIP with multiple RETURNED reports
-        shows up once with the latest returned timestamp. Lab scoping passes
-        lab codes; the join walks ``Report.wip_id (=wip_no) → Wip.lab_name``.
-
-        ``Wip.lab_name`` is nullable; rows with a NULL lab_name are excluded
-        rather than surfaced as orphans, because ``CompletionRow.lab_name``
-        is non-optional and an orphan completion isn't meaningfully
-        actionable on the supervisor dashboard anyway.
-
-        ``Report.created_at`` is a naive TIMESTAMP — cutoff is naive too.
-        """
-        cutoff = _now_naive() - timedelta(minutes=30)
-        latest_returned_at = func.max(Report.created_at).label("returned_at")
-        stmt = (
-            select(Report.wip_id, Wip.order_no, Wip.lab_name, latest_returned_at)
-            .join(Wip, Wip.wip_no == Report.wip_id)
-            .where(
-                Report.status == _REPORT_RETURNED_ZH,
-                Report.created_at >= cutoff,
-                Wip.lab_name.is_not(None),
-            )
-            .group_by(Report.wip_id, Wip.order_no, Wip.lab_name)
-            .order_by(latest_returned_at.desc())
-            .limit(limit)
-        )
-        if lab_codes is not None:
-            lab_names = await self.lab_names_for_codes(lab_codes)
-            if not lab_names:
-                return []
-            stmt = stmt.where(Wip.lab_name.in_(lab_names))
-        return (await self._session.execute(stmt)).all()
-
     # --------------------------------------------------------- leaderboard
 
     async def lab_leaderboard(self, limit: int) -> Sequence[Any]:

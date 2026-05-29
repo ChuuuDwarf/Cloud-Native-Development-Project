@@ -45,7 +45,7 @@ async def _user_by_email(db_session, email: str) -> CurrentUser:
 # --------------------------------------------------------------- general_supervisor
 
 
-async def test_general_supervisor_sees_leaderboard_and_no_completions(
+async def test_general_supervisor_sees_leaderboard_and_no_throughput(
     db_session,
 ) -> None:
     user = await _user_by_email(db_session, "director@example.com")
@@ -55,7 +55,7 @@ async def test_general_supervisor_sees_leaderboard_and_no_completions(
     assert snap.viewer_role == "general_supervisor"
     assert snap.viewer_lab is None
     assert snap.lab_leaderboard is not None
-    assert snap.recent_completions is None
+    assert snap.throughput_24h is None
 
 
 async def test_general_supervisor_kpi_bar_has_all_five_cards(db_session) -> None:
@@ -97,7 +97,7 @@ async def test_machine_heatmap_in_use_count_bounded(db_session) -> None:
 # --------------------------------------------------------------- lab_supervisor
 
 
-async def test_lab_supervisor_sees_completions_and_no_leaderboard(db_session) -> None:
+async def test_lab_supervisor_sees_throughput_and_no_leaderboard(db_session) -> None:
     user = await _user_by_email(db_session, "supervisor@example.com")  # LAB-A
     svc = DashboardService(db_session)
     snap = await svc.compute_snapshot(user)
@@ -105,7 +105,7 @@ async def test_lab_supervisor_sees_completions_and_no_leaderboard(db_session) ->
     assert snap.viewer_role == "lab_supervisor"
     assert snap.viewer_lab == "LAB-A"
     assert snap.lab_leaderboard is None
-    assert snap.recent_completions is not None
+    assert snap.throughput_24h is not None
 
 
 async def test_lab_supervisor_machines_are_scoped_to_own_lab(db_session) -> None:

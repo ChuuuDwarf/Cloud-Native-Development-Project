@@ -4,9 +4,9 @@ a :class:`DashboardSnapshot` for the caller.
 Role-aware projection:
 
 * ``general_supervisor`` / ``system_admin`` → cross-lab view; the Col 3 panel
-  returns ``lab_leaderboard`` (and ``recent_completions`` is ``None``).
+  returns ``lab_leaderboard`` (and ``throughput_24h`` is ``None``).
 * ``lab_supervisor`` (+ any other lab-bound supervisor role we add later)
-  → scoped to their own lab; Col 3 returns ``recent_completions`` (and
+  → scoped to their own lab; Col 3 returns ``throughput_24h`` (and
   ``lab_leaderboard`` is ``None``).
 
 Threshold colors and delta arrows are computed here so the wire format is
@@ -25,7 +25,6 @@ from app.common.dependencies.auth import CurrentUser
 from app.common.dependencies.scope import resolve_user_lab_codes
 from app.modules.dashboard.repository import DashboardRepository
 from app.modules.dashboard.schemas import (
-    CompletionRow,
     DashboardSnapshot,
     EscalationRow,
     KpiBar,
@@ -112,7 +111,6 @@ class DashboardService:
             triage_approvals,
             triage_issues,
             esc_rows,
-            comp_rows,
             leaderboard_rows,
             sparkline_new_orders,
             sparkline_completed,
@@ -130,7 +128,6 @@ class DashboardService:
             self._repo.triage_pending_approvals(lab_codes, limit=5),
             self._repo.triage_unack_issues(lab_codes, user_id=user.id, limit=5),
             self._repo.recent_escalations(lab_codes, limit=5),
-            (_none_async() if cross_lab else self._repo.recent_completions(lab_codes, limit=5)),
             (self._repo.lab_leaderboard(limit=5) if cross_lab else _none_async()),
             self._repo.hourly_buckets_new_orders(lab_codes),
             self._repo.hourly_buckets_completed(lab_codes),
@@ -159,11 +156,6 @@ class DashboardService:
         pipeline = self._build_pipeline(pipeline_counts)  # type: ignore[arg-type]
         triage = self._build_triage(triage_approvals, triage_issues)  # type: ignore[arg-type]
         escalations = self._build_escalations(esc_rows)  # type: ignore[arg-type]
-        completions = (
-            self._build_completions(comp_rows)  # type: ignore[arg-type]
-            if comp_rows is not None
-            else None
-        )
         leaderboard = (
             self._build_leaderboard(leaderboard_rows)  # type: ignore[arg-type]
             if leaderboard_rows is not None
@@ -189,7 +181,6 @@ class DashboardService:
             triage=triage,
             recent_escalations=escalations,
             throughput_24h=throughput,
-            recent_completions=completions,
             lab_leaderboard=leaderboard,
         )
 
@@ -347,11 +338,6 @@ class DashboardService:
                 escalated_at=r[5],
             )
             for r in rows
-        ]
-
-    def _build_completions(self, rows: list[Any]) -> list[CompletionRow]:
-        return [
-            CompletionRow(wip_no=r[0], order_no=r[1], lab_name=r[2], returned_at=r[3]) for r in rows
         ]
 
     def _build_throughput(self, rows: list[tuple[int, int, int]]) -> list[ThroughputPoint]:
