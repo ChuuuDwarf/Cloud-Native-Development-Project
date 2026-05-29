@@ -148,3 +148,61 @@ async def test_recent_escalations_capped(db_session) -> None:
     svc = DashboardService(db_session)
     snap = await svc.compute_snapshot(user)
     assert len(snap.recent_escalations) <= 5
+
+
+# --------------------------------------------------------------- Phase H
+#
+# sparkline_24h + throughput_24h + per_lab_util_pct wiring.
+
+
+async def test_flow_kpis_have_sparkline_state_kpis_do_not(db_session) -> None:
+    """Flow KPIs (new_orders / completed / returned) carry a 24-element
+    ``sparkline_24h``; state KPIs (pending_approval, open_critical_high_issues)
+    have no hourly history and must be ``None`` so the FE skips the LineChart.
+    """
+    user = await _user_by_email(db_session, "director@example.com")
+    svc = DashboardService(db_session)
+    snap = await svc.compute_snapshot(user)
+    kpi = snap.kpi
+    assert kpi.new_orders.sparkline_24h is not None
+    assert len(kpi.new_orders.sparkline_24h) == 24
+    assert kpi.completed.sparkline_24h is not None
+    assert len(kpi.completed.sparkline_24h) == 24
+    assert kpi.returned.sparkline_24h is not None
+    assert len(kpi.returned.sparkline_24h) == 24
+    assert kpi.pending_approval.sparkline_24h is None
+    assert kpi.open_critical_high_issues.sparkline_24h is None
+
+
+async def test_machine_heatmap_has_per_lab_util(db_session) -> None:
+    """Every ``per_lab_util_pct`` key must also be present in ``by_lab`` —
+    the FE needs them aligned to draw the per-row mini util bar."""
+    user = await _user_by_email(db_session, "director@example.com")
+    svc = DashboardService(db_session)
+    snap = await svc.compute_snapshot(user)
+    m = snap.machines
+    assert isinstance(m.per_lab_util_pct, dict)
+    for lab_name, pct in m.per_lab_util_pct.items():
+        assert lab_name in m.by_lab
+        assert 0 <= pct <= 100
+
+
+async def test_lab_supervisor_sees_throughput(db_session) -> None:
+    """lab_supervisor's Col 3 carries a 24-element throughput series."""
+    user = await _user_by_email(db_session, "supervisor@example.com")  # LAB-A
+    svc = DashboardService(db_session)
+    snap = await svc.compute_snapshot(user)
+    assert snap.throughput_24h is not None
+    assert len(snap.throughput_24h) == 24
+    offsets = [p.hour_offset for p in snap.throughput_24h]
+    assert offsets == list(range(24))
+
+
+async def test_general_supervisor_throughput_is_none(db_session) -> None:
+    """general_supervisor renders the leaderboard instead — throughput_24h
+    must be None so the FE picks the right Col 3 panel."""
+    user = await _user_by_email(db_session, "director@example.com")
+    svc = DashboardService(db_session)
+    snap = await svc.compute_snapshot(user)
+    assert snap.throughput_24h is None
+    assert snap.lab_leaderboard is not None

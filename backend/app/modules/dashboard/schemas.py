@@ -143,6 +143,14 @@ class DashboardSnapshot(BaseModel):
     wip_pipeline: WipPipeline
     triage: list[TriageItem]
     recent_escalations: list[EscalationRow]
-    # Mutually exclusive based on role: lab_sup gets completions, general_sup gets leaderboard.
+    # Mutually exclusive based on role.
+    # - lab_sup: ``throughput_24h`` is a 24-element series; ``lab_leaderboard``
+    #   is None.
+    # - general_sup: ``lab_leaderboard`` is non-null; ``throughput_24h`` is
+    #   None.
+    #
+    # ``recent_completions`` is retained transiently for the in-flight FE
+    # migration and will be removed once the FE switches to ``throughput_24h``.
+    throughput_24h: list[ThroughputPoint] | None
     recent_completions: list[CompletionRow] | None
     lab_leaderboard: list[LabRow] | None
