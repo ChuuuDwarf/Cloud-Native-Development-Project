@@ -47,7 +47,7 @@ function ago(iso: string): string {
  */
 function buildRows(
   unackHighCriticalIssues: TriageItem[],
-  recentEscalations: EscalationRow[],
+  recentEscalations: EscalationRow[]
 ): AlertRow[] {
   const escalationsById = new Map<string, EscalationRow>();
   for (const e of recentEscalations) {

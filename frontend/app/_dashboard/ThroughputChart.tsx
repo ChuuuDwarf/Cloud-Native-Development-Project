@@ -27,8 +27,7 @@ export function formatHourLabel(offset: unknown): string {
 }
 
 export default function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
-  const empty =
-    data.length === 0 || data.every((p) => p.completed === 0 && p.returned === 0);
+  const empty = data.length === 0 || data.every((p) => p.completed === 0 && p.returned === 0);
 
   const sumCompleted = data.reduce((acc, p) => acc + p.completed, 0);
   const sumReturned = data.reduce((acc, p) => acc + p.returned, 0);
@@ -82,10 +81,7 @@ export default function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
       ) : (
         <div style={{ flex: 1, minHeight: 160, height: 200 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={data}
-              margin={{ top: 8, right: 8, bottom: 24, left: 0 }}
-            >
+            <LineChart data={data} margin={{ top: 8, right: 8, bottom: 24, left: 0 }}>
               <CartesianGrid strokeDasharray="2 4" opacity={0.15} />
               <XAxis
                 dataKey="hour_offset"

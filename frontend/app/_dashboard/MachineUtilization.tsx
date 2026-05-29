@@ -15,10 +15,8 @@ const STATUS_COLOR: Record<string, string> = {
 // full row so the visual weight matches other rows and signals "this machine
 // is out of rotation".
 const STATUS_PATTERN: Record<string, string> = {
-  faulty:
-    "repeating-linear-gradient(45deg, var(--red) 0 6px, rgba(0,0,0,0.4) 6px 10px)",
-  disabled:
-    "repeating-linear-gradient(45deg, #3a3a3a 0 6px, rgba(255,255,255,0.08) 6px 10px)",
+  faulty: "repeating-linear-gradient(45deg, var(--red) 0 6px, rgba(0,0,0,0.4) 6px 10px)",
+  disabled: "repeating-linear-gradient(45deg, #3a3a3a 0 6px, rgba(255,255,255,0.08) 6px 10px)",
 };
 
 // Display label for status (CN). Backend ships canonical English; we render CN.
@@ -40,13 +38,7 @@ function machineUtilPct(m: MachineGrid): number {
   return Math.min(100, Math.round(raw));
 }
 
-function MachineRow({
-  m,
-  showLabPrefix,
-}: {
-  m: MachineGrid;
-  showLabPrefix: boolean;
-}) {
+function MachineRow({ m, showLabPrefix }: { m: MachineGrid; showLabPrefix: boolean }) {
   const isPattern = PATTERN_STATUSES.has(m.status);
   const pct = isPattern ? null : machineUtilPct(m);
   const pattern = STATUS_PATTERN[m.status];
@@ -198,8 +190,7 @@ export default function MachineUtilization({
             fontFamily: "monospace",
           }}
         >
-          avg util {data.avg_utilization_pct}% · in_use {data.in_use_count}/
-          {data.total_count}
+          avg util {data.avg_utilization_pct}% · in_use {data.in_use_count}/{data.total_count}
         </span>
       </div>
       {data.total_count === 0 ? (
@@ -224,11 +215,7 @@ export default function MachineUtilization({
           }}
         >
           {machines.map((m) => (
-            <MachineRow
-              key={m.machine_id}
-              m={m}
-              showLabPrefix={showLabPrefix}
-            />
+            <MachineRow key={m.machine_id} m={m} showLabPrefix={showLabPrefix} />
           ))}
         </div>
       )}

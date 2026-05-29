@@ -229,9 +229,7 @@ export default function WipPipeline({ data }: { data: WipPipelineData }) {
                   {pieData.map((d) => (
                     <Cell
                       key={d.key}
-                      fill={
-                        d.patternId ? `url(#${d.patternId})` : d.color
-                      }
+                      fill={d.patternId ? `url(#${d.patternId})` : d.color}
                       style={{ cursor: "pointer" }}
                     />
                   ))}
@@ -313,9 +311,7 @@ export default function WipPipeline({ data }: { data: WipPipelineData }) {
                     flexShrink: 0,
                   }}
                 />
-                <span style={{ color: "var(--text)", minWidth: 40 }}>
-                  {d.label}
-                </span>
+                <span style={{ color: "var(--text)", minWidth: 40 }}>{d.label}</span>
                 <span
                   style={{
                     color: "var(--text)",

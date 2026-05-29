@@ -40,13 +40,7 @@ function Arrow({ delta }: { delta: number }) {
   return <span style={{ color: "var(--text3)" }}>→</span>;
 }
 
-function TileSparkline({
-  series,
-  color,
-}: {
-  series: number[] | null;
-  color: string;
-}) {
+function TileSparkline({ series, color }: { series: number[] | null; color: string }) {
   // Skip render when no history is available or every bucket is zero.
   if (series == null || series.every((v) => v === 0)) return null;
   const data = series.map((v) => ({ v }));
@@ -83,8 +77,7 @@ function TileSparkline({
 
 function Tile({ card, label, onClick }: { card: KpiCardData; label: string; onClick: () => void }) {
   const color = COLOR_BY_THRESHOLD[card.threshold_color] || "var(--text1)";
-  const sparklineColor =
-    SPARKLINE_COLOR_BY_THRESHOLD[card.threshold_color] || color;
+  const sparklineColor = SPARKLINE_COLOR_BY_THRESHOLD[card.threshold_color] || color;
   return (
     <button
       onClick={onClick}

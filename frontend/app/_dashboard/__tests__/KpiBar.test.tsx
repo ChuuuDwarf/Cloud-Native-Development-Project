@@ -6,7 +6,9 @@ import type { KpiBar as KpiBarData, KpiCardData } from "@/types/dashboard";
 const mk = (
   v: number,
   d: number = 0,
-  sparkline: number[] | null = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 12, 11, 9, 7, 6, 5, 4, 3, 2, 1, 0]
+  sparkline: number[] | null = [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 12, 11, 9, 7, 6, 5, 4, 3, 2, 1, 0,
+  ]
 ): KpiCardData => ({
   value: v,
   delta_24h: d,
@@ -100,7 +102,11 @@ describe("KpiBar", () => {
     // For neutral KPIs we override the spark stroke to blue while leaving
     // the tile's main number color (text2) alone.
     const onlyNew: KpiBarData = {
-      new_orders: mk(5, 0, [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0]),
+      new_orders: mk(
+        5,
+        0,
+        [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0]
+      ),
       completed: { value: 0, delta_24h: 0, threshold_color: "neutral", sparkline_24h: null },
       returned: { value: 0, delta_24h: 0, threshold_color: "neutral", sparkline_24h: null },
       pending_approval: { value: 0, delta_24h: 0, threshold_color: "neutral", sparkline_24h: null },

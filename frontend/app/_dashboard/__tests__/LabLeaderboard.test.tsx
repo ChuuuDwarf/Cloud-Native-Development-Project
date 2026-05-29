@@ -1,9 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import LabLeaderboard, {
-  buildLabDrillUrl,
-  extractLabNameFromBarClick,
-} from "../LabLeaderboard";
+import LabLeaderboard, { buildLabDrillUrl, extractLabNameFromBarClick } from "../LabLeaderboard";
 import type { LabRow } from "@/types/dashboard";
 
 const rows: LabRow[] = [
@@ -69,9 +66,9 @@ describe("LabLeaderboard", () => {
   it("sorts avg_utilization_pct desc", () => {
     render(<LabLeaderboard rows={rows} />);
     // LAB-A=78, LAB-C=72, LAB-B=58
-    expect(
-      screen.getByTestId("lab-subchart-avg_utilization_pct").getAttribute("data-order")
-    ).toBe("LAB-A,LAB-C,LAB-B");
+    expect(screen.getByTestId("lab-subchart-avg_utilization_pct").getAttribute("data-order")).toBe(
+      "LAB-A,LAB-C,LAB-B"
+    );
   });
 
   it("shows the empty dash when a metric is all zero", () => {
@@ -115,7 +112,7 @@ describe("LabLeaderboard", () => {
       expect(extractLabNameFromBarClick({ payload: {} })).toBeNull();
       expect(extractLabNameFromBarClick({ payload: { lab_name: "" } })).toBeNull();
       expect(
-        extractLabNameFromBarClick({ payload: { lab_name: 123 as unknown as string } }),
+        extractLabNameFromBarClick({ payload: { lab_name: 123 as unknown as string } })
       ).toBeNull();
     });
 
