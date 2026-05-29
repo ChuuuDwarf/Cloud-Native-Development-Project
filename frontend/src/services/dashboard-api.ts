@@ -3,7 +3,6 @@ import type { ApiResponse } from "@/types/api";
 import type { DashboardSnapshot } from "@/types/dashboard";
 
 export type {
-  CompletionRow,
   DashboardSnapshot,
   EscalationRow,
   KpiBar,
@@ -11,6 +10,7 @@ export type {
   LabRow,
   MachineGrid,
   MachineHeatmap,
+  ThroughputPoint,
   TriageItem,
   WipPipeline,
 } from "@/types/dashboard";
@@ -20,7 +20,7 @@ export const dashboardApi = {
    * Fetch the supervisor dashboard snapshot.
    *
    * Backend returns a complete `DashboardSnapshot` keyed by viewer role —
-   * `recent_completions` and `lab_leaderboard` are mutually-null based on
+   * `throughput_24h` and `lab_leaderboard` are mutually-null based on
    * whether the caller is `lab_supervisor` or `general_supervisor`.
    */
   async getSnapshot(): Promise<DashboardSnapshot> {
