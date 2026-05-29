@@ -1,0 +1,164 @@
+# CronJob to refresh Artifact Registry pull secret token every 30 min.
+# The token from oauth2accesstoken is short-lived (~1h); this prevents image
+# pull failures due to expired credentials.
+# Runs in each namespace independently.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ar-token-refresher
+  namespace: lims-prod
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ar-token-refresher
+  namespace: lims-prod
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete", "get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["artifact-registry"]
+    verbs: ["get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ar-token-refresher
+  namespace: lims-prod
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ar-token-refresher
+subjects:
+  - kind: ServiceAccount
+    name: ar-token-refresher
+    namespace: lims-prod
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ar-token-refresher
+  namespace: lims-prod
+spec:
+  schedule: "*/30 * * * *"
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: ar-token-refresher
+          restartPolicy: OnFailure
+          hostNetwork: true
+          containers:
+            - name: kubectl
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  # Fetch fresh token from VM metadata server (accessible from any pod)
+                  TOKEN=$(curl -sH "Metadata-Flavor: Google" \
+                    http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=https://asia-east1-docker.pkg.dev \
+                    2>/dev/null || curl -sH "Metadata-Flavor: Google" \
+                    http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+
+                  if [ -z "$TOKEN" ]; then
+                    echo "Failed to fetch token from metadata server"
+                    exit 1
+                  fi
+
+                  # Delete old secret (ignore if doesn't exist)
+                  kubectl delete secret artifact-registry -n lims-prod --ignore-not-found
+
+                  # Create new secret with fresh token
+                  kubectl create secret docker-registry artifact-registry \
+                    -n lims-prod \
+                    --docker-server=asia-east1-docker.pkg.dev \
+                    --docker-username=oauth2accesstoken \
+                    --docker-password="$TOKEN"
+
+                  echo "✓ artifact-registry secret refreshed at $(date)"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ar-token-refresher
+  namespace: lims-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ar-token-refresher
+  namespace: lims-staging
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete", "get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["artifact-registry"]
+    verbs: ["get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ar-token-refresher
+  namespace: lims-staging
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ar-token-refresher
+subjects:
+  - kind: ServiceAccount
+    name: ar-token-refresher
+    namespace: lims-staging
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ar-token-refresher
+  namespace: lims-staging
+spec:
+  schedule: "*/30 * * * *"
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: ar-token-refresher
+          restartPolicy: OnFailure
+          hostNetwork: true
+          containers:
+            - name: kubectl
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  # Fetch fresh token from VM metadata server
+                  TOKEN=$(curl -sH "Metadata-Flavor: Google" \
+                    http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=https://asia-east1-docker.pkg.dev \
+                    2>/dev/null || curl -sH "Metadata-Flavor: Google" \
+                    http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+
+                  if [ -z "$TOKEN" ]; then
+                    echo "Failed to fetch token from metadata server"
+                    exit 1
+                  fi
+
+                  # Delete old secret (ignore if doesn't exist)
+                  kubectl delete secret artifact-registry -n lims-staging --ignore-not-found
+
+                  # Create new secret with fresh token
+                  kubectl create secret docker-registry artifact-registry \
+                    -n lims-staging \
+                    --docker-server=asia-east1-docker.pkg.dev \
+                    --docker-username=oauth2accesstoken \
+                    --docker-password="$TOKEN"
+
+                  echo "✓ artifact-registry secret refreshed at $(date)"
