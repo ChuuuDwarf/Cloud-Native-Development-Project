@@ -2,6 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: celery-worker
+  annotations:
+    configmap.reloader.stakater.com/reload: "lims-config"
+    secret.reloader.stakater.com/reload: "lims-secrets"
 spec:
   replicas: 1
   selector:
@@ -19,7 +22,8 @@ spec:
       containers:
         - name: celery-worker
           image: lims-backend
-          command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info"]
+          command:
+            ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info"]
           envFrom:
             - configMapRef:
                 name: lims-config
@@ -39,7 +43,12 @@ spec:
               mountPath: /app/uploads
           readinessProbe:
             exec:
-              command: ["sh", "-c", "celery -A app.core.celery_app inspect ping -d celery@$HOSTNAME"]
+              command:
+                [
+                  "sh",
+                  "-c",
+                  "celery -A app.core.celery_app inspect ping -d celery@$HOSTNAME",
+                ]
             initialDelaySeconds: 20
             periodSeconds: 30
             timeoutSeconds: 10
