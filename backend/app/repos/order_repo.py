@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, Protocol
@@ -24,7 +25,10 @@ from app.db.models.order_management import (
     QuotaSettingModel,
     QuotaUsageModel,
 )
-from app.modules.dashboard.publisher import publish_new_pending_approval
+from app.modules.dashboard.publisher import (
+    publish_dashboard_event,
+    publish_new_pending_approval,
+)
 from app.repos.order_mappers import history_to_schema, order_to_schema
 from app.schemas.order import (
     Order,
@@ -36,6 +40,8 @@ from app.schemas.order import (
     QuotaPatchPayload,
     QuotaPayload,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OrderItemMasterData(Protocol):
@@ -434,6 +440,38 @@ class OrderRepository:
         # Redis errors; we belt-and-suspenders the call too.
         if payload.action == OrderAction.SUBMIT:
             await publish_new_pending_approval(None)
+        elif payload.action in {
+            OrderAction.APPROVE,
+            OrderAction.RETURN,
+            OrderAction.REJECT,
+            OrderAction.CANCEL,
+        }:
+            # 待簽 KPI on the lab_supervisor dashboard moves on these terminal
+            # actions; publish per touched lab so each supervisor's view
+            # invalidates. Cross-lab viewers also pick this up via the
+            # ``dashboard:events:*`` psubscribe.
+            try:
+                lab_code_rows = await self.db.execute(
+                    select(OrderItemModel.lab_id)
+                    .where(OrderItemModel.order_id == order.id)
+                    .distinct()
+                )
+                lab_codes = [code for code in lab_code_rows.scalars() if code]
+                event_name = f"order_{payload.action.value.lower()}"
+                if lab_codes:
+                    for code in lab_codes:
+                        await publish_dashboard_event(code, event_name)
+                else:
+                    # No items attached yet — broadcast global so cross-lab
+                    # viewers still refresh.
+                    await publish_dashboard_event(None, event_name)
+            except Exception:
+                # Best-effort: a publish failure must not unwind the action.
+                logger.exception(
+                    "dashboard publish for order action %s failed order=%s",
+                    payload.action.value,
+                    order.id,
+                )
 
         return await self.get_order(order.id)
 
