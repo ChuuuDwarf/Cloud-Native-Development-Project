@@ -1,36 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import type { WipPipeline as WipPipelineData, Pair } from "@/types/dashboard";
 
-const STAGES: Array<{
-  key: keyof Omit<WipPipelineData, "total">;
+type StageKey =
+  | "waiting_dispatch"
+  | "dispatched"
+  | "in_progress"
+  | "awaiting_handoff"
+  | "done"
+  | "terminated";
+
+interface StageDef {
+  key: StageKey;
   label: string;
   color: string;
   drillTo: string;
-  pattern?: string;
-}> = [
+  // If set, the segment is filled with the SVG pattern of this id instead of
+  // the solid color. Used for "terminated" so it visually reads as a
+  // cancelled/abnormal state.
+  patternId?: string;
+}
+
+const STAGES: StageDef[] = [
   {
     key: "waiting_dispatch",
     label: "待排程",
     color: "var(--text3)",
     drillTo: "/dispatch",
   },
-  { key: "dispatched", label: "排程", color: "var(--cyan)", drillTo: "/dispatch" },
-  { key: "in_progress", label: "進行", color: "var(--blue)", drillTo: "/execution" },
-  { key: "awaiting_handoff", label: "待傳", color: "var(--orange)", drillTo: "/execution" },
+  {
+    key: "dispatched",
+    label: "排程",
+    color: "var(--cyan)",
+    drillTo: "/dispatch",
+  },
+  {
+    key: "in_progress",
+    label: "進行",
+    color: "var(--blue)",
+    drillTo: "/execution",
+  },
+  {
+    key: "awaiting_handoff",
+    label: "待傳",
+    color: "var(--orange)",
+    drillTo: "/execution",
+  },
   { key: "done", label: "完", color: "#3fb950", drillTo: "/storage" },
   {
     key: "terminated",
     label: "終止",
     color: "var(--red)",
     drillTo: "/orders?status=terminated",
-    pattern: "repeating-linear-gradient(45deg, var(--red) 0 4px, transparent 4px 6px)",
+    patternId: "wip-stripe-terminated",
   },
 ];
-
-const BAR_HEIGHT = 40;
 
 function Arrow({ delta }: { delta: number }) {
   if (delta > 0) return <span style={{ color: "#3fb950" }}>↑{delta}</span>;
@@ -38,32 +64,69 @@ function Arrow({ delta }: { delta: number }) {
   return <span style={{ color: "var(--text3)" }}>→</span>;
 }
 
-interface HoverState {
-  stageKey: string;
+interface PieDatum {
+  key: StageKey;
   label: string;
-  count: number;
-  pct: number;
+  color: string;
+  patternId?: string;
+  value: number;
   delta: number;
-  x: number;
-  y: number;
+  drillTo: string;
+}
+
+interface TooltipPayloadEntry {
+  payload: PieDatum;
+}
+
+function PieTooltip({
+  active,
+  payload,
+  total,
+}: {
+  active?: boolean;
+  payload?: TooltipPayloadEntry[];
+  total: number;
+}) {
+  if (!active || !payload || payload.length === 0 || total === 0) return null;
+  const datum = payload[0].payload;
+  const pct = Math.round((datum.value / total) * 100);
+  return (
+    <div
+      data-testid="wip-tooltip"
+      style={{
+        background: "#0a0a0a",
+        color: "white",
+        fontSize: 11,
+        padding: "4px 8px",
+        borderRadius: 4,
+        fontFamily: "monospace",
+        border: "1px solid var(--border)",
+      }}
+    >
+      {datum.label} · {datum.value} · {pct}%
+    </div>
+  );
 }
 
 export default function WipPipeline({ data }: { data: WipPipelineData }) {
   const total = data.total;
-  const [hover, setHover] = useState<HoverState | null>(null);
 
-  // Cumulative percent up to (but not including) each stage, used to place
-  // the 完工 baseline marker at the right edge of the 完 segment.
-  let cumulative = 0;
-  const stagePcts: Record<string, { startPct: number; pct: number }> = {};
-  for (const s of STAGES) {
-    const [count] = data[s.key] as Pair;
-    const pct = total > 0 ? (count / total) * 100 : 0;
-    stagePcts[s.key] = { startPct: cumulative, pct };
-    cumulative += pct;
-  }
-  const doneEdgePct = stagePcts.done.startPct + stagePcts.done.pct;
-  const showDoneBaseline = stagePcts.done.pct > 0;
+  // Build pie data: keep every stage so the legend lists 6 rows, but the pie
+  // itself drops zero-value entries (Recharts renders empty slices as a thin
+  // visual artifact otherwise).
+  const allStages: PieDatum[] = STAGES.map((s) => {
+    const [value, delta] = data[s.key] as Pair;
+    return {
+      key: s.key,
+      label: s.label,
+      color: s.color,
+      patternId: s.patternId,
+      value,
+      delta,
+      drillTo: s.drillTo,
+    };
+  });
+  const pieData = allStages.filter((d) => d.value > 0);
 
   return (
     <div
@@ -75,6 +138,8 @@ export default function WipPipeline({ data }: { data: WipPipelineData }) {
         padding: 16,
         height: "100%",
         position: "relative",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       <div
@@ -110,163 +175,163 @@ export default function WipPipeline({ data }: { data: WipPipelineData }) {
           目前無 WIP
         </div>
       ) : (
-        <>
-          <div style={{ position: "relative", marginTop: showDoneBaseline ? 18 : 0 }}>
-            <div
-              style={{
-                display: "flex",
-                height: BAR_HEIGHT,
-                borderRadius: 4,
-                overflow: "hidden",
-              }}
-            >
-              {STAGES.map(({ key, label, color, pattern }) => {
-                const [count, delta] = data[key] as Pair;
-                const pct = stagePcts[key].pct;
-                if (pct === 0) return null;
-                const isTerminated = key === "terminated";
-                return (
-                  <div
-                    key={key}
-                    data-testid={`wip-segment-${key}`}
-                    data-stage={key}
-                    onMouseEnter={(e) =>
-                      setHover({
-                        stageKey: key,
-                        label,
-                        count,
-                        pct,
-                        delta,
-                        x: e.clientX,
-                        y: e.clientY,
-                      })
-                    }
-                    onMouseMove={(e) =>
-                      setHover((prev) =>
-                        prev && prev.stageKey === key
-                          ? { ...prev, x: e.clientX, y: e.clientY }
-                          : prev
-                      )
-                    }
-                    onMouseLeave={() => setHover(null)}
-                    style={{
-                      width: `${pct}%`,
-                      background: color,
-                      backgroundImage: pattern,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "white",
-                      fontSize: 11,
-                      fontFamily: "monospace",
-                      fontWeight: 600,
-                      // 45deg stripes need a sturdy base color underneath, which
-                      // is already set via `background` above. The pattern
-                      // overlays on top.
-                      cursor: "pointer",
-                      ...(isTerminated ? { backgroundColor: "var(--red)" } : {}),
-                    }}
-                  >
-                    {pct >= 8 ? `${Math.round(pct)}%` : null}
-                  </div>
-                );
-              })}
-            </div>
-
-            {showDoneBaseline && (
-              <>
-                <div
-                  data-testid="done-baseline-marker"
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: `${doneEdgePct}%`,
-                    width: 2,
-                    height: BAR_HEIGHT,
-                    background: "white",
-                  }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    top: -16,
-                    left: `${doneEdgePct}%`,
-                    transform: "translateX(-50%)",
-                    fontSize: 11,
-                    color: "var(--text3)",
-                    whiteSpace: "nowrap",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  本日完工 baseline
-                </div>
-              </>
-            )}
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(6, 1fr)",
-              gap: 6,
-              marginTop: 14,
-              fontSize: 11,
-            }}
-          >
-            {STAGES.map(({ key, label, color, drillTo }) => {
-              const [count, delta] = data[key] as Pair;
-              return (
-                <button
-                  key={key}
-                  onClick={() => {
-                    window.location.href = drillTo;
-                  }}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--text2)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    padding: 0,
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 4, alignItems: "baseline" }}>
-                    <span style={{ color, fontWeight: 600 }}>{label}</span>
-                    <span style={{ color: "var(--text1)", fontFamily: "monospace" }}>{count}</span>
-                  </div>
-                  <div style={{ fontSize: 10, fontFamily: "monospace" }}>
-                    <Arrow delta={delta} />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {hover && (
         <div
-          data-testid="wip-tooltip"
           style={{
-            position: "fixed",
-            top: hover.y + 12,
-            left: hover.x + 12,
-            background: "#0a0a0a",
-            color: "white",
-            fontSize: 11,
-            padding: "4px 8px",
-            borderRadius: 4,
-            pointerEvents: "none",
-            zIndex: 10,
-            fontFamily: "monospace",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 12,
+            flex: 1,
+            minHeight: 0,
           }}
         >
-          {hover.label} · {hover.count} · {Math.round(hover.pct)}% ·{" "}
-          {hover.delta > 0
-            ? `↑${hover.delta}`
-            : hover.delta < 0
-              ? `↓${Math.abs(hover.delta)}`
-              : "→"}
+          {/* Donut. Wrapped so the center label can sit absolutely on top. */}
+          <div
+            data-testid="wip-donut"
+            style={{
+              position: "relative",
+              minHeight: 180,
+            }}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                {/* SVG <defs> for the terminated stripe pattern. Recharts
+                    passes raw children through to the SVG root, so this
+                    becomes a real <defs> element on the page. */}
+                <defs>
+                  <pattern
+                    id="wip-stripe-terminated"
+                    patternUnits="userSpaceOnUse"
+                    width="10"
+                    height="10"
+                    patternTransform="rotate(45)"
+                  >
+                    <rect width="6" height="10" fill="var(--red)" />
+                    <rect x="6" width="4" height="10" fill="rgba(0,0,0,0.4)" />
+                  </pattern>
+                </defs>
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  nameKey="label"
+                  innerRadius="60%"
+                  outerRadius="100%"
+                  paddingAngle={1}
+                  stroke="var(--s1)"
+                  strokeWidth={2}
+                  isAnimationActive={false}
+                  onClick={(entry: unknown) => {
+                    const datum = entry as { payload?: PieDatum };
+                    if (datum.payload?.drillTo) {
+                      window.location.href = datum.payload.drillTo;
+                    }
+                  }}
+                >
+                  {pieData.map((d) => (
+                    <Cell
+                      key={d.key}
+                      fill={
+                        d.patternId ? `url(#${d.patternId})` : d.color
+                      }
+                      style={{ cursor: "pointer" }}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  content={<PieTooltip total={total} />}
+                  wrapperStyle={{ outline: "none" }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Center label sits on top of the donut. pointerEvents: none so
+                hover/click pass through to the underlying pie. */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "none",
+              }}
+            >
+              <span
+                data-testid="wip-donut-total"
+                style={{
+                  fontSize: 16,
+                  fontFamily: "monospace",
+                  color: "var(--text)",
+                  fontWeight: 600,
+                }}
+              >
+                共 {total} 件
+              </span>
+            </div>
+          </div>
+
+          {/* Side legend. One row per stage with colored dot, label, count,
+              and 24h delta arrow. Clicking drills to the same path the
+              segment uses. */}
+          <div
+            data-testid="wip-legend"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              fontSize: 12,
+              justifyContent: "center",
+            }}
+          >
+            {allStages.map((d) => (
+              <button
+                key={d.key}
+                data-testid={`wip-legend-${d.key}`}
+                onClick={() => {
+                  window.location.href = d.drillTo;
+                }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text2)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  padding: "2px 0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <span
+                  data-testid={`wip-legend-swatch-${d.key}`}
+                  style={{
+                    display: "inline-block",
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: d.patternId
+                      ? "repeating-linear-gradient(45deg, var(--red) 0 3px, rgba(0,0,0,0.4) 3px 5px)"
+                      : d.color,
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ color: "var(--text)", minWidth: 40 }}>
+                  {d.label}
+                </span>
+                <span
+                  style={{
+                    color: "var(--text)",
+                    fontFamily: "monospace",
+                    minWidth: 24,
+                    textAlign: "right",
+                  }}
+                >
+                  {d.value}
+                </span>
+                <span style={{ fontSize: 11, fontFamily: "monospace" }}>
+                  <Arrow delta={d.delta} />
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
