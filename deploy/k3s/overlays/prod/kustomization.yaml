@@ -16,10 +16,10 @@ resources:
 images:
   - name: lims-backend
     newName: asia-east1-docker.pkg.dev/lims-497613/lims/backend
-    newTag: latest
+    newTag: v0.1.0
   - name: lims-frontend
     newName: asia-east1-docker.pkg.dev/lims-497613/lims/frontend
-    newTag: latest
+    newTag: v0.1.0
 
 # Host-based TLS for prod. REPLACE_IP is filled with the VM's reserved static
 # IP in Phase 3 (e.g. 34.80.1.2 -> host 34.80.1.2.nip.io). cert-manager issues
