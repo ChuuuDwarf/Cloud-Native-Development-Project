@@ -450,9 +450,17 @@ class OrderRepository:
             # actions; publish per touched lab so each supervisor's view
             # invalidates. Cross-lab viewers also pick this up via the
             # ``dashboard:events:*`` psubscribe.
+            #
+            # ``OrderItemModel.lab_id`` is declared ``String(50)`` but
+            # actually stores ``str(lab.id)`` (UUID), while the dashboard SSE
+            # channels are keyed by ``Lab.code`` (see
+            # [[project-dashboard-sse-channel-keys]]). JOIN through Lab to
+            # translate UUID → code before publishing — otherwise we publish
+            # to ``dashboard:events:<UUID>`` and no one is subscribed.
             try:
                 lab_code_rows = await self.db.execute(
-                    select(OrderItemModel.lab_id)
+                    select(Lab.code)
+                    .join(OrderItemModel, cast(Lab.id, String) == OrderItemModel.lab_id)
                     .where(OrderItemModel.order_id == order.id)
                     .distinct()
                 )
