@@ -6,8 +6,7 @@ import { dashboardApi } from "@/services/dashboard-api";
 import KpiBar from "@/app/_dashboard/KpiBar";
 import MachineHeatmap from "@/app/_dashboard/MachineHeatmap";
 import WipPipeline from "@/app/_dashboard/WipPipeline";
-import TriageList from "@/app/_dashboard/TriageList";
-import EscalationsList from "@/app/_dashboard/EscalationsList";
+import AlertsPanel from "@/app/_dashboard/AlertsPanel";
 import ThroughputChart from "@/app/_dashboard/ThroughputChart";
 import LabLeaderboard from "@/app/_dashboard/LabLeaderboard";
 import { useDashboardStream } from "@/app/_dashboard/useDashboardStream";
@@ -80,16 +79,18 @@ function DashboardContent() {
         <WipPipeline data={data.wip_pipeline} />
       </div>
 
-      {/* Bottom: 3 cols */}
+      {/* Bottom: AlertsPanel (2fr) | leaderboard or throughput (1fr) */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
+          gridTemplateColumns: "2fr 1fr",
           gap: 16,
         }}
       >
-        <TriageList items={data.triage} />
-        <EscalationsList rows={data.recent_escalations} />
+        <AlertsPanel
+          unackHighCriticalIssues={data.triage.filter((t) => t.type !== "pending_approval")}
+          recentEscalations={data.recent_escalations}
+        />
         {isCrossLab ? (
           <LabLeaderboard rows={data.lab_leaderboard ?? []} />
         ) : (
