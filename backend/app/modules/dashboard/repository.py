@@ -60,6 +60,13 @@ from app.db.models.wips import Wip
 
 _DAY = timedelta(hours=24)
 
+# Phase H: hourly sparkline / throughput series are fixed-length (one bucket per
+# hour over the trailing 24h window). The fixed length matters so the FE
+# LineChart x-axis stays stable regardless of activity — empty hours surface as
+# zero buckets rather than gaps. Keep this constant aligned with the schema's
+# ``ThroughputPoint.hour_offset`` range.
+_HOURLY_BUCKETS = 24
+
 # DB-side WIP status values (B's CHECK constraint vocabulary — see
 # ``app/db/models/wips.py``: 'created', 'waiting_schedule', 'scheduled',
 # 'dispatched', 'running', 'paused', 'completed', 'terminated', 'cancelled').
@@ -731,3 +738,178 @@ class DashboardRepository:
             )
         result_rows.sort(key=lambda r: r[1], reverse=True)
         return result_rows[:limit]
+
+    # ----------------------------------------------------- hourly time-series
+    #
+    # Phase H additions. Each method returns a fixed-length 24-element list so
+    # the FE's LineChart x-axis stays stable. The hour bucket index is
+    # ``floor((row.ts - bucket_start) / 1h)`` where ``bucket_start`` =
+    # ``date_trunc('hour', now - 23h)`` — i.e. the start of the trailing 24h
+    # aligned to the top of the hour. Missing buckets default to zero.
+
+    @staticmethod
+    def _hourly_bucket_origin(*, naive: bool) -> datetime:
+        """Top-of-hour for ``now - 23h`` — the start of bucket 0.
+
+        ``naive=True`` for tz-naive TIMESTAMP columns (``Wip.completed_at``,
+        ``Report.created_at``). Mixing tz-aware bounds against a naive column
+        raises asyncpg ``DataError`` at execute time.
+        """
+        now = _now_naive() if naive else _now_aware()
+        # 24 buckets total, indexed 0..23. Bucket 23 covers the current hour;
+        # bucket 0 starts 23 hours before that, so the lower bound spans
+        # exactly 24 hours of activity.
+        return (now - timedelta(hours=_HOURLY_BUCKETS - 1)).replace(
+            minute=0, second=0, microsecond=0
+        )
+
+    def _pad_hourly_buckets(self, rows: Sequence[Any], origin: datetime) -> list[int]:
+        """Convert ``(bucket_ts, count)`` rows into a 24-element list of ints.
+
+        ``bucket_ts`` is the SQL ``date_trunc('hour', col)`` output. We compute
+        the integer offset from ``origin`` and place the count at that index.
+        Rows outside [0, 24) are skipped (defensive — the WHERE clause should
+        already filter them).
+        """
+        buckets = [0] * _HOURLY_BUCKETS
+        for r in rows:
+            bucket_ts, count = r[0], r[1]
+            if bucket_ts is None:
+                continue
+            # If the column is tz-aware, ``date_trunc`` preserves tz so
+            # subtraction works as long as origin matches the column's
+            # naive/aware nature (caller's responsibility).
+            offset = int((bucket_ts - origin).total_seconds() // 3600)
+            if 0 <= offset < _HOURLY_BUCKETS:
+                buckets[offset] += int(count or 0)
+        return buckets
+
+    async def hourly_buckets_new_orders(self, lab_codes: list[str] | None) -> list[int]:
+        """24 hourly counts of orders created in the trailing 24h.
+
+        Scoping goes through ``OrderItemModel.lab_id`` for the same reason
+        ``kpi_new_orders`` does — pending-approval orders have no Wip rows
+        yet, so a Wip-join would under-count.
+        """
+        origin = self._hourly_bucket_origin(naive=False)
+        bucket = func.date_trunc("hour", OrderModel.created_at).label("bucket")
+        stmt = (
+            select(bucket, func.count(func.distinct(OrderModel.id)))
+            .select_from(OrderModel)
+            .where(OrderModel.created_at >= origin)
+            .group_by(bucket)
+        )
+        if lab_codes is not None:
+            if not lab_codes:
+                return [0] * _HOURLY_BUCKETS
+            stmt = stmt.join(OrderItemModel, OrderItemModel.order_id == OrderModel.id).where(
+                OrderItemModel.lab_id.in_(lab_codes)
+            )
+        rows = (await self._session.execute(stmt)).all()
+        return self._pad_hourly_buckets(rows, origin)
+
+    async def hourly_buckets_completed(self, lab_codes: list[str] | None) -> list[int]:
+        """24 hourly counts of WIPs completed in the trailing 24h.
+
+        ``Wip.completed_at`` is a naive TIMESTAMP — use naive bounds.
+        """
+        origin = self._hourly_bucket_origin(naive=True)
+        bucket = func.date_trunc("hour", Wip.completed_at).label("bucket")
+        stmt = (
+            select(bucket, func.count())
+            .select_from(Wip)
+            .where(
+                Wip.status == _WIP_COMPLETED,
+                Wip.completed_at >= origin,
+            )
+            .group_by(bucket)
+        )
+        if lab_codes is not None:
+            lab_names = await self.lab_names_for_codes(lab_codes)
+            if not lab_names:
+                return [0] * _HOURLY_BUCKETS
+            stmt = stmt.where(Wip.lab_name.in_(lab_names))
+        rows = (await self._session.execute(stmt)).all()
+        return self._pad_hourly_buckets(rows, origin)
+
+    async def hourly_buckets_returned(self, lab_codes: list[str] | None) -> list[int]:
+        """24 hourly counts of RETURNED reports in the trailing 24h.
+
+        Mirrors ``kpi_returned_today``'s scoping path: ``Report.created_at``
+        is naive, lab scoping joins ``Wip.wip_no = Report.wip_id``.
+        """
+        origin = self._hourly_bucket_origin(naive=True)
+        bucket = func.date_trunc("hour", Report.created_at).label("bucket")
+        stmt = (
+            select(bucket, func.count())
+            .select_from(Report)
+            .where(
+                Report.status == _REPORT_RETURNED_ZH,
+                Report.created_at >= origin,
+            )
+            .group_by(bucket)
+        )
+        if lab_codes is not None:
+            lab_names = await self.lab_names_for_codes(lab_codes)
+            if not lab_names:
+                return [0] * _HOURLY_BUCKETS
+            stmt = stmt.join(Wip, Wip.wip_no == Report.wip_id).where(Wip.lab_name.in_(lab_names))
+        rows = (await self._session.execute(stmt)).all()
+        return self._pad_hourly_buckets(rows, origin)
+
+    async def throughput_24h(self, lab_codes: list[str] | None) -> list[tuple[int, int, int]]:
+        """Per-hour ``(hour_offset, completed_count, returned_count)`` series
+        scoped to ``lab_codes`` (usually a single-element list for the
+        lab_supervisor's view).
+
+        Implemented as two sub-queries merged in Python rather than one UNION
+        because the two source tables have different scoping paths and the
+        merge is trivially O(24).
+        """
+        completed = await self.hourly_buckets_completed(lab_codes)
+        returned = await self.hourly_buckets_returned(lab_codes)
+        return [(i, completed[i], returned[i]) for i in range(_HOURLY_BUCKETS)]
+
+    async def per_lab_util(self, lab_codes: list[str] | None) -> dict[str, int]:
+        """Lab display name → average utilization percent (0..100).
+
+        Mirrors the ``avg_utilization_pct`` formula used by the MachineHeatmap
+        builder: ``sum(today_hours) / (machine_count * 8h) * 100``, but
+        bucketed per lab so the FE can draw a mini util bar on each lab's
+        heatmap row. ``today_hours`` is the same crude
+        ``Machine.utilization / 100 * 8`` proxy used elsewhere in this module.
+
+        ``Machine.lab`` stores the lab **code** (e.g. ``LAB-A``); we join to
+        ``Lab.name`` so every dashboard widget keys per-lab dicts off the
+        display name consistently. Machines whose lab code has no matching
+        ``labs`` row fall back to the raw code rather than disappearing.
+
+        Scoping: ``lab_codes=None`` → every lab present in the ``machines``
+        table; a list → only those codes (typically one for lab_supervisor).
+        """
+        stmt = (
+            select(
+                Machine.lab,
+                Lab.name,
+                func.count(),
+                func.coalesce(func.avg(Machine.utilization), 0),
+            )
+            .outerjoin(Lab, Lab.code == Machine.lab)
+            .group_by(Machine.lab, Lab.name)
+        )
+        if lab_codes is not None:
+            if not lab_codes:
+                return {}
+            stmt = stmt.where(Machine.lab.in_(lab_codes))
+        rows = (await self._session.execute(stmt)).all()
+        result: dict[str, int] = {}
+        for lab_code, lab_name, machine_count, avg_util in rows:
+            if not machine_count:
+                continue
+            display = lab_name or lab_code
+            # ``avg_util`` is already a per-machine percent (0..100); the
+            # sum-of-today-hours / (count * 8) formula reduces to ``avg_util``
+            # for the per-lab bucket. Clamp defensively.
+            pct = int(round(min(100.0, max(0.0, float(avg_util)))))
+            result[display] = pct
+        return result

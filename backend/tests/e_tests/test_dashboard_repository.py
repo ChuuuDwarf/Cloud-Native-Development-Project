@@ -195,6 +195,136 @@ async def test_recent_completions_limit_respected(db_session) -> None:
     assert len(rows) <= 5
 
 
+# ------------------------------------------------------ Hourly time-series
+#
+# Phase H additions — sparkline + throughput backing queries. Every method
+# returns a fixed-length 24-element list (one bucket per hour for the trailing
+# 24h window) so the FE LineChart x-axis is stable regardless of activity.
+
+
+async def test_hourly_buckets_new_orders_returns_24_elements(db_session) -> None:
+    repo = DashboardRepository(db_session)
+    buckets = await repo.hourly_buckets_new_orders(lab_codes=None)
+    assert len(buckets) == 24
+    assert all(isinstance(v, int) and v >= 0 for v in buckets)
+
+
+async def test_hourly_buckets_new_orders_unknown_lab_all_zero(db_session) -> None:
+    repo = DashboardRepository(db_session)
+    buckets = await repo.hourly_buckets_new_orders(lab_codes=["LAB-DOES-NOT-EXIST"])
+    assert buckets == [0] * 24
+
+
+async def test_hourly_buckets_completed_lab_scoped(db_session) -> None:
+    """Two LAB-A completions + one LAB-B completion inside the 24h window —
+    the scoped query for LAB-A must report >= 2 completions across the
+    24 buckets, but never see the LAB-B row."""
+    naive_now = datetime.now(UTC).replace(tzinfo=None, microsecond=0)
+    order_no = f"REG-H-COMP-{uuid.uuid4().hex[:8]}"
+    db_session.add(
+        OrderModel(
+            order_no=order_no,
+            applicant_id="reg-applicant",
+            department_id="DEPT-RD",
+            apply_date=naive_now,
+            status=OrderStatus.IN_PROGRESS.value,
+            priority="normal",
+            total_items=1,
+        )
+    )
+    await db_session.flush()
+    seeded = [
+        ("WIP-H-A1", "材料分析實驗室"),
+        ("WIP-H-A2", "材料分析實驗室"),
+        ("WIP-H-B1", "電性測試實驗室"),
+    ]
+    for wip_no, lab_name in seeded:
+        db_session.add(
+            Wip(
+                wip_no=f"{wip_no}-{uuid.uuid4().hex[:6]}",
+                sample_id=uuid.uuid4(),
+                order_no=order_no,
+                lab_name=lab_name,
+                experiment_item="reg",
+                priority="normal",
+                status="completed",
+                progress=100,
+                completed_at=naive_now,
+            )
+        )
+    await db_session.commit()
+
+    repo = DashboardRepository(db_session)
+    full = await repo.hourly_buckets_completed(lab_codes=None)
+    scoped = await repo.hourly_buckets_completed(lab_codes=["LAB-A"])
+    assert len(full) == 24
+    assert len(scoped) == 24
+    # The LAB-B completion must not appear in the LAB-A view, so per-bucket
+    # the scoped counts cannot exceed the unscoped counts.
+    assert all(s <= f for s, f in zip(scoped, full, strict=False))
+    assert sum(scoped) >= 2  # the two LAB-A completions land in some bucket
+
+
+async def test_hourly_buckets_returned_returns_24_zeros_when_empty(db_session) -> None:
+    """Scoping to a lab with no Reports must yield 24 zero buckets, not an
+    empty list — the FE LineChart still needs the x-axis."""
+    repo = DashboardRepository(db_session)
+    buckets = await repo.hourly_buckets_returned(lab_codes=["LAB-DOES-NOT-EXIST"])
+    assert buckets == [0] * 24
+
+
+async def test_hourly_buckets_returned_returns_24_elements(db_session) -> None:
+    repo = DashboardRepository(db_session)
+    buckets = await repo.hourly_buckets_returned(lab_codes=None)
+    assert len(buckets) == 24
+    assert all(isinstance(v, int) and v >= 0 for v in buckets)
+
+
+# ------------------------------------------------------------- Throughput
+
+
+async def test_throughput_24h_returns_24_tuples(db_session) -> None:
+    """24 (hour_offset, completed, returned) tuples; offsets cover 0..23."""
+    repo = DashboardRepository(db_session)
+    rows = await repo.throughput_24h(lab_codes=["LAB-A"])
+    assert len(rows) == 24
+    offsets = [r[0] for r in rows]
+    assert offsets == list(range(24))
+    for r in rows:
+        assert len(r) == 3
+        assert r[1] >= 0
+        assert r[2] >= 0
+
+
+async def test_throughput_24h_unknown_lab_all_zero(db_session) -> None:
+    repo = DashboardRepository(db_session)
+    rows = await repo.throughput_24h(lab_codes=["LAB-DOES-NOT-EXIST"])
+    assert len(rows) == 24
+    assert all(r[1] == 0 and r[2] == 0 for r in rows)
+
+
+# ----------------------------------------------------------- per_lab_util
+
+
+async def test_per_lab_util_all_labs_bounded(db_session) -> None:
+    """Every reported lab's utilization must be in [0, 100]."""
+    repo = DashboardRepository(db_session)
+    by_lab = await repo.per_lab_util(lab_codes=None)
+    assert isinstance(by_lab, dict)
+    for lab_name, pct in by_lab.items():
+        assert isinstance(lab_name, str)
+        assert isinstance(pct, int)
+        assert 0 <= pct <= 100
+
+
+async def test_per_lab_util_scoped_returns_only_requested_labs(db_session) -> None:
+    """A LAB-A-scoped query must not surface other labs' utilization."""
+    repo = DashboardRepository(db_session)
+    by_lab = await repo.per_lab_util(lab_codes=["LAB-A"])
+    # Either empty (no LAB-A machines) or the single LAB-A display name.
+    assert set(by_lab.keys()) <= {"材料分析實驗室"}
+
+
 # ------------------------------------------------------------ Leaderboard
 
 
