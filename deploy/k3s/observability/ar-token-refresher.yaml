@@ -62,9 +62,8 @@ spec:
                   set -e
                   # Fetch fresh token from VM metadata server (accessible from any pod)
                   TOKEN=$(curl -sH "Metadata-Flavor: Google" \
-                    http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=https://asia-east1-docker.pkg.dev \
-                    2>/dev/null || curl -sH "Metadata-Flavor: Google" \
-                    http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+                    http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token \
+                    | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
 
                   if [ -z "$TOKEN" ]; then
                     echo "Failed to fetch token from metadata server"
