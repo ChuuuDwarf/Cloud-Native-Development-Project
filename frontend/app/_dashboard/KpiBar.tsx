@@ -1,5 +1,7 @@
 "use client";
 
+import { Line, LineChart, ResponsiveContainer } from "recharts";
+
 import type { KpiBar as KpiBarData, KpiCardData } from "@/types/dashboard";
 
 const COLOR_BY_THRESHOLD: Record<string, string> = {
@@ -25,12 +27,53 @@ function Arrow({ delta }: { delta: number }) {
   return <span style={{ color: "var(--text3)" }}>→</span>;
 }
 
+function TileSparkline({
+  series,
+  color,
+}: {
+  series: number[] | null;
+  color: string;
+}) {
+  // Skip render when no history is available or every bucket is zero.
+  if (series == null || series.every((v) => v === 0)) return null;
+  const data = series.map((v, i) => ({ x: i, v }));
+  return (
+    <div
+      data-testid="kpi-sparkline"
+      style={{
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: "50%",
+        pointerEvents: "none",
+      }}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <Line
+            type="monotone"
+            dataKey="v"
+            stroke={color}
+            strokeOpacity={0.15}
+            strokeWidth={1.5}
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 function Tile({ card, label, onClick }: { card: KpiCardData; label: string; onClick: () => void }) {
   const color = COLOR_BY_THRESHOLD[card.threshold_color] || "var(--text1)";
   return (
     <button
       onClick={onClick}
       style={{
+        position: "relative",
         background: "var(--s1)",
         border: "1px solid var(--border)",
         borderRadius: 8,
@@ -41,10 +84,22 @@ function Tile({ card, label, onClick }: { card: KpiCardData; label: string; onCl
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
+        overflow: "hidden",
       }}
     >
-      <div style={{ fontSize: 12, color: "var(--text2)" }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+      <TileSparkline series={card.sparkline_24h} color={color} />
+      <div style={{ fontSize: 12, color: "var(--text2)", position: "relative", zIndex: 1 }}>
+        {label}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: 8,
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
         <span style={{ fontSize: 28, fontWeight: 800, color }}>{card.value}</span>
         <span style={{ fontSize: 11, fontFamily: "monospace" }}>
           <Arrow delta={card.delta_24h} />
