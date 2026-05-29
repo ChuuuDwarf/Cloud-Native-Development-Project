@@ -1,6 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import LabLeaderboard from "../LabLeaderboard";
+import LabLeaderboard, {
+  buildLabDrillUrl,
+  extractLabNameFromBarClick,
+} from "../LabLeaderboard";
 import type { LabRow } from "@/types/dashboard";
 
 const rows: LabRow[] = [
@@ -80,5 +83,47 @@ describe("LabLeaderboard", () => {
   it("shows the top-level empty state when no rows", () => {
     render(<LabLeaderboard rows={[]} />);
     expect(screen.getByText("無 lab 資料")).toBeInTheDocument();
+  });
+
+  describe("buildLabDrillUrl", () => {
+    it("URL-encodes the lab name", () => {
+      expect(buildLabDrillUrl("LAB-A")).toBe("/orders?lab=LAB-A");
+      expect(buildLabDrillUrl("Lab A/1")).toBe("/orders?lab=Lab%20A%2F1");
+    });
+  });
+
+  describe("extractLabNameFromBarClick", () => {
+    it("reads lab_name out of the Recharts v3 payload envelope", () => {
+      // Recharts v3 Bar.onClick signature: (data: BarRectangleItem, index, event)
+      // where the row sits at data.payload.<field>, NOT flat on data.
+      const arg = {
+        payload: {
+          lab_name: "LAB-A",
+          completed_today: 9,
+        },
+      };
+      expect(extractLabNameFromBarClick(arg)).toBe("LAB-A");
+    });
+
+    it("returns null when payload is missing", () => {
+      expect(extractLabNameFromBarClick({})).toBeNull();
+      expect(extractLabNameFromBarClick(null)).toBeNull();
+      expect(extractLabNameFromBarClick(undefined)).toBeNull();
+    });
+
+    it("returns null when payload.lab_name is missing or empty", () => {
+      expect(extractLabNameFromBarClick({ payload: {} })).toBeNull();
+      expect(extractLabNameFromBarClick({ payload: { lab_name: "" } })).toBeNull();
+      expect(
+        extractLabNameFromBarClick({ payload: { lab_name: 123 as unknown as string } }),
+      ).toBeNull();
+    });
+
+    it("does NOT read lab_name from the flat top-level (regression for the old bug)", () => {
+      // The previous implementation used `"lab_name" in payload` on the flat
+      // arg, which always returned false for Recharts v3 — drill silently
+      // no-op'd. This test pins down that we never trust the flat shape.
+      expect(extractLabNameFromBarClick({ lab_name: "LAB-A" })).toBeNull();
+    });
   });
 });

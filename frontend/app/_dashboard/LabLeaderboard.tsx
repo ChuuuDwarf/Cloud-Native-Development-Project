@@ -19,6 +19,24 @@ interface SubChartSpec {
   suffix?: string;
 }
 
+/** Build the drill-down URL for a lab row. Exported for unit testing. */
+export function buildLabDrillUrl(labName: string): string {
+  return `/orders?lab=${encodeURIComponent(labName)}`;
+}
+
+/**
+ * Recharts v3 wraps the row in a ``{ payload }`` envelope when invoking
+ * ``Bar.onClick(data, index, event)``. Pull ``lab_name`` out defensively
+ * so a shape change doesn't crash the dashboard.
+ */
+export function extractLabNameFromBarClick(arg: unknown): string | null {
+  if (!arg || typeof arg !== "object") return null;
+  const payload = (arg as { payload?: unknown }).payload;
+  if (!payload || typeof payload !== "object") return null;
+  const lab = (payload as { lab_name?: unknown }).lab_name;
+  return typeof lab === "string" && lab.length > 0 ? lab : null;
+}
+
 const SUB_CHARTS: SubChartSpec[] = [
   {
     metric: "completed_today",
@@ -114,15 +132,10 @@ function SubChart({ rows, spec }: { rows: LabRow[]; spec: SubChartSpec }) {
                 dataKey={spec.metric}
                 fill={spec.fill}
                 isAnimationActive={false}
-                onClick={(payload) => {
-                  // Recharts wraps the row in a `payload` envelope at runtime
-                  // for Bar onClick — guard for shape and pull lab_name out.
-                  const lab =
-                    payload && typeof payload === "object" && "lab_name" in payload
-                      ? (payload as { lab_name: string }).lab_name
-                      : null;
+                onClick={(arg) => {
+                  const lab = extractLabNameFromBarClick(arg);
                   if (lab) {
-                    window.location.href = `/orders?lab=${encodeURIComponent(lab)}`;
+                    window.location.href = buildLabDrillUrl(lab);
                   }
                 }}
                 style={{ cursor: "pointer" }}
