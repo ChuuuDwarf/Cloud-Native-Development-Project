@@ -1,3 +1,5 @@
+import json
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -17,6 +19,9 @@ fallback_user = {
 
 
 WIP_ORDER_GUARD_MESSAGE = "目前尚未輪到此 WIP，請先完成前一站實驗或交接流程"
+NO_PENDING_DEPENDENCY_MESSAGE = "No pending dependency item"
+DEPENDENCY_REASON_LOWEST_MACHINE_UTILIZATION = "lowest_machine_utilization"
+MISSING_MACHINE_UTILIZATION_SCORE = 1_000_000
 
 
 async def get_active_user(
@@ -281,6 +286,196 @@ def parse_requested_experiments(experiment_item: str | None) -> list[dict[str, s
 
 def normalize_flow_value(value: str | None) -> str:
     return (value or "").strip().lower()
+
+
+def parse_supported_items(value: Any) -> list[str]:
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return [str(item) for item in value]
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return []
+
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            return [part.strip() for part in stripped.split(",") if part.strip()]
+
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+
+    return []
+
+
+def normalize_dependency_item(item: dict) -> dict:
+    return {
+        **item,
+        "target_group": item.get("target_group") or "G1",
+        "target": int(item.get("target") or 1),
+        "dependency_check": bool(item.get("dependency_check")),
+    }
+
+
+def select_pending_dependency_candidates(order_items: list[dict]) -> list[dict]:
+    pending_by_group: dict[str, dict] = {}
+
+    for raw_item in order_items:
+        item = normalize_dependency_item(raw_item)
+        if item["dependency_check"]:
+            continue
+
+        group = item["target_group"]
+        current = pending_by_group.get(group)
+
+        if current is None or (
+            item["target"],
+            str(item.get("created_at") or ""),
+            int(item["id"]),
+        ) < (
+            current["target"],
+            str(current.get("created_at") or ""),
+            int(current["id"]),
+        ):
+            pending_by_group[group] = item
+
+    return list(pending_by_group.values())
+
+
+def machine_utilization_score(candidate: dict, machines: list[dict]) -> int:
+    lab_values = {
+        normalize_flow_value(candidate.get("lab_name")),
+        normalize_flow_value(candidate.get("lab_code")),
+        normalize_flow_value(candidate.get("lab_id")),
+    }
+    experiment_name = normalize_flow_value(candidate.get("experiment_name"))
+
+    scores: list[int] = []
+    for machine in machines:
+        if normalize_flow_value(machine.get("lab")) not in lab_values:
+            continue
+
+        supported_items = {
+            normalize_flow_value(item)
+            for item in parse_supported_items(machine.get("supported_items"))
+        }
+        if experiment_name not in supported_items:
+            continue
+
+        try:
+            scores.append(int(machine.get("utilization") or 0))
+        except (TypeError, ValueError):
+            scores.append(MISSING_MACHINE_UTILIZATION_SCORE)
+
+    return min(scores) if scores else MISSING_MACHINE_UTILIZATION_SCORE
+
+
+def select_dependency_candidate(candidates: list[dict], machines: list[dict]) -> dict:
+    return sorted(
+        candidates,
+        key=lambda item: (
+            machine_utilization_score(item, machines),
+            item["target"],
+            str(item.get("created_at") or ""),
+            int(item["id"]),
+        ),
+    )[0]
+
+
+async def claim_next_dependency_experiment(
+    db: AsyncSession,
+    sample_id: str,
+) -> dict:
+    validate_uuid(sample_id, "sampleId")
+
+    sample = await get_sample_by_id(sample_id, db)
+    if sample is None:
+        raise HTTPException(status_code=404, detail="Sample not found")
+
+    order_no = sample.get("order_no")
+    sample_no = sample.get("sample_no")
+    if not order_no or not sample_no:
+        raise HTTPException(
+            status_code=400,
+            detail="Sample is missing order_no or sample_no",
+        )
+
+    order_items = await wip_repo.list_dependency_order_items_for_sample(
+        db,
+        order_no=str(order_no),
+        sample_no=str(sample_no),
+    )
+    if not order_items:
+        raise HTTPException(status_code=404, detail="Dependency order items not found")
+
+    candidates = select_pending_dependency_candidates(order_items)
+    if not candidates:
+        return {
+            "success": True,
+            "data": None,
+            "message": NO_PENDING_DEPENDENCY_MESSAGE,
+        }
+
+    lab_names = sorted(
+        {str(candidate.get("lab_name")) for candidate in candidates if candidate.get("lab_name")}
+    )
+    lab_codes = sorted(
+        {
+            str(candidate.get("lab_code") or candidate.get("lab_id"))
+            for candidate in candidates
+            if candidate.get("lab_code") or candidate.get("lab_id")
+        }
+    )
+    machines = await wip_repo.list_machines_for_dependency_candidates(
+        db,
+        lab_names=lab_names,
+        lab_codes=lab_codes,
+    )
+
+    for candidate in sorted(
+        candidates,
+        key=lambda item: (
+            machine_utilization_score(item, machines),
+            item["target"],
+            str(item.get("created_at") or ""),
+            int(item["id"]),
+        ),
+    ):
+        claimed = await wip_repo.claim_order_item_dependency_check(
+            db,
+            order_item_id=int(candidate["id"]),
+        )
+        if claimed is None:
+            continue
+
+        await db.commit()
+        return {
+            "success": True,
+            "data": {
+                "orderItemId": candidate["id"],
+                "orderNo": order_no,
+                "sampleId": sample_id,
+                "sampleNo": sample_no,
+                "labId": candidate.get("lab_id"),
+                "labName": candidate.get("lab_name"),
+                "experimentId": candidate.get("experiment_id"),
+                "experimentName": candidate.get("experiment_name"),
+                "targetGroup": candidate.get("target_group") or "G1",
+                "target": candidate.get("target") or 1,
+                "check": True,
+                "reason": DEPENDENCY_REASON_LOWEST_MACHINE_UTILIZATION,
+            },
+        }
+
+    await db.rollback()
+    return {
+        "success": True,
+        "data": None,
+        "message": NO_PENDING_DEPENDENCY_MESSAGE,
+    }
 
 
 def find_current_experiment_index(

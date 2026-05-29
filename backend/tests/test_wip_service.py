@@ -12,7 +12,10 @@ from app.services.wip_service import (
     get_completable_wip_slots_for_current_segment,
     lab_location,
     machine_location,
+    machine_utilization_score,
     parse_requested_experiments,
+    select_dependency_candidate,
+    select_pending_dependency_candidates,
     validate_uuid,
     validate_wip_create_items_in_order,
 )
@@ -74,6 +77,50 @@ def test_validate_uuid_rejects_invalid_wip_id():
 
     assert exc.value.status_code == 400
     assert exc.value.detail == "wip_id must be a valid UUID"
+
+
+def test_dependency_candidates_pick_smallest_unchecked_target_per_group():
+    items = [
+        {"id": 1, "target_group": "G1", "target": 1, "dependency_check": True},
+        {"id": 2, "target_group": "G1", "target": 2, "dependency_check": False},
+        {"id": 3, "target_group": "G1", "target": 3, "dependency_check": False},
+        {"id": 4, "target_group": "G2", "target": 1, "dependency_check": False},
+    ]
+
+    candidates = select_pending_dependency_candidates(items)
+
+    assert [candidate["id"] for candidate in candidates] == [2, 4]
+
+
+def test_dependency_tie_break_uses_lowest_machine_utilization():
+    candidates = [
+        {
+            "id": 1,
+            "lab_id": "A",
+            "lab_name": "Lab A",
+            "lab_code": "A",
+            "experiment_name": "SEM 觀察",
+            "target": 1,
+            "created_at": "2026-05-01",
+        },
+        {
+            "id": 2,
+            "lab_id": "B",
+            "lab_name": "Lab B",
+            "lab_code": "B",
+            "experiment_name": "光學量測",
+            "target": 1,
+            "created_at": "2026-05-01",
+        },
+    ]
+    machines = [
+        {"lab": "A", "supported_items": ["SEM 觀察"], "utilization": 80},
+        {"lab": "B", "supported_items": ["光學量測"], "utilization": 20},
+    ]
+
+    assert machine_utilization_score(candidates[0], machines) == 80
+    assert machine_utilization_score(candidates[1], machines) == 20
+    assert select_dependency_candidate(candidates, machines)["id"] == 2
 
 
 def test_wip_order_slots_prevent_skipping_later_same_lab_in_aba_flow():
