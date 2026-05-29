@@ -111,6 +111,8 @@ services:
                 condition: service_healthy
             migrate:
                 condition: service_completed_successfully
+            seed:
+                condition: service_completed_successfully
 
     celery-worker:
         build: ./backend
@@ -152,6 +154,8 @@ services:
                 condition: service_healthy
             migrate:
                 condition: service_completed_successfully
+            seed:
+                condition: service_completed_successfully
 
     celery-beat:
         build: ./backend
@@ -179,16 +183,21 @@ services:
                 condition: service_healthy
             migrate:
                 condition: service_completed_successfully
+            seed:
+                condition: service_completed_successfully
 
-    # Opt-in seed runner. `docker compose --profile seed up seed` populates
-    # roles / users / labs / departments + (if DEMO_PHONE is set in .env)
-    # writes the demo phone into every User.phone so the TAS pipeline can be
-    # exercised end-to-end. Profile-gated so prod / CI don't accidentally seed
-    # demo data over real rows.
+    # One-shot seed runner. Populates roles / users / labs / departments +
+    # (if DEMO_PHONE is set in .env) writes the demo phone into every
+    # User.phone so the TAS pipeline can be exercised end-to-end.
+    #
+    # On the critical path of every `docker compose up` (backend / celery
+    # depend on this). seed_dev is idempotent (upserts every row by natural
+    # key) so re-running is safe; new code or DB resets land the latest
+    # seed without a separate command. For CI / prod that don't want demo
+    # rows, override ``SEED_PROFILE=skip`` or comment out the dependency.
     seed:
         build: ./backend
         command: ["python", "-m", "scripts.seed_dev"]
-        profiles: ["seed"]
         env_file:
             - path: ./backend/.env
               required: false
