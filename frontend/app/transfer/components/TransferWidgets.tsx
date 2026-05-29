@@ -282,12 +282,10 @@ export function ReturnDetail({
   candidate,
   submitting,
   onNotifyPickup,
-  onConfirmPickup,
 }: {
   candidate: ReturnCandidate;
   submitting: boolean;
   onNotifyPickup: (candidate: ReturnCandidate) => void;
-  onConfirmPickup: (candidate: ReturnCandidate) => void;
 }) {
   const isOutbound = candidate.sample.status === "outbound";
 
@@ -350,13 +348,13 @@ export function ReturnDetail({
           )}
 
           {isOutbound && (
-            <button
-              onClick={() => onConfirmPickup(candidate)}
-              disabled={submitting}
-              style={primaryButtonStyle}
-            >
-              確認使用者已取件
-            </button>
+            // 'pickup_confirmed' is reserved for the original requester
+            // (see backend _validate_sample_action_permission). Lab roles
+            // no longer flip the sample on the requester's behalf — wait
+            // for the user's own confirmation on /sample 我的樣品追蹤.
+            <span style={{ ...hintStyle, fontStyle: "italic" }}>
+              等待使用者本人於「我的樣品追蹤」確認取件
+            </span>
           )}
         </div>
       </div>
