@@ -57,7 +57,8 @@ function DashboardContent() {
             fontFamily: "monospace",
           }}
         >
-          SUPERVISOR DASHBOARD · {isCrossLab ? "全廠視角" : `${data.viewer_lab ?? "本 lab"}`} · 自動更新
+          SUPERVISOR DASHBOARD · {isCrossLab ? "全廠視角" : `${data.viewer_lab ?? "本 lab"}`} ·
+          自動更新
         </p>
       </div>
 

@@ -41,7 +41,7 @@ describe("WipPipeline", () => {
           done: [0, 0],
           terminated: [0, 0],
         }}
-      />,
+      />
     );
     expect(screen.getByText("目前無 WIP")).toBeInTheDocument();
   });

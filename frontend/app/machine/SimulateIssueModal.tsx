@@ -112,7 +112,11 @@ export default function SimulateIssueModal({ machines, onClose }: Props) {
         </p>
 
         <Field label="機台">
-          <select value={machineId} onChange={(e) => setMachineId(e.target.value)} style={selectStyle}>
+          <select
+            value={machineId}
+            onChange={(e) => setMachineId(e.target.value)}
+            style={selectStyle}
+          >
             {machines.length === 0 && <option value="">沒有機台可選</option>}
             {machines.map((m) => (
               <option key={m.machineId} value={m.machineId}>

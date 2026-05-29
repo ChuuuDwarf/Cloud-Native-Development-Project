@@ -55,7 +55,7 @@ describe("MachineHeatmap", () => {
       <MachineHeatmap
         data={{ by_lab: {}, avg_utilization_pct: 0, in_use_count: 0, total_count: 0 }}
         showLabPrefix={true}
-      />,
+      />
     );
     expect(screen.getByText("無機台資料")).toBeInTheDocument();
   });
