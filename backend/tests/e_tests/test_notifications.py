@@ -366,18 +366,27 @@ async def test_mark_read_non_issue_source_leaves_issues_alone(
 
 
 # ---------------------------------------------------------------------------
-# Ack side effect: machine-targeted issues restore the machine to 閒置.
+# Ack side effect: machine status is NOT auto-modified.
+#
+# Previously, acknowledging an issue whose target was a 故障中 machine flipped
+# the machine back to 閒置 inside the same transaction. That auto-reset was
+# removed — staff repair the physical machine first, then update its status
+# from the machine management UI. These tests pin the new contract: regardless
+# of starting status (故障中 / 保養中 / …), Machine.status is untouched by
+# notification ack.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_mark_read_restores_faulty_machine_to_idle(
+async def test_mark_read_does_not_modify_faulty_machine_status(
     engineer_a_client: AsyncClient,
     admin_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """When the acked issue targets a 故障中 machine, the side effect flips
-    the machine back to 閒置 in the same transaction.
+    """A 故障中 machine stays 故障中 after the source issue is acked.
+
+    Manual recovery via the machine management UI is the only path back to
+    閒置. Acknowledgement only stops escalation; it does not heal the machine.
     """
     from sqlalchemy import select
 
@@ -432,7 +441,8 @@ async def test_mark_read_restores_faulty_machine_to_idle(
     refreshed = (
         await db_session.execute(select(Machine).where(Machine.machine_id == "SEM-TEST"))
     ).scalar_one()
-    assert refreshed.status == "閒置"
+    # Unchanged by ack — manual UI edit is the only path to 閒置 now.
+    assert refreshed.status == "故障中"
 
 
 @pytest.mark.asyncio
@@ -441,7 +451,7 @@ async def test_mark_read_does_not_touch_machines_in_other_status(
     admin_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """A 保養中 machine stays 保養中 — the ack restore only undoes 故障中."""
+    """A 保養中 machine stays 保養中 — ack never mutates Machine.status."""
     from sqlalchemy import select
 
     from app.common.enums import IssueStatus, IssueType
@@ -495,5 +505,5 @@ async def test_mark_read_does_not_touch_machines_in_other_status(
     refreshed = (
         await db_session.execute(select(Machine).where(Machine.machine_id == "SEM-MAINT"))
     ).scalar_one()
-    # Guarded: still 保養中, not 閒置.
+    # Guarded: still 保養中.
     assert refreshed.status == "保養中"

@@ -22,7 +22,6 @@ from app.common.enums import IssueStatus, NotificationChannel, NotificationStatu
 from app.core.database import get_db
 from app.db.models.issues import Issue
 from app.db.models.labs import Lab
-from app.db.models.machines import Machine
 from app.db.models.notifications import Notification
 from app.db.models.users import User
 from app.modules.dashboard.publisher import publish_dashboard_event
@@ -265,36 +264,12 @@ class NotificationService:
                 await publish_dashboard_event(code, "issue_acknowledged")
         except Exception:
             logger.exception("publish issue_acknowledged failed for issue_ids=%s", issue_ids)
-        # Side effect: if any of the acked issues targets a machine, flip
-        # that machine from 故障中 back to 閒置. The status guard ensures
-        # we only undo the simulate-issue button — a machine that's
-        # legitimately 保養中 / 停用 / 使用中 stays put.
-        #
-        # Machine.status stores Chinese strings (C 組 schema); MachineStatus
-        # enum's English values aren't used at the DB layer here.
-
-        machine_targets_stmt = (
-            select(Issue.target_id)
-            .where(Issue.id.in_(issue_ids), Issue.target_type == "machine")
-            .distinct()
-        )
-        machine_ids = list((await self._session.execute(machine_targets_stmt)).scalars().all())
-
-        if machine_ids:
-            restore_stmt = (
-                update(Machine)
-                .where(
-                    Machine.machine_id.in_(machine_ids),
-                    Machine.status == "故障中",
-                )
-                .values(status="閒置")
-                .execution_options(synchronize_session=False)
-            )
-            await self._session.execute(restore_stmt)
-            logger.info(
-                "restored %d machine(s) to 閒置 after issue ack",
-                len(machine_ids),
-            )
+        # Note: previously this method also flipped any machine targeted by
+        # the acked issue from 故障中 → 閒置. That auto-reset has been removed
+        # — acknowledgement only stops escalation; a 故障中 machine returns to
+        # 閒置 only when staff manually update its status from the machine
+        # management UI after physically repairing it. See the discussion on
+        # the issue-flow walkthrough for the motivation.
 
 
 async def get_notification_service(
