@@ -96,6 +96,20 @@ async def publish_report_returned(lab_code: str | None) -> None:
     await _publish(_lab_channel(lab_code), "report_returned")
 
 
+async def publish_dashboard_event(lab_code: str | None, event_name: str) -> None:
+    """Publish a dashboard event. ``lab_code`` is the lab CODE (e.g. ``"LAB-A"``)
+    or None for cross-lab/global events. ``event_name`` is a short identifier
+    used for logging; the frontend handler is event-name-agnostic (any
+    ``dashboard`` SSE event triggers query invalidation).
+
+    See :func:`publish_new_escalation` for ``lab_code`` semantics and
+    channel-selection rationale. This is the generic helper that newer
+    publish call sites should prefer; the named wrappers above remain for
+    backwards compatibility with their existing call sites.
+    """
+    await _publish(_lab_channel(lab_code), event_name)
+
+
 async def listen(channels: list[str], *, patterns: list[str] | None = None) -> AsyncIterator[str]:
     """Async-generator yielding event names as they arrive on any of
     ``channels`` or matching any of ``patterns`` (Redis PSUBSCRIBE globs).
