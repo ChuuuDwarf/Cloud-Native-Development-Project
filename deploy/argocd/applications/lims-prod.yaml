@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lims-prod
+  namespace: argocd
+  finalizers: []
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/ChuuuDwarf/Cloud-Native-Development-Project.git
+    targetRevision: main
+    path: deploy/k3s/overlays/prod
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lims-prod
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m

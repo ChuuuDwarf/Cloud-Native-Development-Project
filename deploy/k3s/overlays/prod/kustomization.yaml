@@ -33,6 +33,7 @@ patches:
         path: /metadata/annotations
         value:
           cert-manager.io/cluster-issuer: letsencrypt-prod
+          traefik.ingress.kubernetes.io/router.middlewares: lims-prod-redirect-https@kubernetescrd
       - op: add
         path: /spec/tls
         value:
