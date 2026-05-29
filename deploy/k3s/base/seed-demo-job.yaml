@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-seed-demo
+  annotations:
+    # Runs AFTER db-seed (wave 2) — seed_dashboard_demo assumes roles/users/labs
+    # are already in place.
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/hook: PostSync
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: artifact-registry
+      containers:
+        - name: seed-demo
+          image: lims-backend
+          # scripts/seed_dashboard_demo.py: idempotent natural-key upserts
+          # producing demo machines + orders + WIPs + reports + issues spread
+          # across the last 24h so the supervisor dashboard reads non-zero
+          # immediately after deploy. Safe to re-run on every Argo sync.
+          # Skip this Job by removing seed-demo-job.yaml from the base
+          # kustomization for real-prod environments that should NOT have
+          # demo rows.
+          command: ["python", "-m", "scripts.seed_dashboard_demo"]
+          envFrom:
+            - configMapRef:
+                name: lims-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: lims-secrets
+                  key: DATABASE_URL

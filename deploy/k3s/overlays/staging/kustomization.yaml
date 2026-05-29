@@ -8,6 +8,15 @@ namespace: lims-staging
 resources:
 - ../../base
 
+# Override CORS_ORIGINS for staging's nip.io subdomain. Same-origin browser
+# requests don't trip CORS; this is for non-browser API clients calling
+# the staging URL directly.
+configMapGenerator:
+- name: lims-config
+  behavior: merge
+  literals:
+  - CORS_ORIGINS=https://staging.34.80.119.4.nip.io
+
 # Staging deploys on the same VM/IP as prod, distinguished by the nip.io
 # subdomain `staging.<IP>.nip.io`. CD points these at the -rc image tags.
 images:
