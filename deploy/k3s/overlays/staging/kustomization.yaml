@@ -13,10 +13,10 @@ resources:
 images:
 - name: lims-backend
   newName: asia-east1-docker.pkg.dev/lims-497613/lims/backend
-  newTag: v0.2.0-rc1
+  newTag: v0.2.1-rc1
 - name: lims-frontend
   newName: asia-east1-docker.pkg.dev/lims-497613/lims/frontend
-  newTag: v0.2.0-rc1
+  newTag: v0.2.1-rc1
 
 # Fewer replicas in staging to leave room on the single VM.
   # Host-based TLS for staging. REPLACE_IP filled with the VM static IP in
