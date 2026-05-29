@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lims-staging
+  namespace: argocd
+  # Don't delete the lims-staging namespace if this Application is deleted.
+  finalizers: []
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/ChuuuDwarf/Cloud-Native-Development-Project.git
+    targetRevision: main
+    path: deploy/k3s/overlays/staging
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lims-staging
+
+  syncPolicy:
+    automated:
+      prune: true       # delete resources removed from git
+      selfHeal: true    # revert manual cluster edits
+    syncOptions:
+      - CreateNamespace=false   # namespace pre-created by provision.sh
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m

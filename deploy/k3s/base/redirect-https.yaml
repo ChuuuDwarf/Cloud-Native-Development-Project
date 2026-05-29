@@ -1,0 +1,12 @@
+# Traefik Middleware：把 http 流量 301 轉到 https。
+# 由 overlay 的 Ingress annotation 引用，引用格式：
+#   traefik.ingress.kubernetes.io/router.middlewares: <ns>-redirect-https@kubernetescrd
+# 例：lims-prod-redirect-https@kubernetescrd
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true  # 301（瀏覽器會快取，下次直接走 https）
