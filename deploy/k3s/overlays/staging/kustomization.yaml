@@ -13,10 +13,10 @@ resources:
 images:
   - name: lims-backend
     newName: asia-east1-docker.pkg.dev/lims-497613/lims/backend
-    newTag: latest
+    newTag: v0.1.0
   - name: lims-frontend
     newName: asia-east1-docker.pkg.dev/lims-497613/lims/frontend
-    newTag: latest
+    newTag: v0.1.0
 
 # Fewer replicas in staging to leave room on the single VM.
 patches:
