@@ -1,6 +1,6 @@
 """Regression tests for the end-to-end order-flow bugs surfaced 2026-05-29.
 
-Three independent bugs walked through together — each test pins one of them.
+Four independent bugs walked through together — each test pins one of them.
 
 1. ``Wip.completed_at`` was NULL after ``confirm_result`` flipped status to
    ``completed``. The dashboard's "完工 today" KPI and every other rolling-24h
@@ -19,6 +19,14 @@ Three independent bugs walked through together — each test pins one of them.
    with zero storage rows (no inbound has run) bypassed the guard and could
    be flipped to CLOSED before the user had actually picked anything up. The
    fix treats an empty ``items`` list as "not yet picked up" too.
+
+4. ``DashboardRepository.recent_escalations`` filtered ``Issue.status ==
+   'escalated'``. Phase K C5 (ack from notification center) flips the issue's
+   status to ``acknowledged`` while leaving ``escalation_level > 0`` — so an
+   ack'd issue silently disappeared from the supervisor's "Recent Escalations"
+   panel the moment they read it. The fix drops the status filter and gates
+   on ``escalation_level > 0`` instead so the panel works as a 24h escalation
+   audit log, not a "currently-escalating" snapshot.
 """
 
 from __future__ import annotations
@@ -27,11 +35,12 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy import select
 
 from app.common.dependencies.lab_scope import LabScope
-from app.common.enums import OrderStatus, WipStatus
+from app.common.enums import IssueStatus, OrderStatus, Severity, WipStatus
 from app.common.errors import ConflictError
-from app.db.models import OrderModel, Wip, WipExecution
+from app.db.models import Issue, Lab, OrderModel, Wip, WipExecution
 from app.modules.closures.repository import ClosureRepository
 from app.modules.closures.service import ClosureService
 from app.modules.dashboard.repository import DashboardRepository
@@ -115,6 +124,37 @@ async def _seed_wip(
     db_session.add(wip)
     await db_session.flush()
     return wip
+
+
+async def _seed_issue(
+    db_session,
+    *,
+    lab_id: uuid.UUID,
+    severity: Severity,
+    status: IssueStatus,
+    escalation_level: int,
+    title: str | None = None,
+) -> Issue:
+    """Seed an Issue with the minimum fields recent_escalations / triage need.
+
+    ``updated_at`` is set server-side; the regression test below relies on the
+    default landing inside the rolling 24h window — which it always does for a
+    row inserted in the same test run.
+    """
+    issue = Issue(
+        type="warning",
+        target_type="machine",
+        target_id=f"M-REG-{uuid.uuid4().hex[:6]}",
+        lab_id=lab_id,
+        title=title or f"reg issue {uuid.uuid4().hex[:6]}",
+        description="",
+        severity=severity,
+        status=status,
+        escalation_level=escalation_level,
+    )
+    db_session.add(issue)
+    await db_session.flush()
+    return issue
 
 
 # ---------------------------------------------------------------------------
@@ -254,3 +294,37 @@ async def test_close_order_rejects_when_no_storage_items(db_session) -> None:
     service = ClosureService(ClosureRepository(db_session), LabScope.system())
     with pytest.raises(ConflictError, match="尚有樣品未取件"):
         await service.close_order(order_no, operator="tester")
+
+
+# ---------------------------------------------------------------------------
+# Issue 4 — recent_escalations keeps ack'd issues in the 24h audit window.
+# ---------------------------------------------------------------------------
+
+
+async def test_recent_escalations_includes_acknowledged_issues_within_24h(
+    db_session,
+) -> None:
+    """Phase K C5 flips issue.status from 'escalated' to 'acknowledged' when
+    the user reads the notification. The recent_escalations panel should
+    still show that issue (it WAS escalated in the last 24h) — otherwise
+    the supervisor loses all history the moment they ack.
+    """
+    lab = (await db_session.execute(select(Lab).where(Lab.code == "LAB-A"))).scalar_one()
+
+    issue = await _seed_issue(
+        db_session,
+        lab_id=lab.id,
+        severity=Severity.CRITICAL,
+        status=IssueStatus.ACKNOWLEDGED,
+        escalation_level=2,
+        title=f"REG-OF4 acked-but-escalated {_suite()}",
+    )
+    await db_session.commit()
+
+    repo = DashboardRepository(db_session)
+    rows = await repo.recent_escalations(lab_codes=None, limit=50)
+    assert any(str(r[0]) == str(issue.id) for r in rows), (
+        "an acknowledged issue with escalation_level>0 must still appear in "
+        "recent_escalations within 24h — Phase K C5 ack must not erase the "
+        "supervisor's escalation history"
+    )

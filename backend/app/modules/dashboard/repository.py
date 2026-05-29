@@ -585,12 +585,20 @@ class DashboardRepository:
     # ------------------------------------------------------------ escalations
 
     async def recent_escalations(self, lab_codes: list[str] | None, limit: int) -> Sequence[Any]:
-        """Last 24h of issues currently at ``escalated`` status.
+        """Last 24h of issues that have been escalated at least once.
 
-        ``Issue.updated_at`` acts as the "escalated_at" proxy — the escalation
+        Includes ack'd / closed issues to preserve the history — the panel is
+        consumed as a recently-escalated audit log, not a "currently-
+        escalating" list. Filtering on ``Issue.status == 'escalated'`` would
+        silently drop rows the moment Phase K C5 (ack from notification
+        center) flipped status to ``acknowledged`` while ``escalation_level``
+        stays > 0, erasing the supervisor's escalation history on every ack.
+
+        ``Issue.updated_at`` acts as the "last touched" proxy: the escalation
         worker bumps ``escalation_level`` and updates this timestamp on each
-        level transition, so it's the closest available signal without
-        introducing a dedicated audit table.
+        level transition, and the ack/close paths also stamp it — so the 24h
+        window naturally tracks escalation activity without a dedicated audit
+        table.
 
         Returns ``(issue_id, lab_name, severity, escalation_level, title,
         escalated_at)``. ``lab_name`` is the display name (Lab.name) so it
@@ -608,7 +616,7 @@ class DashboardRepository:
             )
             .join(Lab, Lab.id == Issue.lab_id)
             .where(
-                Issue.status == IssueStatus.ESCALATED.value,
+                Issue.escalation_level > 0,
                 Issue.updated_at >= cutoff,
             )
             .order_by(Issue.updated_at.desc())
