@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import WipPipeline from "../WipPipeline";
 import type { WipPipeline as Data } from "@/types/dashboard";
@@ -44,5 +44,57 @@ describe("WipPipeline", () => {
       />
     );
     expect(screen.getByText("目前無 WIP")).toBeInTheDocument();
+  });
+
+  it("shows tooltip when hovering over a segment", () => {
+    render(<WipPipeline data={data} />);
+    // in_progress is 12 of 31 = 38.7%
+    const segment = screen.getByTestId("wip-segment-in_progress");
+    expect(screen.queryByTestId("wip-tooltip")).not.toBeInTheDocument();
+    fireEvent.mouseEnter(segment);
+    const tooltip = screen.getByTestId("wip-tooltip");
+    expect(tooltip).toBeInTheDocument();
+    expect(tooltip.textContent).toContain("進行");
+    expect(tooltip.textContent).toContain("12");
+    expect(tooltip.textContent).toContain("39%");
+    expect(tooltip.textContent).toContain("↓2");
+    fireEvent.mouseLeave(segment);
+    expect(screen.queryByTestId("wip-tooltip")).not.toBeInTheDocument();
+  });
+
+  it("applies striped pattern to the terminated segment", () => {
+    const withTerminated: Data = {
+      ...data,
+      total: 35,
+      terminated: [4, 0],
+    };
+    render(<WipPipeline data={withTerminated} />);
+    const segment = screen.getByTestId("wip-segment-terminated");
+    const bgImage = segment.style.backgroundImage;
+    expect(bgImage).toContain("repeating-linear-gradient");
+    expect(bgImage).toContain("45deg");
+  });
+
+  it("renders 完工 baseline marker when done segment is non-zero", () => {
+    render(<WipPipeline data={data} />);
+    expect(screen.getByTestId("done-baseline-marker")).toBeInTheDocument();
+    expect(screen.getByText("本日完工 baseline")).toBeInTheDocument();
+  });
+
+  it("hides 完工 baseline marker when no WIP is done", () => {
+    const noDone: Data = {
+      ...data,
+      done: [0, 0],
+    };
+    render(<WipPipeline data={noDone} />);
+    expect(screen.queryByTestId("done-baseline-marker")).not.toBeInTheDocument();
+  });
+
+  it("shows pct text only on segments >= 8%", () => {
+    // waiting_dispatch 5/31 = 16% (rendered), in_progress 12/31 = 38% (rendered),
+    // done 3/31 = 9% (rendered), dispatched 3/31 = 9.6% (rendered)
+    render(<WipPipeline data={data} />);
+    const inProgressSegment = screen.getByTestId("wip-segment-in_progress");
+    expect(inProgressSegment.textContent).toContain("39%");
   });
 });
