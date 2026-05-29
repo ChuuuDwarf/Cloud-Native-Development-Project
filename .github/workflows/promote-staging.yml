@@ -43,7 +43,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PROMOTION_TOKEN }}
 
       - name: Install kustomize
         run: |
