@@ -6,7 +6,7 @@ kind: Kustomization
 namespace: lims-prod
 
 resources:
-  - ../../base
+- ../../base
 
 # Real images in GCP Artifact Registry (project lims-497613, repo `lims`,
 # region asia-east1). CD overrides the tag per release via:
@@ -14,32 +14,32 @@ resources:
 #     lims-backend=asia-east1-docker.pkg.dev/lims-497613/lims/backend:vX.Y.Z \
 #     lims-frontend=asia-east1-docker.pkg.dev/lims-497613/lims/frontend:vX.Y.Z
 images:
-  - name: lims-backend
-    newName: asia-east1-docker.pkg.dev/lims-497613/lims/backend
-    newTag: v0.1.0
-  - name: lims-frontend
-    newName: asia-east1-docker.pkg.dev/lims-497613/lims/frontend
-    newTag: v0.1.0
+- name: lims-backend
+  newName: asia-east1-docker.pkg.dev/lims-497613/lims/backend
+  newTag: v0.2.2
+- name: lims-frontend
+  newName: asia-east1-docker.pkg.dev/lims-497613/lims/frontend
+  newTag: v0.2.2
 
 # Host-based TLS for prod. REPLACE_IP is filled with the VM's reserved static
 # IP in Phase 3 (e.g. 34.80.1.2 -> host 34.80.1.2.nip.io). cert-manager issues
 # a Let's Encrypt cert into the lims-tls secret via the letsencrypt-prod issuer.
 patches:
-  - target:
-      kind: Ingress
-      name: lims
-    patch: |-
-      - op: add
-        path: /metadata/annotations
-        value:
-          cert-manager.io/cluster-issuer: letsencrypt-prod
-          traefik.ingress.kubernetes.io/router.middlewares: lims-prod-redirect-https@kubernetescrd
-      - op: add
-        path: /spec/tls
-        value:
-          - hosts:
-              - 34.80.119.4.nip.io
-            secretName: lims-tls
-      - op: add
-        path: /spec/rules/0/host
-        value: 34.80.119.4.nip.io
+- patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        traefik.ingress.kubernetes.io/router.middlewares: lims-prod-redirect-https@kubernetescrd
+    - op: add
+      path: /spec/tls
+      value:
+        - hosts:
+            - 34.80.119.4.nip.io
+          secretName: lims-tls
+    - op: add
+      path: /spec/rules/0/host
+      value: 34.80.119.4.nip.io
+  target:
+    kind: Ingress
+    name: lims
