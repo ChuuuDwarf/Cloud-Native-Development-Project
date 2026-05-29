@@ -54,25 +54,36 @@ function Tile({ m }: { m: MachineGrid }) {
   );
 }
 
-function RadialGauge({ pct, color }: { pct: number; color: string }) {
+function RadialGauge({
+  pct,
+  color,
+  size = 240,
+}: {
+  pct: number;
+  color: string;
+  size?: number;
+}) {
   // Single semicircle bar showing `pct` out of 100. The background prop
-  // renders the unused portion as a grey track.
+  // renders the unused portion as a grey track. ``size`` scales the whole
+  // gauge — inner value/caption follow.
   const data = [{ name: "util", value: pct, fill: color }];
+  const valueFont = Math.max(40, Math.round(size * 0.27));
+  const captionFont = Math.max(12, Math.round(size * 0.06));
   return (
     <div
       data-testid="radial-gauge"
       data-util-color={color}
-      style={{ width: 160, height: 160, position: "relative" }}
+      style={{ width: size, height: size / 1.6, position: "relative" }}
     >
       <ResponsiveContainer width="100%" height="100%">
         <RadialBarChart
           data={data}
           startAngle={180}
           endAngle={0}
-          innerRadius="65%"
+          innerRadius="60%"
           outerRadius="100%"
           cx="50%"
-          cy="75%"
+          cy="100%"
         >
           <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
           <RadialBar
@@ -91,12 +102,19 @@ function RadialGauge({ pct, color }: { pct: number; color: string }) {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "flex-end",
-          paddingBottom: 12,
+          paddingBottom: Math.round(size * 0.04),
           pointerEvents: "none",
         }}
       >
-        <span style={{ fontSize: 36, fontWeight: 700, color, lineHeight: 1 }}>{pct}%</span>
-        <span style={{ fontSize: 13, fontFamily: "monospace", color: "var(--text3)", marginTop: 2 }}>
+        <span style={{ fontSize: valueFont, fontWeight: 700, color, lineHeight: 1 }}>{pct}%</span>
+        <span
+          style={{
+            fontSize: captionFont,
+            fontFamily: "monospace",
+            color: "var(--text3)",
+            marginTop: 2,
+          }}
+        >
           avg util
         </span>
       </div>
@@ -166,24 +184,31 @@ export default function MachineHeatmap({
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 12,
-          gap: 12,
+          alignItems: "baseline",
+          marginBottom: 8,
         }}
       >
         <h3 style={{ margin: 0, fontSize: 14 }}>機台狀態</h3>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <RadialGauge pct={avg} color={avgColor} />
-          <span
-            style={{
-              fontSize: 12,
-              color: "var(--text3)",
-              fontFamily: "monospace",
-            }}
-          >
-            in_use {data.in_use_count}/{data.total_count}
-          </span>
-        </div>
+        <span
+          style={{
+            fontSize: 12,
+            color: "var(--text3)",
+            fontFamily: "monospace",
+          }}
+        >
+          in_use {data.in_use_count}/{data.total_count}
+        </span>
+      </div>
+      {/* Hero gauge — dominates the panel per user request "fill 80% of widget". */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
+        <RadialGauge pct={avg} color={avgColor} size={360} />
       </div>
       {data.total_count === 0 ? (
         <div style={{ color: "var(--text3)", fontSize: 12 }}>無機台資料</div>
