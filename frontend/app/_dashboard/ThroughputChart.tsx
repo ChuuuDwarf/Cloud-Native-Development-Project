@@ -15,9 +15,11 @@ import type { ThroughputPoint } from "@/types/dashboard";
 // hour_offset 0..23, 23 = current hour. The bucket at offset 0 starts at
 // (now − 24h). We use the rendering clock to label each bucket with its
 // real hour-of-day, which is good enough for the dashboard refresh cadence.
-function formatHourLabel(offset: number): string {
+function formatHourLabel(offset: unknown): string {
+  const n = typeof offset === "number" ? offset : Number(offset);
+  if (!Number.isFinite(n)) return "";
   const nowHour = new Date().getHours();
-  const actualHour = (((nowHour - 24 + offset) % 24) + 24) % 24;
+  const actualHour = (((nowHour - 24 + n) % 24) + 24) % 24;
   return `${String(actualHour).padStart(2, "0")}:00`;
 }
 
@@ -84,7 +86,7 @@ export default function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
               <CartesianGrid strokeDasharray="2 4" opacity={0.15} />
               <XAxis
                 dataKey="hour_offset"
-                tickFormatter={(h: number) => formatHourLabel(h)}
+                tickFormatter={formatHourLabel}
                 angle={-45}
                 textAnchor="end"
                 interval={0}
@@ -105,7 +107,7 @@ export default function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
                 }}
                 labelStyle={{ color: "white", fontSize: 11 }}
                 itemStyle={{ fontSize: 11 }}
-                labelFormatter={(h: number) => formatHourLabel(h)}
+                labelFormatter={formatHourLabel}
               />
               <Line
                 type="monotone"

@@ -8,7 +8,7 @@ import MachineHeatmap from "@/app/_dashboard/MachineHeatmap";
 import WipPipeline from "@/app/_dashboard/WipPipeline";
 import TriageList from "@/app/_dashboard/TriageList";
 import EscalationsList from "@/app/_dashboard/EscalationsList";
-import CompletionsList from "@/app/_dashboard/CompletionsList";
+import ThroughputChart from "@/app/_dashboard/ThroughputChart";
 import LabLeaderboard from "@/app/_dashboard/LabLeaderboard";
 import { useDashboardStream } from "@/app/_dashboard/useDashboardStream";
 
@@ -93,7 +93,7 @@ function DashboardContent() {
         {isCrossLab ? (
           <LabLeaderboard rows={data.lab_leaderboard ?? []} />
         ) : (
-          <CompletionsList rows={data.recent_completions ?? []} />
+          <ThroughputChart data={data.throughput_24h ?? []} />
         )}
       </div>
     </div>
