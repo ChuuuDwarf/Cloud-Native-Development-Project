@@ -105,8 +105,10 @@ class EscalationRow(BaseModel):
 class ThroughputPoint(BaseModel):
     """One bucket of the lab_supervisor's 24h throughput chart.
 
-    ``hour_offset`` is the bucket index (0 = the hour starting at ``now-24h``,
-    23 = the current hour). The two counts are scoped to the caller's lab.
+    ``hour_offset`` is the bucket index. Bucket 0 starts at the top-of-hour
+    23 hours before the current hour (i.e. ``(now - 23h).replace(minute=0,
+    ...)``) and bucket 23 covers the current hour. The two counts are scoped
+    to the caller's lab.
     """
 
     hour_offset: int = Field(ge=0, le=23)

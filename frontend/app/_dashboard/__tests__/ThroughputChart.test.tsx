@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
-import ThroughputChart from "../ThroughputChart";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import ThroughputChart, { formatHourLabel } from "../ThroughputChart";
 import type { ThroughputPoint } from "@/types/dashboard";
 
 function makeData(spec: Partial<Record<number, [number, number]>>): ThroughputPoint[] {
@@ -42,5 +42,33 @@ describe("ThroughputChart", () => {
     const totals = screen.getByTestId("throughput-totals");
     expect(totals.textContent).toContain("完工 0");
     expect(totals.textContent).toContain("回傳 0");
+  });
+
+  describe("formatHourLabel", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      // 2026-05-29 14:30 local. getHours() returns 14.
+      vi.setSystemTime(new Date(2026, 4, 29, 14, 30, 0));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("labels bucket 23 with the current hour", () => {
+      expect(formatHourLabel(23)).toBe("14:00");
+    });
+
+    it("labels bucket 0 with (now - 23h)'s top-of-hour", () => {
+      // (14 + 0 - 23) mod 24 = -9 mod 24 = 15
+      expect(formatHourLabel(0)).toBe("15:00");
+    });
+
+    it("labels bucket 22 with the previous hour", () => {
+      expect(formatHourLabel(22)).toBe("13:00");
+    });
+
+    it("returns empty string for non-numeric input", () => {
+      expect(formatHourLabel("nope")).toBe("");
+    });
   });
 });
