@@ -180,6 +180,71 @@ def create_schema(db):
         )
         """,
         """
+        CREATE TABLE lab_capabilities (
+            id TEXT PRIMARY KEY,
+            lab_id TEXT NOT NULL,
+            experiment_item TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE machines (
+            id TEXT PRIMARY KEY,
+            machine_id TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            lab TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT '閒置',
+            supported_items TEXT NOT NULL DEFAULT '[]',
+            utilization INTEGER NOT NULL DEFAULT 0,
+            owner TEXT NOT NULL DEFAULT '',
+            last_maintenance TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE orders (
+            id INTEGER PRIMARY KEY,
+            order_no TEXT NOT NULL UNIQUE,
+            applicant_id TEXT NOT NULL,
+            department_id TEXT NOT NULL,
+            apply_date TEXT NOT NULL,
+            status TEXT NOT NULL,
+            priority TEXT NOT NULL DEFAULT 'normal',
+            total_items INTEGER NOT NULL DEFAULT 0,
+            last_reason TEXT,
+            is_deleted INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE order_items (
+            id INTEGER PRIMARY KEY,
+            order_id INTEGER NOT NULL,
+            sample_id TEXT NOT NULL,
+            sample_name TEXT,
+            lab_id TEXT NOT NULL,
+            experiment_id TEXT NOT NULL,
+            target_group TEXT NOT NULL DEFAULT 'G1',
+            target INTEGER NOT NULL DEFAULT 1,
+            dependency_check INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'approved',
+            approved_by TEXT,
+            approved_at TEXT,
+            return_reason TEXT,
+            reject_reason TEXT,
+            quota_exceeded INTEGER NOT NULL DEFAULT 0,
+            quota_override INTEGER NOT NULL DEFAULT 0,
+            quota_override_reason TEXT,
+            quota_approved_by TEXT,
+            quota_approved_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
         CREATE TABLE storage_locations (
             id TEXT PRIMARY KEY,
             code TEXT NOT NULL UNIQUE,
@@ -312,6 +377,47 @@ def seed_data(db):
                 ('bbbbbbbb-0000-0000-0000-000000000002', 'B', 'Lab B', 10)
             """
         )
+    )
+
+    db.execute(
+        text(
+            """
+            INSERT INTO lab_capabilities (id, lab_id, experiment_item)
+            VALUES
+                (:sem_id, :lab_a_id, :sem_item),
+                (:opt_id, :lab_b_id, :opt_item),
+                (:edx_id, :lab_a_id, :edx_item)
+            """
+        ),
+        {
+            "sem_id": "cap-sem-0000-0000-0000-000000000001",
+            "opt_id": "cap-opt-0000-0000-0000-000000000002",
+            "edx_id": "cap-edx-0000-0000-0000-000000000003",
+            "lab_a_id": "aaaaaaaa-0000-0000-0000-000000000001",
+            "lab_b_id": "bbbbbbbb-0000-0000-0000-000000000002",
+            "sem_item": "SEM 觀察",
+            "opt_item": "光學量測",
+            "edx_item": "EDX 分析",
+        },
+    )
+
+    db.execute(
+        text(
+            """
+            INSERT INTO machines (
+                id, machine_id, name, lab, supported_items, utilization
+            )
+            VALUES
+                (:machine_a_id, 'M-A-1', 'SEM Machine', 'A', :machine_a_items, 80),
+                (:machine_b_id, 'M-B-1', 'Optical Machine', 'B', :machine_b_items, 20)
+            """
+        ),
+        {
+            "machine_a_id": "machine-a-0000-0000-0000-000000000001",
+            "machine_b_id": "machine-b-0000-0000-0000-000000000002",
+            "machine_a_items": '["SEM 觀察", "EDX 分析"]',
+            "machine_b_items": '["光學量測"]',
+        },
     )
 
     db.execute(
@@ -462,6 +568,138 @@ def test_samples_route_filters_visibility_and_status(client):
     )
     assert status_response.status_code == 200
     assert status_response.json() == []
+
+
+def test_wip_dependency_next_claims_lowest_utilization_candidate(client, integration_db):
+    integration_db.execute(
+        text(
+            """
+            INSERT INTO orders (
+                id, order_no, applicant_id, department_id, apply_date, status, priority, total_items
+            )
+            VALUES (
+                99, 'ORD-2026-0001', 'user-factory-001', 'F12',
+                '2026-05-23', 'approved', 'normal', 3
+            )
+            """
+        )
+    )
+    integration_db.execute(
+        text(
+            """
+            INSERT INTO order_items (
+                id, order_id, sample_id, sample_name, lab_id, experiment_id,
+                target_group, target, dependency_check, status
+            )
+            VALUES
+                (
+                    991, 99, 'SMP-2026-0001', '跨 Lab 樣品',
+                    'aaaaaaaa-0000-0000-0000-000000000001',
+                    'cap-sem-0000-0000-0000-000000000001',
+                    'G1', 1, 0, 'approved'
+                ),
+                (
+                    992, 99, 'SMP-2026-0001', '跨 Lab 樣品',
+                    'bbbbbbbb-0000-0000-0000-000000000002',
+                    'cap-opt-0000-0000-0000-000000000002',
+                    'G2', 1, 0, 'approved'
+                ),
+                (
+                    993, 99, 'SMP-2026-0001', '跨 Lab 樣品',
+                    'aaaaaaaa-0000-0000-0000-000000000001',
+                    'cap-edx-0000-0000-0000-000000000003',
+                    'G1', 2, 0, 'approved'
+                )
+            """
+        )
+    )
+    integration_db.commit()
+
+    first_response = client.post(
+        "/api/wips/dependency/next",
+        headers=ADMIN_HEADERS,
+        json={"sampleId": SAMPLE_A_ID},
+    )
+
+    assert first_response.status_code == 200
+    first_payload = first_response.json()
+    assert first_payload["success"] is True
+    assert first_payload["data"]["orderItemId"] == 992
+    assert first_payload["data"]["experimentId"] == "cap-opt-0000-0000-0000-000000000002"
+    assert first_payload["data"]["experimentName"] == "光學量測"
+    assert first_payload["data"]["check"] is True
+    assert first_payload["data"]["reason"] == "lowest_machine_utilization"
+
+    claimed_first = fetch_one(
+        integration_db,
+        "SELECT dependency_check FROM order_items WHERE id = 992",
+    )
+    assert claimed_first["dependency_check"] == 1
+
+    second_response = client.post(
+        "/api/wips/dependency/next",
+        headers=ADMIN_HEADERS,
+        json={"sampleId": SAMPLE_A_ID},
+    )
+
+    assert second_response.status_code == 200
+    assert second_response.json()["data"]["orderItemId"] == 991
+
+
+def test_wip_dependency_next_returns_null_when_done(client, integration_db):
+    integration_db.execute(
+        text(
+            """
+            INSERT INTO orders (
+                id, order_no, applicant_id, department_id, apply_date, status, priority, total_items
+            )
+            VALUES (
+                100, 'ORD-2026-0001', 'user-factory-001', 'F12',
+                '2026-05-23', 'approved', 'normal', 1
+            )
+            """
+        )
+    )
+    integration_db.execute(
+        text(
+            """
+            INSERT INTO order_items (
+                id, order_id, sample_id, sample_name, lab_id, experiment_id,
+                target_group, target, dependency_check, status
+            )
+            VALUES (
+                1001, 100, 'SMP-2026-0001', '跨 Lab 樣品',
+                'aaaaaaaa-0000-0000-0000-000000000001',
+                'cap-sem-0000-0000-0000-000000000001',
+                'G1', 1, 1, 'approved'
+            )
+            """
+        )
+    )
+    integration_db.commit()
+
+    response = client.post(
+        "/api/wips/dependency/next",
+        headers=ADMIN_HEADERS,
+        json={"sampleId": SAMPLE_A_ID},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "data": None,
+        "message": "No pending dependency item",
+    }
+
+
+def test_wip_dependency_next_rejects_missing_sample(client):
+    response = client.post(
+        "/api/wips/dependency/next",
+        headers=ADMIN_HEADERS,
+        json={"sampleId": "99999999-9999-9999-9999-999999999999"},
+    )
+
+    assert response.status_code == 404
 
 
 def test_sample_receive_split_and_wip_creation_persist_to_db(client, integration_db):

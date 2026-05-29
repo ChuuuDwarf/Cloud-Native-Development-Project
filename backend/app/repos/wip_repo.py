@@ -1,4 +1,4 @@
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -8,6 +8,110 @@ def row_to_dict(row):
 
 def rows_to_dicts(rows):
     return [dict(row._mapping) for row in rows]
+
+
+async def list_dependency_order_items_for_sample(
+    db: AsyncSession,
+    *,
+    order_no: str,
+    sample_no: str,
+) -> list[dict]:
+    result = await db.execute(
+        text(
+            """
+            SELECT
+                oi.id,
+                oi.order_id,
+                o.order_no,
+                oi.sample_id AS sample_no,
+                oi.lab_id,
+                COALESCE(l.name, oi.lab_id) AS lab_name,
+                COALESCE(l.code, oi.lab_id) AS lab_code,
+                oi.experiment_id,
+                COALESCE(lc.experiment_item, oi.experiment_id) AS experiment_name,
+                oi.target_group,
+                oi.target,
+                oi.dependency_check,
+                oi.created_at
+            FROM order_items oi
+            JOIN orders o
+                ON o.id = oi.order_id
+            LEFT JOIN labs l
+                ON CAST(l.id AS TEXT) = oi.lab_id
+                OR l.code = oi.lab_id
+            LEFT JOIN lab_capabilities lc
+                ON CAST(lc.id AS TEXT) = oi.experiment_id
+            WHERE o.order_no = :order_no
+              AND oi.sample_id = :sample_no
+            ORDER BY oi.target ASC, oi.created_at ASC, oi.id ASC
+            """
+        ),
+        {
+            "order_no": order_no,
+            "sample_no": sample_no,
+        },
+    )
+
+    return rows_to_dicts(result.fetchall())
+
+
+async def list_machines_for_dependency_candidates(
+    db: AsyncSession,
+    *,
+    lab_names: list[str],
+    lab_codes: list[str],
+) -> list[dict]:
+    if not lab_names and not lab_codes:
+        return []
+
+    result = await db.execute(
+        text(
+            """
+            SELECT
+                machine_id,
+                lab,
+                supported_items,
+                utilization,
+                status
+            FROM machines
+            WHERE lab IN :lab_values
+            """
+        ).bindparams(bindparam("lab_values", expanding=True)),
+        {"lab_values": (*lab_names, *lab_codes)},
+    )
+
+    return rows_to_dicts(result.fetchall())
+
+
+async def claim_order_item_dependency_check(
+    db: AsyncSession,
+    *,
+    order_item_id: int,
+) -> dict | None:
+    result = await db.execute(
+        text(
+            """
+            UPDATE order_items
+            SET
+                dependency_check = true,
+                updated_at = NOW()
+            WHERE id = :order_item_id
+              AND dependency_check = false
+            RETURNING
+                id,
+                order_id,
+                sample_id AS sample_no,
+                lab_id,
+                experiment_id,
+                target_group,
+                target,
+                dependency_check
+            """
+        ),
+        {"order_item_id": order_item_id},
+    )
+
+    return row_to_dict(result.fetchone())
 
 
 async def list_wips(

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.current_user import build_current_user
@@ -10,6 +11,25 @@ router = APIRouter(
     prefix="/api/wips",
     tags=["wips"],
 )
+
+
+class WipDependencyNextRequest(BaseModel):
+    sample_id: str = Field(alias="sampleId")
+
+    model_config = {"populate_by_name": True}
+
+
+@router.post("/dependency/next")
+async def claim_next_dependency_experiment(
+    payload: WipDependencyNextRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await build_current_user(current_user, db)
+    return await wip_service.claim_next_dependency_experiment(
+        db=db,
+        sample_id=payload.sample_id,
+    )
 
 
 @router.get("")
