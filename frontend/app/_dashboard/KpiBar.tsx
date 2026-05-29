@@ -10,6 +10,19 @@ const COLOR_BY_THRESHOLD: Record<string, string> = {
   red: "var(--red)",
 };
 
+/**
+ * Sparkline stroke is rendered at 0.15 opacity, which makes ``var(--text2)``
+ * (the neutral KPI accent) invisible against ``var(--s1)`` dark surface.
+ * Most flow KPIs have no threshold and would otherwise never show a
+ * sparkline, so override neutral with ``var(--blue)`` for the spark layer
+ * only — the tile's main number color stays neutral.
+ */
+const SPARKLINE_COLOR_BY_THRESHOLD: Record<string, string> = {
+  neutral: "var(--blue)",
+  orange: "var(--orange)",
+  red: "var(--red)",
+};
+
 const TILE_LABELS: Record<keyof KpiBarData, { label: string; drillTo: string }> = {
   new_orders: { label: "新單", drillTo: "/orders?created=today" },
   completed: { label: "完工", drillTo: "/execution?status=completed" },
@@ -36,10 +49,11 @@ function TileSparkline({
 }) {
   // Skip render when no history is available or every bucket is zero.
   if (series == null || series.every((v) => v === 0)) return null;
-  const data = series.map((v, i) => ({ x: i, v }));
+  const data = series.map((v) => ({ v }));
   return (
     <div
       data-testid="kpi-sparkline"
+      data-stroke={color}
       style={{
         position: "absolute",
         bottom: 0,
@@ -69,6 +83,8 @@ function TileSparkline({
 
 function Tile({ card, label, onClick }: { card: KpiCardData; label: string; onClick: () => void }) {
   const color = COLOR_BY_THRESHOLD[card.threshold_color] || "var(--text1)";
+  const sparklineColor =
+    SPARKLINE_COLOR_BY_THRESHOLD[card.threshold_color] || color;
   return (
     <button
       onClick={onClick}
@@ -87,7 +103,7 @@ function Tile({ card, label, onClick }: { card: KpiCardData; label: string; onCl
         overflow: "hidden",
       }}
     >
-      <TileSparkline series={card.sparkline_24h} color={color} />
+      <TileSparkline series={card.sparkline_24h} color={sparklineColor} />
       <div style={{ fontSize: 12, color: "var(--text2)", position: "relative", zIndex: 1 }}>
         {label}
       </div>

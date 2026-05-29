@@ -94,4 +94,52 @@ describe("KpiBar", () => {
     render(<KpiBar data={allZero} />);
     expect(screen.queryAllByTestId("kpi-sparkline")).toHaveLength(0);
   });
+
+  it("uses var(--blue) for neutral sparkline stroke so it stays visible at 0.15 opacity", () => {
+    // Pure neutral text2 at 0.15 opacity is invisible on the dark s1 surface.
+    // For neutral KPIs we override the spark stroke to blue while leaving
+    // the tile's main number color (text2) alone.
+    const onlyNew: KpiBarData = {
+      new_orders: mk(5, 0, [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0]),
+      completed: { value: 0, delta_24h: 0, threshold_color: "neutral", sparkline_24h: null },
+      returned: { value: 0, delta_24h: 0, threshold_color: "neutral", sparkline_24h: null },
+      pending_approval: { value: 0, delta_24h: 0, threshold_color: "neutral", sparkline_24h: null },
+      open_critical_high_issues: {
+        value: 0,
+        delta_24h: 0,
+        threshold_color: "neutral",
+        sparkline_24h: null,
+      },
+    };
+    render(<KpiBar data={onlyNew} />);
+    // Assert via data-stroke attribute on the wrapper; the actual <path>
+    // emitted by Recharts is unreliable in jsdom because ResponsiveContainer
+    // measures width/height as 0.
+    const spark = screen.getByTestId("kpi-sparkline");
+    expect(spark.getAttribute("data-stroke")).toBe("var(--blue)");
+  });
+
+  it("keeps the threshold color for non-neutral sparklines", () => {
+    const orangeSpark = [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0];
+    const onlyOrange: KpiBarData = {
+      new_orders: { value: 0, delta_24h: 0, threshold_color: "neutral", sparkline_24h: null },
+      completed: { value: 0, delta_24h: 0, threshold_color: "neutral", sparkline_24h: null },
+      returned: { value: 0, delta_24h: 0, threshold_color: "neutral", sparkline_24h: null },
+      pending_approval: {
+        value: 7,
+        delta_24h: 0,
+        threshold_color: "orange",
+        sparkline_24h: orangeSpark,
+      },
+      open_critical_high_issues: {
+        value: 0,
+        delta_24h: 0,
+        threshold_color: "neutral",
+        sparkline_24h: null,
+      },
+    };
+    render(<KpiBar data={onlyOrange} />);
+    const spark = screen.getByTestId("kpi-sparkline");
+    expect(spark.getAttribute("data-stroke")).toBe("var(--orange)");
+  });
 });
