@@ -1,21 +1,20 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: db-migrate
+  name: db-seed
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "2"
     argocd.argoproj.io/hook: PostSync
 spec:
-  backoffLimit: 3
-  # Clean up finished migration jobs after 10 min to avoid clutter.
+  backoffLimit: 2
   ttlSecondsAfterFinished: 600
   template:
     spec:
       restartPolicy: Never
       containers:
-        - name: migrate
+        - name: seed
           image: lims-backend
-          command: ["alembic", "upgrade", "head"]
+          command: ["python", "scripts/seed_dev.py"]
           envFrom:
             - configMapRef:
                 name: lims-config
