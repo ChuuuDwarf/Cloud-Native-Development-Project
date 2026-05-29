@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * - Unauthenticated visitors see the LoginForm (no dashboard widgets).
  * - general_supervisor (大主管, cross-lab) sees the cross-lab leaderboard
  *   variant of the bottom-right slot.
- * - lab_supervisor (per-lab) sees the recent-completions variant in the
+ * - lab_supervisor (per-lab) sees the 24h throughput chart variant in the
  *   same slot.
  * - The "完工" KPI tile drills to /execution?status=completed.
  *
@@ -67,10 +67,10 @@ test.describe("Supervisor dashboard", () => {
 
     // Bottom-right slot: cross-lab leaderboard for general_supervisor.
     await expect(page.getByTestId("lab-leaderboard")).toBeVisible();
-    await expect(page.getByTestId("completions-list")).toHaveCount(0);
+    await expect(page.getByTestId("throughput-chart")).toHaveCount(0);
   });
 
-  test("lab_supervisor lands on /, sees per-lab dashboard with completions", async ({
+  test("lab_supervisor lands on /, sees per-lab dashboard with throughput chart", async ({
     page,
   }) => {
     await login(page, "supervisor@example.com", "Super1234");
@@ -90,8 +90,8 @@ test.describe("Supervisor dashboard", () => {
     await expect(page.getByTestId("machine-heatmap")).toBeVisible();
     await expect(page.getByTestId("wip-pipeline")).toBeVisible();
 
-    // Bottom-right slot: recent completions for lab_supervisor.
-    await expect(page.getByTestId("completions-list")).toBeVisible();
+    // Bottom-right slot: 24h throughput chart for lab_supervisor.
+    await expect(page.getByTestId("throughput-chart")).toBeVisible();
     await expect(page.getByTestId("lab-leaderboard")).toHaveCount(0);
   });
 
