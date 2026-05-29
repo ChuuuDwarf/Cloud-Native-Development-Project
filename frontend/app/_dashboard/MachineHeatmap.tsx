@@ -62,7 +62,7 @@ function RadialGauge({ pct, color }: { pct: number; color: string }) {
     <div
       data-testid="radial-gauge"
       data-util-color={color}
-      style={{ width: 80, height: 80, position: "relative" }}
+      style={{ width: 160, height: 160, position: "relative" }}
     >
       <ResponsiveContainer width="100%" height="100%">
         <RadialBarChart
@@ -77,7 +77,7 @@ function RadialGauge({ pct, color }: { pct: number; color: string }) {
           <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
           <RadialBar
             dataKey="value"
-            cornerRadius={4}
+            cornerRadius={6}
             background={{ fill: "var(--s2)" }}
             isAnimationActive={false}
           />
@@ -91,12 +91,12 @@ function RadialGauge({ pct, color }: { pct: number; color: string }) {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "flex-end",
-          paddingBottom: 6,
+          paddingBottom: 12,
           pointerEvents: "none",
         }}
       >
-        <span style={{ fontSize: 18, fontWeight: 700, color, lineHeight: 1 }}>{pct}%</span>
-        <span style={{ fontSize: 10, fontFamily: "monospace", color: "var(--text3)" }}>
+        <span style={{ fontSize: 36, fontWeight: 700, color, lineHeight: 1 }}>{pct}%</span>
+        <span style={{ fontSize: 13, fontFamily: "monospace", color: "var(--text3)", marginTop: 2 }}>
           avg util
         </span>
       </div>
@@ -174,27 +174,15 @@ export default function MachineHeatmap({
         <h3 style={{ margin: 0, fontSize: 14 }}>機台狀態</h3>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <RadialGauge pct={avg} color={avgColor} />
-          <div
+          <span
             style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              gap: 2,
+              fontSize: 12,
+              color: "var(--text3)",
+              fontFamily: "monospace",
             }}
           >
-            <span style={{ fontSize: 28, fontWeight: 700, color: avgColor, lineHeight: 1 }}>
-              {avg}%
-            </span>
-            <span
-              style={{
-                fontSize: 11,
-                color: "var(--text3)",
-                fontFamily: "monospace",
-              }}
-            >
-              in_use {data.in_use_count}/{data.total_count}
-            </span>
-          </div>
+            in_use {data.in_use_count}/{data.total_count}
+          </span>
         </div>
       </div>
       {data.total_count === 0 ? (
