@@ -43,9 +43,7 @@ function isAuthEndpoint(url: string): boolean {
   // Don't try to refresh from inside an auth flow — login / refresh / logout
   // 401-ing has business meaning, not "token expired".
   return (
-    url.includes("/auth/login") ||
-    url.includes("/auth/refresh") ||
-    url.includes("/auth/logout")
+    url.includes("/auth/login") || url.includes("/auth/refresh") || url.includes("/auth/logout")
   );
 }
 

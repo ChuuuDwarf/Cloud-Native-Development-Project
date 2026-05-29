@@ -25,15 +25,7 @@ function Arrow({ delta }: { delta: number }) {
   return <span style={{ color: "var(--text3)" }}>→</span>;
 }
 
-function Tile({
-  card,
-  label,
-  onClick,
-}: {
-  card: KpiCardData;
-  label: string;
-  onClick: () => void;
-}) {
+function Tile({ card, label, onClick }: { card: KpiCardData; label: string; onClick: () => void }) {
   const color = COLOR_BY_THRESHOLD[card.threshold_color] || "var(--text1)";
   return (
     <button
