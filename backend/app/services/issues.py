@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.dependencies import CurrentUser
@@ -13,6 +14,8 @@ from app.common.enums import NotificationChannel
 from app.common.recipients import recipients_for_role_in_lab
 from app.core.database import get_db
 from app.db.models.issues import Issue
+from app.db.models.labs import Lab
+from app.modules.dashboard.publisher import publish_dashboard_event
 from app.repos.issues import IssueRepository
 from app.schemas.issues import IssueCreate, IssueListParams, IssueUpdate
 from app.services.notifications import NotificationService
@@ -75,6 +78,21 @@ class IssueService:
                 )
         except Exception:
             logger.exception("initial-notify failed for issue=%s", issue.id)
+
+        # Best-effort dashboard SSE fanout — a new issue moves the
+        # lab_supervisor's 異常 KPI / list immediately. Issue.lab_id is a
+        # FK to labs.id; translate to Lab.code (ASCII) so the SSE handler's
+        # CurrentUser.lab_code subscription matches. Failures here must not
+        # roll back the create — the issue is already persisted.
+        try:
+            lab_code: str | None = None
+            if issue.lab_id:
+                lab_code = await self._session.scalar(
+                    select(Lab.code).where(Lab.id == issue.lab_id)
+                )
+            await publish_dashboard_event(lab_code, "issue_created")
+        except Exception:
+            logger.exception("publish issue_created failed for issue=%s", issue.id)
 
         return issue
 
