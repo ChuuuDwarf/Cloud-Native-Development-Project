@@ -21,9 +21,11 @@ from app.common.dependencies import CurrentUser
 from app.common.enums import IssueStatus, NotificationChannel, NotificationStatus, Severity
 from app.core.database import get_db
 from app.db.models.issues import Issue
+from app.db.models.labs import Lab
 from app.db.models.machines import Machine
 from app.db.models.notifications import Notification
 from app.db.models.users import User
+from app.modules.dashboard.publisher import publish_dashboard_event
 from app.repos.notifications import NotificationRepository
 from app.schemas.notifications import ListNotificationsQuery
 
@@ -239,6 +241,30 @@ class NotificationService:
             len(issue_ids),
             user.id,
         )
+
+        # Best-effort dashboard SSE fanout per touched lab. The 異常 KPI
+        # decrements when an issue moves to ACKNOWLEDGED, so this needs to
+        # reach lab_supervisor immediately instead of waiting on the 30s
+        # poll. Resolve Lab.code via the labs table (Issue.lab_id is a FK
+        # to labs.id, but the SSE handler keys off CurrentUser.lab_code).
+        # Skip publishing for any issue that was already CLOSED at ack time
+        # — the ack_stmt's WHERE filter excluded them, so their KPI didn't
+        # actually change.
+        try:
+            lab_rows = await self._session.execute(
+                select(Issue.id, Lab.code)
+                .join(Lab, Lab.id == Issue.lab_id)
+                .where(Issue.id.in_(issue_ids), Issue.status == IssueStatus.ACKNOWLEDGED)
+            )
+            lab_codes = {code for _, code in lab_rows.all() if code}
+            # Skip the publish entirely when nothing actually transitioned
+            # (e.g. all issues were already CLOSED before this batch). The
+            # ack_stmt's WHERE clause already filtered those out, so there's
+            # no KPI movement to broadcast.
+            for code in lab_codes:
+                await publish_dashboard_event(code, "issue_acknowledged")
+        except Exception:
+            logger.exception("publish issue_acknowledged failed for issue_ids=%s", issue_ids)
         # Side effect: if any of the acked issues targets a machine, flip
         # that machine from 故障中 back to 閒置. The status guard ensures
         # we only undo the simulate-issue button — a machine that's
