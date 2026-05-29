@@ -13,6 +13,7 @@ resources:
   - celery-beat.yaml
   - frontend.yaml
   - migrate-job.yaml
+  - seed-job.yaml
   - ingress.yaml
   - redirect-https.yaml
   # NOTE: secret.example.yaml is intentionally NOT included — the real
