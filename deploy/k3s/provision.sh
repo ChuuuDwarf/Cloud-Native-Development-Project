@@ -207,7 +207,8 @@ phase6_observability() {
   for f in \
     "deploy/k3s/observability/cert-manager/clusterissuers.yaml" \
     "deploy/k3s/observability/logging/fluent-bit.yaml" \
-    "deploy/k3s/observability/monitoring/kube-state-metrics.yaml"; do
+    "deploy/k3s/observability/monitoring/kube-state-metrics.yaml" \
+    "deploy/k3s/observability/ar-token-refresher.yaml"; do
     if [[ ! -f "$f" ]]; then
       echo "  ⚠️  找不到 $f，跳過"
       continue
