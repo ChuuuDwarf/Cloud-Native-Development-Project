@@ -16,11 +16,15 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+from sqlalchemy import select
+
 from app.common.dependencies.lab_scope import LabScope
 from app.common.enums import OrderStatus, WipStatus
 from app.common.enums.role_d_zh import WIP_EXEC_TO_B
 from app.common.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.db.models import Wip, WipExecution, WipHistory
+from app.db.models.labs import Lab
+from app.modules.dashboard.publisher import publish_dashboard_event
 from app.modules.experiment_runs.repository import ExperimentRunRepository
 from app.modules.experiment_runs.serializers import wip_dict
 from app.modules.reports.fake_data import generate_for_items
@@ -89,6 +93,30 @@ class ExperimentRunService:
         if not self._scope.can_access_lab(wip.lab_name):
             raise ForbiddenError("無權存取其他實驗室的 WIP")
         return wip
+
+    async def _publish_wip_pipeline_change(self, wip: Wip, event_name: str) -> None:
+        """Best-effort dashboard SSE fanout for a WIP pipeline transition.
+
+        WIP rows store the display name (Chinese); SSE channels are keyed by
+        ``Lab.code`` (ASCII) to match what the SSE handler subscribes off
+        (``CurrentUser.lab_code``). Translate via the labs table; fall back
+        to the global channel if the row has no lab_name or the translation
+        misses. All errors swallowed — a publish hiccup must not fail the
+        request that already committed.
+        """
+        try:
+            lab_code: str | None = None
+            if wip is not None and wip.lab_name:
+                lab_code = await self._repo.session.scalar(
+                    select(Lab.code).where(Lab.name == wip.lab_name)
+                )
+            await publish_dashboard_event(lab_code, event_name)
+        except Exception:
+            logger.exception(
+                "publish %s failed for wip=%s",
+                event_name,
+                wip.wip_no if wip else None,
+            )
 
     async def _all_wips_in(self, order_no: str, statuses: set[str]) -> bool:
         """Whether every WIP of the order has an exec row in ``statuses``."""
@@ -162,6 +190,7 @@ class ExperimentRunService:
         if order and order.status == OrderStatus.SCHEDULED.value:
             order.status = OrderStatus.IN_PROGRESS.value
         await self._repo.commit()
+        await self._publish_wip_pipeline_change(wip, "wip_check_in")
         return wip_dict(wip, exec_row)
 
     async def check_out(self, wip_no: str, operator: str, note: str | None) -> dict:
@@ -243,6 +272,7 @@ class ExperimentRunService:
         await self._refresh_order_after_confirm(wip.order_no)
         await self._repo.commit()
         await self._advance_sample_flow(wip, operator)
+        await self._publish_wip_pipeline_change(wip, "wip_completed")
         return wip_dict(wip, exec_row)
 
     async def _advance_sample_flow(self, wip: Wip, operator: str) -> None:
@@ -320,6 +350,10 @@ class ExperimentRunService:
             if order:
                 order.status = OrderStatus.IN_PROGRESS.value
         await self._repo.commit()
+        if approve:
+            # Only fire the SSE on actual termination — a rejected abort
+            # leaves the WIP running and doesn't change the dashboard slice.
+            await self._publish_wip_pipeline_change(wip, "wip_terminated")
         return wip_dict(wip, exec_row)
 
     async def apply_machine_completion(self, wip_no: str) -> bool:
