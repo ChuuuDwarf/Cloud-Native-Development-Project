@@ -38,7 +38,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, case, exists, func, select
+from sqlalchemy import String, and_, case, cast, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.enums import (
@@ -170,10 +170,14 @@ class DashboardRepository:
         compared partial-today vs full-yesterday and read as negative all
         morning.
 
-        Scoping walks ``OrderItemModel.lab_id`` (a short String code like
-        ``"LAB-A"``) — see ``backend/app/repos/order_repo.py``. Going through
-        Wip.lab_name would under-count orders that have not yet been split
-        into WIPs (notably PENDING_APPROVAL).
+        Scoping walks ``OrderItemModel.lab_id`` (which holds ``Lab.id`` as a
+        stringified UUID — see the ``OrderItemModel`` declaration: declared
+        ``String(50)`` but populated with ``str(lab.id)`` by
+        ``app/repos/order_repo.py``). We JOIN through ``Lab`` so callers can
+        keep passing lab *codes* (matching every other widget) while the
+        filter bridges to the UUID-string actually stored on the item row.
+        Going through ``Wip.lab_name`` would under-count orders that have
+        not yet been split into WIPs (notably PENDING_APPROVAL).
         """
         now, today_lower, yday_lower = _rolling_windows()
 
@@ -194,11 +198,14 @@ class DashboardRepository:
             return int(today or 0), int(yday or 0)
 
         # Scoped: count distinct orders whose items target the caller's labs.
+        # ``Lab.id`` is UUID; ``OrderItemModel.lab_id`` is String(50) holding
+        # the UUID's str() form — cast Lab.id to text to bridge the join.
         base = (
             select(func.count(func.distinct(OrderModel.id)))
             .select_from(OrderModel)
             .join(OrderItemModel, OrderItemModel.order_id == OrderModel.id)
-            .where(OrderItemModel.lab_id.in_(lab_codes))
+            .join(Lab, cast(Lab.id, String) == OrderItemModel.lab_id)
+            .where(Lab.code.in_(lab_codes))
         )
         today = await self._session.scalar(
             base.where(OrderModel.created_at >= today_lower, OrderModel.created_at < now)
@@ -292,9 +299,10 @@ class DashboardRepository:
     async def kpi_pending_approval(self, lab_codes: list[str] | None) -> int:
         """Current count of orders awaiting supervisor approval.
 
-        Scoped via ``OrderItemModel.lab_id`` (lab code) rather than ``Wip``,
-        because PENDING_APPROVAL orders have not been split into WIPs yet
-        — joining through Wip would silently report 0 for every lab.
+        Scoped via ``OrderItemModel.lab_id`` (which holds the Lab's UUID as
+        a string) joined to ``Lab.code`` — rather than ``Wip`` — because
+        PENDING_APPROVAL orders have not been split into WIPs yet, so
+        joining through Wip would silently report 0 for every lab.
         """
         base = (
             select(func.count())
@@ -306,9 +314,10 @@ class DashboardRepository:
                 select(func.count(func.distinct(OrderModel.id)))
                 .select_from(OrderModel)
                 .join(OrderItemModel, OrderItemModel.order_id == OrderModel.id)
+                .join(Lab, cast(Lab.id, String) == OrderItemModel.lab_id)
                 .where(
                     OrderModel.status == OrderStatus.PENDING_APPROVAL.value,
-                    OrderItemModel.lab_id.in_(lab_codes),
+                    Lab.code.in_(lab_codes),
                 )
             )
         return int(await self._session.scalar(base) or 0)
@@ -482,8 +491,9 @@ class DashboardRepository:
         """Oldest pending-approval orders first — they need a supervisor's eyes
         most urgently. Returns ``(order_no, applicant_id, created_at)`` rows.
 
-        Scoped via ``OrderItemModel.lab_id`` (lab code) so PENDING_APPROVAL
-        orders without WIPs still surface for the right lab supervisor.
+        Scoped via ``OrderItemModel.lab_id`` (Lab.id as a UUID string)
+        joined to ``Lab.code`` so PENDING_APPROVAL orders without WIPs
+        still surface for the right lab supervisor.
         """
         if lab_codes is None:
             stmt = (
@@ -495,13 +505,15 @@ class DashboardRepository:
             return (await self._session.execute(stmt)).all()
 
         # Group by order id so an order with multiple items in the caller's
-        # labs only appears once.
+        # labs only appears once. The Lab JOIN bridges the UUID(Lab.id) ↔
+        # String(50)(OrderItemModel.lab_id) type gap via a cast.
         stmt = (
             select(OrderModel.order_no, OrderModel.applicant_id, OrderModel.created_at)
             .join(OrderItemModel, OrderItemModel.order_id == OrderModel.id)
+            .join(Lab, cast(Lab.id, String) == OrderItemModel.lab_id)
             .where(
                 OrderModel.status == OrderStatus.PENDING_APPROVAL.value,
-                OrderItemModel.lab_id.in_(lab_codes),
+                Lab.code.in_(lab_codes),
             )
             .group_by(
                 OrderModel.id, OrderModel.order_no, OrderModel.applicant_id, OrderModel.created_at
@@ -750,7 +762,9 @@ class DashboardRepository:
 
         Scoping goes through ``OrderItemModel.lab_id`` for the same reason
         ``kpi_new_orders`` does — pending-approval orders have no Wip rows
-        yet, so a Wip-join would under-count.
+        yet, so a Wip-join would under-count. ``OrderItemModel.lab_id``
+        holds the lab UUID as a string; JOIN through ``Lab`` so the IN
+        filter can match against ``Lab.code``.
         """
         origin = self._hourly_bucket_origin(naive=False)
         bucket = func.date_trunc("hour", OrderModel.created_at).label("bucket")
@@ -763,8 +777,10 @@ class DashboardRepository:
         if lab_codes is not None:
             if not lab_codes:
                 return [0] * _HOURLY_BUCKETS
-            stmt = stmt.join(OrderItemModel, OrderItemModel.order_id == OrderModel.id).where(
-                OrderItemModel.lab_id.in_(lab_codes)
+            stmt = (
+                stmt.join(OrderItemModel, OrderItemModel.order_id == OrderModel.id)
+                .join(Lab, cast(Lab.id, String) == OrderItemModel.lab_id)
+                .where(Lab.code.in_(lab_codes))
             )
         rows = (await self._session.execute(stmt)).all()
         return self._pad_hourly_buckets(rows, origin)

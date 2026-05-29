@@ -346,8 +346,16 @@ async def test_lab_leaderboard_contains_seeded_labs(db_session) -> None:
 
 async def test_pending_approval_order_scoped_via_items_no_wips(db_session) -> None:
     """An order at PENDING_APPROVAL with an OrderItem in LAB-A and NO Wip rows
-    must still appear in the LAB-A supervisor's KPI + triage list."""
+    must still appear in the LAB-A supervisor's KPI + triage list.
+
+    ``OrderItemModel.lab_id`` is declared ``String(50)`` but
+    ``app/repos/order_repo.py`` actually writes ``str(lab.id)`` (the Lab's
+    UUID) — mirror that so the regression bites if the dashboard scoping
+    ever drops the UUID-string ↔ Lab.code bridging join (see B4).
+    """
     now = datetime.now(UTC)
+    lab_a_id = await db_session.scalar(select(Lab.id).where(Lab.code == "LAB-A"))
+    assert lab_a_id is not None, "seed must provide LAB-A"
     order = OrderModel(
         order_no=f"REG-B1-{uuid.uuid4().hex[:8]}",
         applicant_id="reg-applicant",
@@ -364,7 +372,7 @@ async def test_pending_approval_order_scoped_via_items_no_wips(db_session) -> No
             order_id=order.id,
             sample_id="SMP-B1",
             sample_name="B1 sample",
-            lab_id="LAB-A",
+            lab_id=str(lab_a_id),
             experiment_id="EXP-B1",
             status=OrderStatus.PENDING_APPROVAL.value,
         )
@@ -635,3 +643,100 @@ async def test_triage_unack_issues_excludes_acked_by_user(db_session) -> None:
     assert str(issue.id) in {
         str(r[0]) for r in other
     }, "issue must still surface for a user who has not acked it"
+
+
+# ------------------------------------------------------- regression: B4
+#
+# B4: OrderItemModel.lab_id stores Lab.id UUIDs as String(50), NOT lab codes.
+# Originally the dashboard's scoped queries compared
+# ``OrderItemModel.lab_id.in_(lab_codes)`` directly — so an item whose
+# lab_id is a UUID like ``"3328d1d8-…"`` never matched ``"LAB-A"`` and
+# lab_supervisor views silently returned zero even when matching orders
+# existed in the DB. The fix is to JOIN through ``Lab`` (cast Lab.id to
+# String to bridge the UUID ↔ String(50) type gap) so the IN clause runs
+# against ``Lab.code``.
+#
+# This test seeds an order/item the same way production does: ``lab_id``
+# = ``str(lab.id)`` (UUID stringified). Without the fix, every scoped
+# query (kpi_new_orders / kpi_pending_approval / triage_pending_approvals
+# / hourly_buckets_new_orders) returns zero for the matching code.
+
+
+async def test_order_item_lab_id_uuid_string_scoped_matches_via_lab_code(db_session) -> None:
+    """OrderItem.lab_id holds Lab.id UUID strings (production reality).
+
+    Seed a fresh lab + an order whose item points at that lab via UUID
+    string, then verify every scoped dashboard query that walks OrderItem
+    finds the order when filtered by the lab's *code*. Mirrors the live
+    Docker DB data shape that caused the original bug.
+    """
+    now = datetime.now(UTC)
+    suite_id = uuid.uuid4().hex[:8]
+    # Fresh lab so this test is independent of seed code drift.
+    lab = Lab(
+        code=f"LAB-REG-B4-{suite_id}",
+        name=f"Regression B4 Lab {suite_id}",
+        capacity=1,
+        is_active=True,
+    )
+    db_session.add(lab)
+    await db_session.flush()
+
+    order = OrderModel(
+        order_no=f"REG-B4-{suite_id}",
+        applicant_id="reg-applicant",
+        department_id="DEPT-RD",
+        apply_date=now,
+        status=OrderStatus.PENDING_APPROVAL.value,
+        priority="normal",
+        total_items=1,
+    )
+    db_session.add(order)
+    await db_session.flush()
+    db_session.add(
+        OrderItemModel(
+            order_id=order.id,
+            sample_id="SMP-B4",
+            sample_name="B4 sample",
+            # CRITICAL: production stores the Lab.id UUID *as a string* here,
+            # NOT the Lab.code. The dashboard must bridge that gap when the
+            # caller passes lab codes.
+            lab_id=str(lab.id),
+            experiment_id="EXP-B4",
+            status=OrderStatus.PENDING_APPROVAL.value,
+        )
+    )
+    await db_session.commit()
+
+    repo = DashboardRepository(db_session)
+
+    # F1.1: kpi_new_orders scoped — today bucket must include the seeded order.
+    today, _ = await repo.kpi_new_orders(lab_codes=[lab.code])
+    assert today >= 1, (
+        "kpi_new_orders did not find an order whose OrderItem.lab_id is a "
+        "Lab.id UUID string — dashboard is not bridging UUID → code."
+    )
+
+    # F1.2: kpi_pending_approval scoped.
+    pending = await repo.kpi_pending_approval(lab_codes=[lab.code])
+    assert pending >= 1, (
+        "kpi_pending_approval did not find the order via Lab.code → "
+        "OrderItem.lab_id (UUID-string) join."
+    )
+
+    # F1.3: triage_pending_approvals scoped — order must surface in the list.
+    triage = await repo.triage_pending_approvals(lab_codes=[lab.code], limit=50)
+    order_nos = [r[0] for r in triage]
+    assert order.order_no in order_nos, (
+        "triage_pending_approvals did not surface a PENDING_APPROVAL order "
+        "scoped via OrderItem.lab_id UUID string."
+    )
+
+    # F1.4: hourly_buckets_new_orders scoped — at least one of the 24 buckets
+    # must contain the freshly-seeded order.
+    buckets = await repo.hourly_buckets_new_orders(lab_codes=[lab.code])
+    assert len(buckets) == 24
+    assert sum(buckets) >= 1, (
+        "hourly_buckets_new_orders dropped the order — UUID-string lab_id "
+        "did not match the code-based IN filter."
+    )
