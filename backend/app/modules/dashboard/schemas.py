@@ -102,13 +102,6 @@ class EscalationRow(BaseModel):
     escalated_at: datetime
 
 
-class CompletionRow(BaseModel):
-    wip_no: str
-    order_no: str
-    lab_name: str
-    returned_at: datetime
-
-
 class ThroughputPoint(BaseModel):
     """One bucket of the lab_supervisor's 24h throughput chart.
 
@@ -148,9 +141,5 @@ class DashboardSnapshot(BaseModel):
     #   is None.
     # - general_sup: ``lab_leaderboard`` is non-null; ``throughput_24h`` is
     #   None.
-    #
-    # ``recent_completions`` is retained transiently for the in-flight FE
-    # migration and will be removed once the FE switches to ``throughput_24h``.
     throughput_24h: list[ThroughputPoint] | None
-    recent_completions: list[CompletionRow] | None
     lab_leaderboard: list[LabRow] | None

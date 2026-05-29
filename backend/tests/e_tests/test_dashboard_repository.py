@@ -186,15 +186,6 @@ async def test_recent_escalations_limit_respected(db_session) -> None:
         assert len(r) == 6
 
 
-# ------------------------------------------------------------ Completions
-
-
-async def test_recent_completions_limit_respected(db_session) -> None:
-    repo = DashboardRepository(db_session)
-    rows = await repo.recent_completions(lab_codes=None, limit=5)
-    assert len(rows) <= 5
-
-
 # ------------------------------------------------------ Hourly time-series
 #
 # Phase H additions — sparkline + throughput backing queries. Every method

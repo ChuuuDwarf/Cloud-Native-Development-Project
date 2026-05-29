@@ -35,10 +35,14 @@ async def test_get_dashboard_as_lab_supervisor(supervisor_a_client: AsyncClient)
     assert snap["viewer_role"] == "lab_supervisor"
     # LAB-A supervisor is scoped to their own lab.
     assert snap["viewer_lab"] == "LAB-A"
-    # Recent completions is the lab_supervisor's Col 3 panel.
-    assert snap["recent_completions"] is not None
+    # Throughput is the lab_supervisor's Col 3 panel — replaces the old
+    # recent_completions panel as of Phase H.
+    assert snap["throughput_24h"] is not None
+    assert len(snap["throughput_24h"]) == 24
     # Lab leaderboard is the general_supervisor's panel and must be null here.
     assert snap["lab_leaderboard"] is None
+    # Phase H removed recent_completions from the response.
+    assert "recent_completions" not in snap
 
 
 async def test_get_dashboard_as_general_supervisor(director_client: AsyncClient) -> None:
@@ -47,9 +51,10 @@ async def test_get_dashboard_as_general_supervisor(director_client: AsyncClient)
     snap = res.json()["data"]
     assert snap["viewer_role"] == "general_supervisor"
     assert snap["viewer_lab"] is None
-    # Leaderboard non-null; completions null.
+    # Leaderboard non-null; throughput null.
     assert snap["lab_leaderboard"] is not None
-    assert snap["recent_completions"] is None
+    assert snap["throughput_24h"] is None
+    assert "recent_completions" not in snap
 
 
 async def test_get_dashboard_response_shape(director_client: AsyncClient) -> None:
@@ -65,7 +70,7 @@ async def test_get_dashboard_response_shape(director_client: AsyncClient) -> Non
         "wip_pipeline",
         "triage",
         "recent_escalations",
-        "recent_completions",
+        "throughput_24h",
         "lab_leaderboard",
     ):
         assert key in snap, f"missing top-level key {key!r}"
@@ -82,6 +87,11 @@ async def test_get_dashboard_response_shape(director_client: AsyncClient) -> Non
         assert "value" in card
         assert "delta_24h" in card
         assert "threshold_color" in card
+        # Phase H: every KpiCard exposes the sparkline_24h field (None for
+        # state-type KPIs, 24-element list for flow KPIs).
+        assert "sparkline_24h" in card
+    # Phase H: MachineHeatmap carries per_lab_util_pct for the per-row mini bar.
+    assert "per_lab_util_pct" in snap["machines"]
 
 
 async def test_get_dashboard_pipeline_has_six_stages(director_client: AsyncClient) -> None:
