@@ -1,43 +1,35 @@
 import type { ApiResponse } from "../types";
-
-const apiBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(
-  /\/api\/?$/,
-  ""
-);
+import { httpClient } from "@/api/httpClient";
+import { AxiosError, Method } from "axios";
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<ApiResponse<T>> {
-  const response = await fetch(`${apiBase}${path}`, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-    ...init,
-  });
-
-  let payload: unknown = null;
+  const url = path.replace(/^\/api/, "");
+  let data: unknown = undefined;
+  if (init?.body != null) {
+    data = typeof init.body === "string" ? JSON.parse(init.body) : init.body;
+  }
 
   try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!response.ok) {
+    const res = await httpClient.request<ApiResponse<T>>({
+      url,
+      method: (init?.method as Method | undefined) ?? "GET",
+      data,
+      headers: init?.headers as Record<string, string> | undefined,
+    });
+    return res.data;
+  } catch (err) {
+    const axErr = err as AxiosError<{
+      detail?: string;
+      message?: string;
+      error?: { message?: string };
+    }>;
+    const body = axErr.response?.data;
     const message =
-      typeof payload === "object" && payload && "detail" in payload
-        ? String((payload as { detail: unknown }).detail)
-        : typeof payload === "object" && payload && "message" in payload
-          ? String((payload as { message: unknown }).message)
-          : typeof payload === "object" && payload && "error" in payload
-            ? String(
-                (payload as { error?: { message?: unknown } }).error?.message ??
-                  "API request failed"
-              )
-            : "API request failed";
-
+      body?.detail ??
+      body?.message ??
+      body?.error?.message ??
+      axErr.message ??
+      "API request failed";
     throw new Error(message);
   }
-
-  return payload as ApiResponse<T>;
 }

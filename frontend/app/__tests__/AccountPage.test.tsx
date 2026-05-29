@@ -29,6 +29,13 @@ vi.mock("@/services/master-data-api", () => ({
   },
 }));
 
+// next/navigation — AccountPage is wrapped in PermissionGuard which calls
+// useRouter() for the redirect-on-denied path. Mock it so the test renderer
+// doesn't crash with "invariant expected app router to be mounted".
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+}));
+
 import AccountPage from "@/../app/account/page";
 
 const seedUsers = [

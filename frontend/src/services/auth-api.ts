@@ -25,6 +25,13 @@ export const authApi = {
     await httpClient.post("/auth/logout");
   },
 
+  // Mint a new access token (and rotate the refresh token) using the
+  // refresh cookie. Cookie travel is automatic via `withCredentials`. Used
+  // by httpClient's 401 interceptor; rarely called directly.
+  async refresh(): Promise<void> {
+    await httpClient.post("/auth/refresh");
+  },
+
   async me(): Promise<MeResponse> {
     const res = await httpClient.get<ApiResponse<MeResponse>>("/me");
     return res.data.data;

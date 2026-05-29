@@ -550,28 +550,10 @@ export default function SampleTransferPage() {
     }
   }
 
-  async function confirmPickup(candidate: ReturnCandidate) {
-    try {
-      setSubmitting(true);
-      setError("");
-      setSuccessMessage("");
-
-      await apiPost(`/api/samples/${candidate.sample.id}/actions`, {
-        action: "pickup_confirmed",
-        operator_name: operatorName,
-        current_location: "已由使用者取回",
-      });
-
-      setSelectedTransferId(null);
-      setSuccessMessage("已確認使用者取件，樣品流程完成");
-      await loadData();
-    } catch (err) {
-      logClientError("confirmPickup failed", err);
-      setError(getErrorMessage(err, "確認取件失敗"));
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  // confirmPickup removed: pickup_confirmed is reserved for the original
+  // requester (backend _validate_sample_action_permission). The
+  // /sample page (我的樣品追蹤) shows the user-facing button. /transfer
+  // only shows status while the lab waits.
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -860,7 +842,6 @@ export default function SampleTransferPage() {
             candidate={selectedCandidate}
             submitting={submitting}
             onNotifyPickup={notifyPickup}
-            onConfirmPickup={confirmPickup}
           />
         )}
       </section>

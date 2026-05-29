@@ -20,6 +20,7 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.common.enums import UserStatus  # noqa: E402
+from app.core.config import get_settings  # noqa: E402
 from app.core.database import AsyncSessionLocal  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.models import (  # noqa: E402
@@ -76,6 +77,7 @@ PERMISSIONS: list[tuple[str, str]] = [
     # issues / notifications
     ("issues:read", "查看異常 / 告警"),
     ("issues:create", "建立異常"),
+    ("issues:update", "編輯異常欄位 (title / 指派 / severity)"),
     ("issues:close", "關閉告警"),
     ("issues:escalate", "升級告警"),
     ("notifications:read", "查看通知"),
@@ -134,6 +136,7 @@ LAB_ENGINEER_PERMS: list[str] = [
     "closures:operate",
     "issues:read",
     "issues:create",
+    "issues:update",
     "issues:close",
     "issues:escalate",
     "notifications:read",
@@ -159,6 +162,15 @@ ROLES: dict[str, tuple[str, list[str]]] = {
     "system_admin": (
         "系統管理者 (Sysadmin)",
         ["*"],
+    ),
+    "general_supervisor": (
+        # 大主管 — one tier above lab_supervisor, oversees every lab.
+        # Same permission codes as lab_supervisor; the cross-lab visibility
+        # comes from apply_lab_scope treating this role like system_admin.
+        # Notably NOT given system_admin's "*" — no user / role / system
+        # settings management; this is an operations role, not a tech role.
+        "大主管",
+        sorted(set(LAB_ENGINEER_PERMS + LAB_SUPERVISOR_EXTRA_PERMS)),
     ),
     "lab_supervisor": (
         "實驗室主管",
@@ -207,6 +219,7 @@ STORAGE_LOCATIONS: list[tuple[str, str, str]] = [
 # email, name, role-name, department-code, lab-code, password
 USERS: list[tuple[str, str, str, str | None, str | None, str]] = [
     ("admin@example.com", "Sys Admin", "system_admin", None, None, "Admin1234"),
+    ("director@example.com", "林大主", "general_supervisor", None, None, "Direc1234"),
     ("supervisor@example.com", "譚曉蓉", "lab_supervisor", None, "LAB-A", "Super1234"),
     ("supervisor2@example.com", "王小明", "lab_supervisor", None, "LAB-B", "Super1234"),
     ("supervisor3@example.com", "陳美秀", "lab_supervisor", None, "LAB-C", "Super1234"),
@@ -406,6 +419,14 @@ async def upsert_user(
         )
     ).scalar_one_or_none()
 
+    # All seed users share one phone so the CHT TAS callout pipeline can be
+    # demo'd end-to-end without spamming strangers. Source via Settings so
+    # the value is loaded from backend/.env (pydantic-settings handles it).
+    # Raw os.getenv won't see .env values — that's the bug this replaces.
+    # Empty → None so the notify() recipient query (which filters on
+    # User.phone IS NOT NULL) correctly skips phone fan-out altogether.
+    DEMO_PHONE: str | None = get_settings().demo_phone or None
+
     if user is None:
         user = User(
             email=email,
@@ -415,6 +436,7 @@ async def upsert_user(
             lab_id=lab.id if lab else None,
             status=UserStatus.ACTIVE,
             is_active=True,
+            phone=DEMO_PHONE,
         )
         user.roles = desired_roles
         session.add(user)
@@ -426,6 +448,7 @@ async def upsert_user(
         user.lab_id = lab.id if lab else None
         user.status = UserStatus.ACTIVE
         user.is_active = True
+        user.phone = DEMO_PHONE
         user.roles = desired_roles
 
     return user
@@ -526,6 +549,7 @@ async def main() -> None:
     sys.stdout.write(
         "Seed complete.\n"
         "  admin@example.com      / Admin1234   (system_admin)\n"
+        "  director@example.com   / Direc1234   (general_supervisor — 大主管, cross-lab)\n"
         "  supervisor@example.com / Super1234   (lab_supervisor)\n"
         "  supervisor2@example.com / Super1234   (lab_supervisor)\n"
         "  supervisor3@example.com / Super1234   (lab_supervisor)\n"

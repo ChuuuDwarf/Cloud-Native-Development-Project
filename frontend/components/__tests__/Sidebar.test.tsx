@@ -211,9 +211,15 @@ describe("Sidebar", () => {
     expect(screen.queryByText("分貨 / WIP")).not.toBeInTheDocument();
 
     expect(screen.queryByText("執行與機台")).not.toBeInTheDocument();
-    expect(screen.queryByText("結案與倉儲")).not.toBeInTheDocument();
     expect(screen.queryByText("系統")).not.toBeInTheDocument();
     expect(screen.queryByText("OVERVIEW")).not.toBeInTheDocument();
+
+    // 結案與倉儲 section is hidden for plant_user: no item in it is allowed
+    // for them (notifications is engineer / supervisor / admin only).
+    expect(screen.queryByText("結案與倉儲")).not.toBeInTheDocument();
+    expect(screen.queryByText("通知中心")).not.toBeInTheDocument();
+    expect(screen.queryByText("倉儲取件")).not.toBeInTheDocument();
+    expect(screen.queryByText("異常與告警")).not.toBeInTheDocument();
   });
 
   it("footer shows user.name + resolved role label", () => {

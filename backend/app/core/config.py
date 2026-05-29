@@ -25,7 +25,8 @@ class Settings(BaseSettings):
 
     jwt_secret: str = Field(default="change-me-in-prod-please")
     jwt_algorithm: str = Field(default="HS256")
-    jwt_expires_minutes: int = Field(default=60 * 24)
+    jwt_access_expires_minutes: int = Field(default=60)
+    jwt_refresh_expires_days: int = Field(default=7)
 
     cors_origins: str = Field(default="http://localhost:3000")
 
@@ -37,6 +38,19 @@ class Settings(BaseSettings):
     smtp_password: str = Field(default="")
 
     uploads_dir: str = Field(default="./uploads")
+
+    # 中華電信 TAS phone callout (Sprint 3d). When ``cht_api_key`` is empty
+    # the phone_sender task logs the would-be call and exits, so dev can run
+    # the escalation pipeline without burning real minutes.
+    cht_api_key: str = Field(default="")
+    cht_service_number: str = Field(default="")
+    cht_base_url: str = Field(default="https://tasapi.cht.com.tw/apis/CHTIoT")
+
+    # Demo / dev: when set, seed_dev.py writes this number into every
+    # User.phone so the CHT callout pipeline can be exercised end-to-end
+    # without per-account phone management. Empty = phone column left NULL
+    # for all seeded users and phone fan-out becomes a no-op.
+    demo_phone: str = Field(default="")
 
     @property
     def cors_origin_list(self) -> list[str]:

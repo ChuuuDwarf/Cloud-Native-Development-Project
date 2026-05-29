@@ -36,6 +36,7 @@ class CurrentUser(BaseModel):
     role: str
     permissions: list[str]
     lab_id: uuid.UUID | None = None
+    lab_code: str | None = None
     department_id: uuid.UUID | None = None
 
 
@@ -50,6 +51,15 @@ async def get_current_user(
         payload = decode_access_token(access_token)
     except JWTError as exc:
         raise UnauthorizedError("Invalid or expired token") from exc
+
+    # Reject a refresh token used in the access slot. Without this check, a
+    # leaked refresh cookie could be replayed as access for its full 7-day
+    # lifetime. Tokens minted before the ``type`` claim was added have no
+    # type field — treat as access for backward compat (they'll expire on
+    # their old short timeline anyway).
+    token_type = payload.get("type", "access")
+    if token_type != "access":
+        raise UnauthorizedError("Wrong token type for this endpoint")
 
     sub = payload.get("sub")
     if not sub:
@@ -77,6 +87,7 @@ async def get_current_user(
         role=role,
         permissions=permissions,
         lab_id=user.lab_id,
+        lab_code=user.lab.code if user.lab else None,
         department_id=user.department_id,
     )
 

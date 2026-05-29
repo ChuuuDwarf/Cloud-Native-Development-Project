@@ -50,11 +50,21 @@ class MachineService:
             raise ConflictError(
                 f"機台編號 {payload.machine_id} 已存在於 {existing.lab or '未指定'} 實驗室"
             )
+        # If the caller supplied an explicit status, honour it (validated
+        # against VALID_STATUSES); otherwise fall back to the project default.
+        if payload.status is not None:
+            if payload.status not in VALID_STATUSES:
+                raise ValidationError(
+                    f"無效的機台狀態：{payload.status}（需為 {'/'.join(sorted(VALID_STATUSES))}）"
+                )
+            initial_status = payload.status
+        else:
+            initial_status = DEFAULT_STATUS
         machine = Machine(
             machine_id=payload.machine_id,
             name=payload.name,
             lab=payload.lab,
-            status=DEFAULT_STATUS,
+            status=initial_status,
             supported_items=list(payload.supported_items),
             owner=payload.owner,
             utilization=payload.utilization,
@@ -75,6 +85,15 @@ class MachineService:
         machine.owner = payload.owner
         machine.utilization = payload.utilization
         machine.last_maintenance = payload.last_maintenance
+        # status is optional on update — omit to preserve the existing value,
+        # supply to change it (e.g. lab engineer marking a faulty machine
+        # back to 閒置 after repair, replacing the prior auto-reset hook).
+        if payload.status is not None:
+            if payload.status not in VALID_STATUSES:
+                raise ValidationError(
+                    f"無效的機台狀態：{payload.status}（需為 {'/'.join(sorted(VALID_STATUSES))}）"
+                )
+            machine.status = payload.status
         await self._repo.commit()
         return machine_dict(machine)
 

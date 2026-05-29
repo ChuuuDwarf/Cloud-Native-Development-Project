@@ -19,7 +19,9 @@ class Issue(Base, TimestampMixin):
     type: Mapped[IssueType] = mapped_column(String(40), nullable=False, index=True)
     target_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     target_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
-
+    lab_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("labs.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     severity: Mapped[Severity] = mapped_column(String(20), nullable=False, default=Severity.MEDIUM)

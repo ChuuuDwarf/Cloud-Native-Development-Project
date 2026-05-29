@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, Protocol
@@ -24,6 +25,10 @@ from app.db.models.order_management import (
     QuotaSettingModel,
     QuotaUsageModel,
 )
+from app.modules.dashboard.publisher import (
+    publish_dashboard_event,
+    publish_new_pending_approval,
+)
 from app.repos.order_mappers import history_to_schema, order_to_schema
 from app.schemas.order import (
     Order,
@@ -35,6 +40,8 @@ from app.schemas.order import (
     QuotaPatchPayload,
     QuotaPayload,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OrderItemMasterData(Protocol):
@@ -107,23 +114,28 @@ class OrderRepository:
         ):
             actor = require_role(current_user, {"lab_supervisor"})
             lab_ids = set(actor.get("labIds", []))
+            all_labs = bool(actor.get("allLabs"))
 
-            if not lab_ids:
+            # Cross-lab roles (system_admin, general_supervisor) approve
+            # everywhere — no lab filter. Lab-bound roles with no lab fall
+            # through to the empty-list response (misconfigured account).
+            if not lab_ids and not all_labs:
                 return []
 
+            approvable_item_filters = [
+                OrderItemModel.order_id == OrderModel.id,
+                OrderItemModel.status.in_(
+                    [
+                        OrderStatus.PENDING_APPROVAL.value,
+                        OrderStatus.DRAFT.value,
+                    ]
+                ),
+            ]
+            if not all_labs:
+                approvable_item_filters.append(OrderItemModel.lab_id.in_(lab_ids))
+
             approvable_item_exists = (
-                select(OrderItemModel.id)
-                .where(
-                    OrderItemModel.order_id == OrderModel.id,
-                    OrderItemModel.lab_id.in_(lab_ids),
-                    OrderItemModel.status.in_(
-                        [
-                            OrderStatus.PENDING_APPROVAL.value,
-                            OrderStatus.DRAFT.value,
-                        ]
-                    ),
-                )
-                .exists()
+                select(OrderItemModel.id).where(*approvable_item_filters).exists()
             )
 
             stmt = stmt.where(approvable_item_exists)
@@ -295,10 +307,13 @@ class OrderRepository:
         elif payload.action in {OrderAction.APPROVE, OrderAction.RETURN, OrderAction.REJECT}:
             actor = require_role(current_user, {"lab_supervisor"})
             lab_ids = set(actor.get("labIds", []))
+            all_labs = bool(actor.get("allLabs"))
             target_items = [
                 item
                 for item in order.items
-                if item.lab_id in lab_ids
+                # Lab gate: cross-lab roles bypass; lab-bound roles only act
+                # on items in their own lab.
+                if (all_labs or item.lab_id in lab_ids)
                 and (payload.order_item_id is None or item.id == payload.order_item_id)
                 and (
                     item.status == OrderStatus.PENDING_APPROVAL.value
@@ -418,6 +433,54 @@ class OrderRepository:
             quota_override=payload.quota_override,
         )
         await self.db.commit()
+
+        # Best-effort dashboard SSE fanout for a fresh PENDING_APPROVAL.
+        # Order items may span multiple labs (or be lab-less if items are
+        # not yet attached), so this is a global event. Publisher swallows
+        # Redis errors; we belt-and-suspenders the call too.
+        if payload.action == OrderAction.SUBMIT:
+            await publish_new_pending_approval(None)
+        elif payload.action in {
+            OrderAction.APPROVE,
+            OrderAction.RETURN,
+            OrderAction.REJECT,
+            OrderAction.CANCEL,
+        }:
+            # 待簽 KPI on the lab_supervisor dashboard moves on these terminal
+            # actions; publish per touched lab so each supervisor's view
+            # invalidates. Cross-lab viewers also pick this up via the
+            # ``dashboard:events:*`` psubscribe.
+            #
+            # ``OrderItemModel.lab_id`` is declared ``String(50)`` but
+            # actually stores ``str(lab.id)`` (UUID), while the dashboard SSE
+            # channels are keyed by ``Lab.code`` (see
+            # [[project-dashboard-sse-channel-keys]]). JOIN through Lab to
+            # translate UUID → code before publishing — otherwise we publish
+            # to ``dashboard:events:<UUID>`` and no one is subscribed.
+            try:
+                lab_code_rows = await self.db.execute(
+                    select(Lab.code)
+                    .join(OrderItemModel, cast(Lab.id, String) == OrderItemModel.lab_id)
+                    .where(OrderItemModel.order_id == order.id)
+                    .distinct()
+                )
+                lab_codes = [code for code in lab_code_rows.scalars() if code]
+                event_name = f"order_{payload.action.value.lower()}"
+                if lab_codes:
+                    for code in lab_codes:
+                        await publish_dashboard_event(code, event_name)
+                else:
+                    # No items attached yet — broadcast global so cross-lab
+                    # viewers still refresh.
+                    await publish_dashboard_event(None, event_name)
+            except Exception:
+                # Best-effort: a publish failure must not unwind the action.
+                logger.exception(
+                    "dashboard publish for order action %s failed order=%s",
+                    payload.action.value,
+                    order.id,
+                )
+
         return await self.get_order(order.id)
 
     async def get_history(self, order_id: int) -> list[OrderHistory]:

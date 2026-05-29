@@ -12,6 +12,7 @@ from app.common.enums.issue_action import IssueAction
 from app.common.enums.issue_status import IssueStatus
 from app.common.enums.issue_type import IssueType
 from app.common.enums.machine_status import MachineStatus
+from app.common.enums.notification_channel import NotificationChannel
 from app.common.enums.notification_status import NotificationStatus
 from app.common.enums.order_action import OrderAction
 from app.common.enums.order_status import OrderStatus
@@ -29,6 +30,7 @@ __all__ = [
     "IssueStatus",
     "IssueType",
     "MachineStatus",
+    "NotificationChannel",
     "NotificationStatus",
     "OrderAction",
     "OrderStatus",

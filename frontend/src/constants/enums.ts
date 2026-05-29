@@ -82,17 +82,19 @@ export const IssueActionValues: readonly IssueAction[] = [
   "reopen",
 ] as const;
 
-export type IssueStatus = "open" | "assigned" | "escalated" | "closed";
+export type IssueStatus = "open" | "assigned" | "escalated" | "acknowledged" | "closed";
 export const IssueStatus = {
   Open: "open",
   Assigned: "assigned",
   Escalated: "escalated",
+  Acknowledged: "acknowledged",
   Closed: "closed",
 } as const;
 export const IssueStatusValues: readonly IssueStatus[] = [
   "open",
   "assigned",
   "escalated",
+  "acknowledged",
   "closed",
 ] as const;
 
@@ -122,6 +124,18 @@ export const MachineStatusValues: readonly MachineStatus[] = [
   "maintenance",
   "faulty",
   "disabled",
+] as const;
+
+export type NotificationChannel = "in_app" | "email" | "phone";
+export const NotificationChannel = {
+  InApp: "in_app",
+  Email: "email",
+  Phone: "phone",
+} as const;
+export const NotificationChannelValues: readonly NotificationChannel[] = [
+  "in_app",
+  "email",
+  "phone",
 ] as const;
 
 export type NotificationStatus = "unread" | "read";

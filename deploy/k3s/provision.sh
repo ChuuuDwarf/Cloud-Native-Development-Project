@@ -217,6 +217,10 @@ phase6_observability() {
     ssh_run "echo '${content_b64}' | base64 -d | kubectl apply -f -"
     ok "套用 $f"
   done
+
+  # Reloader：ConfigMap/Secret 變動時自動重啟引用它的 Deployment（從 URL 裝，pin 版本）
+  ssh_run "kubectl apply -f https://raw.githubusercontent.com/stakater/Reloader/v1.4.17/deployments/kubernetes/reloader.yaml"
+  ok "套用 Reloader"
 }
 
 # =============================================================================

@@ -7,7 +7,12 @@ data:
   ENV: "production"
   REDIS_URL: "redis://redis:6379/0"
   JWT_ALGORITHM: "HS256"
-  JWT_EXPIRES_MINUTES: "1440"
+  # Pydantic BaseSettings reads env keys uppercased + underscored — backend
+  # expects JWT_ACCESS_EXPIRES_MINUTES and JWT_REFRESH_EXPIRES_DAYS (see
+  # backend/app/core/config.py). The previous JWT_EXPIRES_MINUTES key was
+  # silently ignored and tokens fell back to the default 60-min access.
+  JWT_ACCESS_EXPIRES_MINUTES: "1440"
+  JWT_REFRESH_EXPIRES_DAYS: "7"
   # Same-origin: browser hits /api on the same host, so CORS isn't exercised.
   # Kept for safety / non-browser clients; overlay can point it at the real URL.
   CORS_ORIGINS: "http://localhost"

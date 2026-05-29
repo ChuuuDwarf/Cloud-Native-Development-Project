@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 import KpiCard from "@/components/ui/KpiCard";
 import {
   machinesApi,
@@ -11,16 +12,20 @@ import {
 } from "@/services/machines-api";
 import MachineForm from "./MachineForm";
 import MachineTable from "./MachineTable";
+import SimulateIssueModal from "./SimulateIssueModal";
 
 const STATUSES: MachineStatus[] = ["閒置", "使用中", "保養中", "故障中", "停用"];
 const BLOCKED: MachineStatus[] = ["保養中", "故障中", "停用"];
 
 export default function MachinePage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const userLabCode = user?.role === "lab_supervisor" ? user.labCode : null;
   const [selectedStatus, setSelectedStatus] = useState<MachineStatus>("閒置");
   const [editing, setEditing] = useState<Machine | null>(null);
   // Bump to remount MachineForm so it clears after a successful create.
   const [formNonce, setFormNonce] = useState(0);
+  const [simulateOpen, setSimulateOpen] = useState(false);
 
   const machinesQuery = useQuery({
     queryKey: ["machines"],
@@ -79,16 +84,30 @@ export default function MachinePage() {
             {statusLine(machinesQuery, save.error ?? applyStatus.error)}
           </p>
         </div>
-        <select
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value as MachineStatus)}
-          style={selectStyle}
-        >
-          {STATUSES.map((status) => (
-            <option key={status}>{status}</option>
-          ))}
-        </select>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            onClick={() => setSimulateOpen(true)}
+            disabled={machines.length === 0}
+            title="DEMO 用：把選的機台標為故障並觸發 escalation 通知鏈"
+            style={demoBtnStyle}
+          >
+            🚨 模擬機台異常
+          </button>
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value as MachineStatus)}
+            style={selectStyle}
+          >
+            {STATUSES.map((status) => (
+              <option key={status}>{status}</option>
+            ))}
+          </select>
+        </div>
       </div>
+
+      {simulateOpen && (
+        <SimulateIssueModal machines={machines} onClose={() => setSimulateOpen(false)} />
+      )}
 
       <div
         style={{
@@ -134,6 +153,7 @@ export default function MachinePage() {
           initial={editing}
           submitting={save.isPending}
           onSubmit={(payload) => save.mutate(payload)}
+          userLabCode={userLabCode}
         />
         <MachineTable
           machines={machines}
@@ -178,4 +198,15 @@ const selectStyle: React.CSSProperties = {
   padding: "9px 10px",
   borderRadius: 8,
   fontSize: 12,
+};
+
+const demoBtnStyle: React.CSSProperties = {
+  background: "var(--red)",
+  color: "#fff",
+  border: "none",
+  padding: "9px 14px",
+  borderRadius: 8,
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
 };

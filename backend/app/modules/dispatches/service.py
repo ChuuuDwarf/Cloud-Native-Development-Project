@@ -20,6 +20,7 @@ from datetime import datetime
 from app.common.dependencies.lab_scope import LabScope
 from app.common.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.db.models import Dispatch, Machine, WipHistory
+from app.modules.dashboard.publisher import publish_dashboard_event
 from app.modules.dispatches.repository import DispatchRepository
 from app.modules.dispatches.schemas import (
     AssignDispatchPayload,
@@ -109,6 +110,18 @@ class DispatchService:
         dispatches = await self._repo.list_dispatches(lab_code=self._scope.list_lab_code_filter())
         return [dispatch_dict(d) for d in dispatches]
 
+    @staticmethod
+    async def _publish_dispatch_change(lab_code: str | None, event_name: str) -> None:
+        """Best-effort dashboard SSE fanout. ``dispatch.lab`` is already a
+        lab CODE (ASCII), matching what the SSE handler subscribes off, so no
+        Lab.name -> Lab.code translation is needed here. Errors are
+        swallowed — the dispatch action itself is already committed.
+        """
+        try:
+            await publish_dashboard_event(lab_code or None, event_name)
+        except Exception:
+            logger.exception("dashboard publish %s failed lab=%s", event_name, lab_code)
+
     async def _require(self, dispatch_id: str) -> Dispatch:
         dispatch = await self._repo.get_by_dispatch_id(dispatch_id)
         if dispatch is None:
@@ -163,6 +176,7 @@ class DispatchService:
             created_by,
         )
         await self._repo.commit()
+        await self._publish_dispatch_change(dispatch.lab, "dispatch_created")
         return dispatch_dict(dispatch)
 
     async def suggest(self, strategy: str) -> list[dict]:
@@ -188,6 +202,11 @@ class DispatchService:
                 "系統(排程)",
             )
         await self._repo.commit()
+        # Publish once per distinct lab touched (multiple dispatches may
+        # share a lab; cross-lab callers can affect several labs at once).
+        # Skip the publish entirely when nothing moved — no UI to refresh.
+        for code in {d.lab for d in ordered if d.lab}:
+            await self._publish_dispatch_change(code, "dispatch_suggested")
         return [dispatch_dict(d) for d in ordered]
 
     async def replan(self, reason: str, strategy: str) -> list[dict]:
@@ -218,6 +237,8 @@ class DispatchService:
                 "系統(排程)",
             )
         await self._repo.commit()
+        for code in {d.lab for d in ordered if d.lab}:
+            await self._publish_dispatch_change(code, "dispatch_replanned")
         return [dispatch_dict(d) for d in ordered]
 
     async def assign(
@@ -272,6 +293,7 @@ class DispatchService:
         )
 
         await self._repo.commit()
+        await self._publish_dispatch_change(dispatch.lab, "dispatch_assigned")
         return dispatch_dict(dispatch)
 
     async def _sync_wip_status(

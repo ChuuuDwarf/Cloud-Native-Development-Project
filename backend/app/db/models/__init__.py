@@ -16,7 +16,7 @@ from app.db.models.files import File
 from app.db.models.issues import Issue
 from app.db.models.labs import Lab, LabCapability
 from app.db.models.machines import Dispatch, Machine, Recipe
-from app.db.models.notifications import Notification, NotificationDelivery
+from app.db.models.notifications import Notification
 from app.db.models.order_management import (
     OrderHistoryModel,
     OrderItemModel,
@@ -48,7 +48,6 @@ __all__ = [
     "LabCapability",
     "Machine",
     "Notification",
-    "NotificationDelivery",
     "OrderHistoryModel",
     "OrderItemModel",
     "OrderModel",

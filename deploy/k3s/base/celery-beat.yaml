@@ -2,6 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: celery-beat
+  annotations:
+    configmap.reloader.stakater.com/reload: "lims-config"
+    secret.reloader.stakater.com/reload: "lims-secrets"
 spec:
   replicas: 1
   strategy:
@@ -19,7 +22,8 @@ spec:
       containers:
         - name: celery-beat
           image: lims-backend
-          command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
+          command:
+            ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
           envFrom:
             - configMapRef:
                 name: lims-config

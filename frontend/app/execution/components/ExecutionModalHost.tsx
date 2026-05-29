@@ -3,14 +3,7 @@ import type { Machine } from "@/types/machines";
 import type { Recipe } from "@/types/recipes";
 import type { Wip } from "@/types/lab";
 import type { ModalKind, RunFn } from "../types";
-import {
-  CheckinModal,
-  ResultModal,
-  AbortModal,
-  ReviewModal,
-  VerifyModal,
-  DetailModal,
-} from "./modals";
+import { CheckinModal, AbortModal, ReviewModal, VerifyModal, DetailModal } from "./modals";
 
 export default function ExecutionModalHost({
   modal,
@@ -32,7 +25,6 @@ export default function ExecutionModalHost({
     return (
       <CheckinModal w={target} machines={machines} recipes={recipes} run={run} onClose={onClose} />
     );
-  if (modal === "result") return <ResultModal w={target} run={run} onClose={onClose} />;
   if (modal === "abort") return <AbortModal w={target} run={run} onClose={onClose} />;
   if (modal === "review") return <ReviewModal w={target} run={run} onClose={onClose} />;
   if (modal === "verify") return <VerifyModal w={target} run={run} onClose={onClose} />;

@@ -8,6 +8,15 @@ namespace: lims-prod
 resources:
 - ../../base
 
+# Override CORS_ORIGINS for the prod hostname. Same-origin browser requests
+# (/api + / share the host) don't trip CORS; this is for non-browser API
+# clients calling the prod URL directly.
+configMapGenerator:
+- name: lims-config
+  behavior: merge
+  literals:
+  - CORS_ORIGINS=https://34.80.119.4.nip.io
+
 # Real images in GCP Artifact Registry (project lims-497613, repo `lims`,
 # region asia-east1). CD overrides the tag per release via:
 #   kustomize edit set image \

@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.common.errors import UnauthorizedError
 from app.core.database import get_db
-from app.core.security import create_access_token, verify_password
+from app.core.security import create_access_token, create_refresh_token, verify_password
 from app.db.models import Role, User
 
 
@@ -39,6 +39,12 @@ class AuthService:
 
     @staticmethod
     def issue_token(user: User) -> str:
+        """Issue a short-lived access token only (legacy helper).
+
+        New callers should use :meth:`issue_token_pair` so the refresh
+        flow has something to rotate. Kept around for tests / single-
+        token code paths that pre-date the split.
+        """
         return create_access_token(
             subject=str(user.id),
             extra={
@@ -46,6 +52,20 @@ class AuthService:
                 "email": user.email,
             },
         )
+
+    @staticmethod
+    def issue_token_pair(user: User) -> tuple[str, str]:
+        """Issue ``(access_token, refresh_token)``. Used at login and at
+        refresh-rotation. Refresh carries no display claims; access carries
+        name + email so request handlers can avoid an extra DB round-trip
+        for trivial display needs.
+        """
+        access = create_access_token(
+            subject=str(user.id),
+            extra={"name": user.name, "email": user.email},
+        )
+        refresh = create_refresh_token(subject=str(user.id))
+        return access, refresh
 
 
 def project_user(user: User) -> tuple[str, list[str]]:

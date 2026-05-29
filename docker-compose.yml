@@ -1,170 +1,268 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-lims}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lims}
-      POSTGRES_DB: ${POSTGRES_DB:-lims}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lims}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    # Attach to both the default compose network (so backend/frontend/celery
-    # keep reaching it as `postgres`) and lims_devnet (so the devcontainer
-    # workspace, which lives on lims_devnet, can resolve it by the same name).
-    networks:
-      - default
-      - lims_devnet
+    postgres:
+        image: postgres:16-alpine
+        environment:
+            POSTGRES_USER: ${POSTGRES_USER:-lims}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lims}
+            POSTGRES_DB: ${POSTGRES_DB:-lims}
+        ports:
+            - "5432:5432"
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lims}"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
 
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    networks:
-      - default
-      - lims_devnet
+    redis:
+        image: redis:7-alpine
+        command: ["redis-server", "--appendonly", "yes"]
+        ports:
+            - "6379:6379"
+        volumes:
+            - redisdata:/data
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
 
-  backend:
-    build: ./backend
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      ENV: ${ENV:-development}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
-      REDIS_URL: redis://redis:6379/0
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
-      JWT_ALGORITHM: HS256
-      JWT_EXPIRES_MINUTES: "1440"
-      CORS_ORIGINS: http://localhost:3000
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      EMAIL_FROM: ${EMAIL_FROM:-noreply@lims.local}
-      EMAIL_BACKEND: ${EMAIL_BACKEND:-file}  # file | smtp
-      UPLOADS_DIR: /app/uploads
-    volumes:
-      - ./backend:/app
-      - uploads:/app/uploads
-    networks:
-      - default
-      - lims_devnet
-  celery-worker:
-    build: ./backend
-    command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info"]
-    environment:
-      ENV: ${ENV:-development}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
-      REDIS_URL: redis://redis:6379/0
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
-      EMAIL_BACKEND: ${EMAIL_BACKEND:-file}
-      EMAIL_FROM: ${EMAIL_FROM:-noreply@lims.local}
-      UPLOADS_DIR: /app/uploads
-    volumes:
-      - ./backend:/app
-      - uploads:/app/uploads
-    # Override the image's HEALTHCHECK (curl :8000/health), which only fits the
-    # web service — the worker serves no HTTP. Ping the worker over the broker.
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A app.core.celery_app inspect ping || exit 1"]
-      interval: 30s
-      timeout: 10s
-      start_period: 30s
-      retries: 3
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    # One-shot migration runner. Idempotent (alembic upgrade head is a no-op
+    # when schema is current) so it can sit on the critical path of every
+    # `docker compose up`. backend / celery-worker / celery-beat block until
+    # this exits 0 so they never start against an unmigrated DB.
+    migrate:
+        build: ./backend
+        command: ["alembic", "upgrade", "head"]
+        env_file:
+            - path: ./backend/.env
+              required: false
+        environment:
+            DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
+        volumes:
+            - ./backend:/app
+        depends_on:
+            postgres:
+                condition: service_healthy
+        restart: "no"
 
-  celery-beat:
-    build: ./backend
-    command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
-    environment:
-      ENV: ${ENV:-development}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
-      REDIS_URL: redis://redis:6379/0
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
-    volumes:
-      - ./backend:/app
-    # Disable the image's HEALTHCHECK (curl :8000/health): beat is a scheduler
-    # with no HTTP endpoint and no broker-ping. It runs as PID 1, so if it dies
-    # the container exits — a false "unhealthy" probe is worse than none.
-    healthcheck:
-      disable: true
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    backend:
+        build: ./backend
+        command:
+            [
+                "uvicorn",
+                "app.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--reload",
+            ]
+        ports:
+            - "${BACKEND_PORT:-8000}:8000"
+        # env_file pulls everything in backend/.env (CHT_*, DEMO_PHONE, future
+        # SMTP creds, etc.) so we don't have to mirror each key in `environment`.
+        # `environment` below overrides anything that needs container-internal
+        # hostnames (postgres / redis service names instead of localhost).
+        env_file:
+            - path: ./backend/.env
+              required: false
+        environment:
+            ENV: ${ENV:-development}
+            DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
+            REDIS_URL: redis://redis:6379/0
+            JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
+            JWT_ALGORITHM: HS256
+            JWT_ACCESS_EXPIRES_MINUTES: "60"
+            JWT_REFRESH_EXPIRES_DAYS: "7"
+            CORS_ORIGINS: http://localhost:3000
+            SMTP_HOST: ${SMTP_HOST:-}
+            SMTP_PORT: ${SMTP_PORT:-587}
+            SMTP_USER: ${SMTP_USER:-}
+            SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+            EMAIL_FROM: ${EMAIL_FROM:-noreply@lims.local}
+            EMAIL_BACKEND: ${EMAIL_BACKEND:-file} # file | smtp
+            UPLOADS_DIR: /app/uploads
+        volumes:
+            - ./backend:/app
+            - uploads:/app/uploads
+        networks:
+            - default
+            - lims_devnet
+        # Python-based healthcheck so we don't have to add curl to the slim image.
+        # Hits the FastAPI /health route; frontend waits on this before starting.
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "python",
+                    "-c",
+                    "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=2).status==200 else 1)",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+            start_period: 15s
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+            migrate:
+                condition: service_completed_successfully
+            seed:
+                condition: service_completed_successfully
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
-    ports:
-      # The standalone runner image listens on 3030 (see frontend/Dockerfile:
-      # ENV PORT=3030 / EXPOSE 3030), so publish host 3000 -> container 3030.
-      - "3000:3030"
-    depends_on:
-      - backend
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
-      # NOTE: do NOT set PORT here — the Dockerfile sets PORT=3030 and the port
-      # mapping above publishes host 3000 -> container 3030. Overriding PORT to
-      # 3000 made Next listen on 3000 while the mapping still targeted 3030, so
-      # http://localhost:3000 was unreachable.
-    networks:
-      - default
-      - lims_devnet
+    celery-worker:
+        build: ./backend
+        command:
+            ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info"]
+        # Same env_file as backend so phone_sender (Sprint 3d) sees CHT_API_KEY /
+        # CHT_SERVICE_NUMBER. Without these the task logs "not configured" and
+        # silently no-ops — broken CHT pipeline is invisible.
+        env_file:
+            - path: ./backend/.env
+              required: false
+        environment:
+            ENV: ${ENV:-development}
+            DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
+            REDIS_URL: redis://redis:6379/0
+            JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
+            EMAIL_BACKEND: ${EMAIL_BACKEND:-file}
+            EMAIL_FROM: ${EMAIL_FROM:-noreply@lims.local}
+            UPLOADS_DIR: /app/uploads
+        volumes:
+            - ./backend:/app
+            - uploads:/app/uploads
+        # Override the image's HEALTHCHECK (curl :8000/health), which only fits the
+        # web service — the worker serves no HTTP. Ping the worker over the broker.
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    "celery -A app.core.celery_app inspect ping || exit 1",
+                ]
+            interval: 30s
+            timeout: 10s
+            start_period: 30s
+            retries: 3
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+            migrate:
+                condition: service_completed_successfully
+            seed:
+                condition: service_completed_successfully
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    profiles: ["tools"]
-    ports:
-      - "5050:80"
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@lims.local
-      PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_SERVER_MODE: "False"
-    volumes:
-      - pgadmindata:/var/lib/pgadmin
-    depends_on:
-      postgres:
-        condition: service_healthy
+    celery-beat:
+        build: ./backend
+        command:
+            ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
+        env_file:
+            - path: ./backend/.env
+              required: false
+        environment:
+            ENV: ${ENV:-development}
+            DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
+            REDIS_URL: redis://redis:6379/0
+            JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
+        volumes:
+            - ./backend:/app
+        # Disable the image's HEALTHCHECK (curl :8000/health): beat is a scheduler
+        # with no HTTP endpoint and no broker-ping. It runs as PID 1, so if it dies
+        # the container exits — a false "unhealthy" probe is worse than none.
+        healthcheck:
+            disable: true
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+            migrate:
+                condition: service_completed_successfully
+            seed:
+                condition: service_completed_successfully
+
+    # One-shot seed runner. Populates roles / users / labs / departments +
+    # (if DEMO_PHONE is set in .env) writes the demo phone into every
+    # User.phone so the TAS pipeline can be exercised end-to-end.
+    #
+    # On the critical path of every `docker compose up` (backend / celery
+    # depend on this). seed_dev is idempotent (upserts every row by natural
+    # key) so re-running is safe; new code or DB resets land the latest
+    # seed without a separate command. For CI / prod that don't want demo
+    # rows, override ``SEED_PROFILE=skip`` or comment out the dependency.
+    seed:
+        build: ./backend
+        command: ["python", "-m", "scripts.seed_dev"]
+        env_file:
+            - path: ./backend/.env
+              required: false
+        environment:
+            DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
+        volumes:
+            - ./backend:/app
+        depends_on:
+            migrate:
+                condition: service_completed_successfully
+        restart: "no"
+
+    frontend:
+        build:
+            context: ./frontend
+            dockerfile: Dockerfile
+            args:
+                NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+        ports:
+            # The standalone runner image listens on 3030 (see frontend/Dockerfile:
+            # ENV PORT=3030 / EXPOSE 3030), so publish host 3000 -> container 3030.
+            - "3000:3030"
+        # Wait for backend to be /health-200, not just running, so the first
+        # request from the browser doesn't race a half-booted API.
+        depends_on:
+            backend:
+                condition: service_healthy
+        environment:
+            NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+            # NOTE: do NOT set PORT here — the Dockerfile sets PORT=3030 and the port
+            # mapping above publishes host 3000 -> container 3030. Overriding PORT to
+            # 3000 made Next listen on 3000 while the mapping still targeted 3030, so
+            # http://localhost:3000 was unreachable.
+            # Bind to all interfaces (default in Next ≤ 15 changed in 16 — without
+            # this, server only accepts connections destined for the container's
+            # own hostname and resets traffic forwarded from host port 3000 →
+            # ERR_EMPTY_RESPONSE in the browser).
+            HOSTNAME: "0.0.0.0"
+        networks:
+            - default
+            - lims_devnet
+
+    pgadmin:
+        image: dpage/pgadmin4:latest
+        profiles: ["tools"]
+        ports:
+            - "5050:80"
+        environment:
+            PGADMIN_DEFAULT_EMAIL: admin@lims.local
+            PGADMIN_DEFAULT_PASSWORD: admin
+            PGADMIN_CONFIG_SERVER_MODE: "False"
+        volumes:
+            - pgadmindata:/var/lib/pgadmin
+        depends_on:
+            postgres:
+                condition: service_healthy
 
 volumes:
-  pgdata:
-  redisdata:
-  uploads:
-  pgadmindata:
+    pgdata:
+    redisdata:
+    uploads:
+    pgadmindata:
 
 networks:
-  # Bridge network shared with the .devcontainer workspace. Declared external
-  # so this compose file does NOT create or delete it — the devcontainer
-  # workflow owns its lifecycle (`make devcontainer-net`). Non-devcontainer
-  # users still need to create it once (or run `make devcontainer-up`) before
-  # `docker compose up`, since postgres/redis are now attached to it.
-  lims_devnet:
-    external: true
+    # Project-local. If you need to share this with another compose project
+    # (e.g. a sibling D-team stack), change to `external: true` and pre-create
+    # the network with: docker network create lims_devnet
+    lims_devnet: {}

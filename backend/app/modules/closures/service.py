@@ -189,7 +189,12 @@ class ClosureService:
         if order.status != OrderStatus.WAITING_PICKUP.value:
             raise ConflictError(f"委託單為「{_order_zh(order.status)}」，僅「待取件」可結案")
         items = await self._repo.storage_items(order_no)
-        if items and not all(s.status == STORAGE_ZH[StorageStatus.PICKED_UP] for s in items):
+        # An order at waiting_pickup with no storage rows means the inbound
+        # step never ran (or all rows were purged) — treat as "not yet
+        # picked up", not as a free pass. Previously ``if items and not
+        # all(...)`` was falsy on empty items, letting an unpicked order
+        # flip to CLOSED before the requester had actually picked up.
+        if not items or not all(s.status == STORAGE_ZH[StorageStatus.PICKED_UP] for s in items):
             raise ConflictError("尚有樣品未取件，無法結案")
         order.status = OrderStatus.CLOSED.value
         await self._repo.commit()

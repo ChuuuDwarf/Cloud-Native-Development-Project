@@ -17,6 +17,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from sqlalchemy import select
+
 from app.common.dependencies.lab_scope import LabScope
 from app.common.enums import OrderStatus, ReportStatus, WipStatus
 from app.common.enums.role_d_zh import REPORT_ZH
@@ -29,6 +31,8 @@ from app.db.models import (
     Wip,
     WipExecution,
 )
+from app.db.models.labs import Lab
+from app.modules.dashboard.publisher import publish_report_returned
 from app.modules.reports.fake_data import generate_for_items
 from app.modules.reports.repository import ReportRepository
 from app.modules.reports.serializers import report_dict, template_dict
@@ -280,6 +284,34 @@ class ReportService:
             OrderStatus.WAITING_PICKUP.value,
         )
         await self._repo.commit()
+
+        # Best-effort dashboard SSE fanout. Publisher channels are keyed by
+        # Lab.code (ASCII) to match what the SSE handler subscribes off
+        # (CurrentUser.lab_code); Wip.lab_name is the display name (Chinese)
+        # so we have to translate. Publisher swallows Redis errors; we wrap
+        # the wip + lab lookup too.
+        try:
+            wip = await self._repo.get_wip(rpt.wip_id) if rpt.wip_id else None
+            lab_code: str | None = None
+            if wip and wip.lab_name:
+                lab_code = await self._repo._session.scalar(
+                    select(Lab.code).where(Lab.name == wip.lab_name)
+                )
+            if lab_code is None:
+                # Surface why we fell back to global so demo debugging is
+                # easier: either the report had no wip_id, the wip had no
+                # lab_name, or the Lab.name → Lab.code translation missed
+                # (drift between B's display name and E's labs table).
+                logger.info(
+                    "publish_report_returned: lab_code unresolved "
+                    "(wip=%s, lab_name=%s); falling back to global channel",
+                    rpt.wip_id,
+                    wip.lab_name if wip else None,
+                )
+            await publish_report_returned(lab_code)
+        except Exception:
+            logger.exception("dashboard publish_report_returned failed report=%s", rpt.report_id)
+
         return report_dict(rpt)
 
     @staticmethod

@@ -8,6 +8,7 @@ import type {
   IssueStatus,
   IssueType,
   MachineStatus,
+  NotificationChannel,
   NotificationStatus,
   OrderAction,
   OrderStatus,
@@ -102,6 +103,7 @@ export const IssueStatusLabel: Record<IssueStatus, string> = {
   open: "未處理",
   assigned: "已指派",
   escalated: "已升級",
+  acknowledged: "已處理",
   closed: "已關閉",
 };
 
@@ -123,6 +125,12 @@ export const IssueTypeLabel: Record<IssueType, string> = {
 export const NotificationStatusLabel: Record<NotificationStatus, string> = {
   unread: "未讀",
   read: "已讀",
+};
+
+export const NotificationChannelLabel: Record<NotificationChannel, string> = {
+  in_app: "站內通知",
+  email: "Email",
+  phone: "電話通知",
 };
 
 export const UserStatusLabel: Record<UserStatus, string> = {

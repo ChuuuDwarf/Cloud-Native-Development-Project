@@ -160,35 +160,81 @@ def _prepare_database() -> None:
     asyncio.run(_setup())
 
 
+async def _build_authed_client(email: str, password: str) -> AsyncIterator[AsyncClient]:
+    """Build a fresh AsyncClient logged in as the given user."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.post(
+            "/api/auth/login",
+            json={"email": email, "password": password},
+        )
+        assert res.status_code == 200, res.text
+        yield ac
+
+
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
+    """Unauthenticated AsyncClient — for 401 tests and login flows."""
     transport = ASGITransport(app=app)
-
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 
 @pytest.fixture
-async def admin_client(client: AsyncClient) -> AsyncClient:
-    """A client already logged in as the seeded admin user."""
-
-    res = await client.post(
-        "/api/auth/login",
-        json={"email": "admin@example.com", "password": "Admin1234"},
-    )
-
-    assert res.status_code == 200, res.text
-    return client
+async def admin_client() -> AsyncIterator[AsyncClient]:
+    async for c in _build_authed_client("admin@example.com", "Admin1234"):
+        yield c
 
 
 @pytest.fixture
-async def plant_user_client(client: AsyncClient) -> AsyncClient:
-    """A client logged in as the seeded plant_user."""
+async def plant_user_client() -> AsyncIterator[AsyncClient]:
+    async for c in _build_authed_client("requester@example.com", "Reque1234"):
+        yield c
 
-    res = await client.post(
-        "/api/auth/login",
-        json={"email": "requester@example.com", "password": "Reque1234"},
-    )
 
-    assert res.status_code == 200, res.text
-    return client
+@pytest.fixture
+async def engineer_a_client() -> AsyncIterator[AsyncClient]:
+    async for c in _build_authed_client("engineer@example.com", "Engin1234"):
+        yield c
+
+
+@pytest.fixture
+async def engineer_b_client() -> AsyncIterator[AsyncClient]:
+    async for c in _build_authed_client("engineer2@example.com", "Engin1234"):
+        yield c
+
+
+@pytest.fixture
+async def supervisor_a_client() -> AsyncIterator[AsyncClient]:
+    async for c in _build_authed_client("supervisor@example.com", "Super1234"):
+        yield c
+
+
+@pytest.fixture
+async def director_client() -> AsyncIterator[AsyncClient]:
+    """Authenticated client for the seeded general_supervisor (大主管).
+
+    Unlike admin (system_admin / wildcard ``*``), the director is the
+    operations role: cross-lab visibility but no system-management
+    permissions. Use this when a test specifically needs
+    ``role == general_supervisor`` rather than ``system_admin``.
+    """
+    async for c in _build_authed_client("director@example.com", "Direc1234"):
+        yield c
+
+
+@pytest.fixture
+async def db_session() -> AsyncIterator[AsyncSession]:
+    """An AsyncSession against the test database.
+
+    Tests can use this to set up rows that aren't reachable via the public
+    API (e.g. notifications, which are produced internally by
+    NotificationService.notify and have no POST endpoint). Cleanup is
+    handled by the session-scoped DB reset — committed rows persist across
+    tests within one pytest session, so tests should assert on presence of
+    *their own* rows by title/id, not on collection sizes.
+    """
+    from app.core import database as db_module
+
+    async with db_module.AsyncSessionLocal() as session:
+        yield session
