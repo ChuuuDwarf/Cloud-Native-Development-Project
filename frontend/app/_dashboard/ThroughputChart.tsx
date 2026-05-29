@@ -12,14 +12,17 @@ import {
 
 import type { ThroughputPoint } from "@/types/dashboard";
 
-// hour_offset 0..23, 23 = current hour. The bucket at offset 0 starts at
-// (now − 24h). We use the rendering clock to label each bucket with its
-// real hour-of-day, which is good enough for the dashboard refresh cadence.
-function formatHourLabel(offset: unknown): string {
+// hour_offset 0..23. Backend bucket origin is
+// ``(now - 23h).replace(minute=0, ...)`` so bucket 23 covers the current
+// hour, and bucket 0 starts at the top-of-hour 23h before now.
+// Label maps offset n → wall-clock hour `(nowHour + n - 23) mod 24`:
+//   n=23 → nowHour (current hour)
+//   n=0  → (nowHour - 23) mod 24 = (nowHour + 1) mod 24
+export function formatHourLabel(offset: unknown): string {
   const n = typeof offset === "number" ? offset : Number(offset);
   if (!Number.isFinite(n)) return "";
   const nowHour = new Date().getHours();
-  const actualHour = (((nowHour - 24 + n) % 24) + 24) % 24;
+  const actualHour = (((nowHour + n - 23) % 24) + 24) % 24;
   return `${String(actualHour).padStart(2, "0")}:00`;
 }
 
