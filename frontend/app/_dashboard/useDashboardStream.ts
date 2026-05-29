@@ -16,7 +16,11 @@ export function useDashboardStream(): void {
   useEffect(() => {
     if (typeof window === "undefined" || typeof EventSource === "undefined") return;
 
-    const base = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+    // Match the fallback baseURL used in src/services/httpClient.ts so the
+    // EventSource hits the backend (8000) and not the Next dev server (3000)
+    // when NEXT_PUBLIC_API_URL isn't set — otherwise SSE silently 404s and
+    // the dashboard falls back to 30s polling.
+    const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
     const url = `${base}/dashboard/stream`;
 
     let es: EventSource | null = null;

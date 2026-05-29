@@ -297,6 +297,17 @@ class ReportService:
                 lab_code = await self._repo._session.scalar(
                     select(Lab.code).where(Lab.name == wip.lab_name)
                 )
+            if lab_code is None:
+                # Surface why we fell back to global so demo debugging is
+                # easier: either the report had no wip_id, the wip had no
+                # lab_name, or the Lab.name → Lab.code translation missed
+                # (drift between B's display name and E's labs table).
+                logger.info(
+                    "publish_report_returned: lab_code unresolved "
+                    "(wip=%s, lab_name=%s); falling back to global channel",
+                    rpt.wip_id,
+                    wip.lab_name if wip else None,
+                )
             await publish_report_returned(lab_code)
         except Exception:
             logger.exception("dashboard publish_report_returned failed report=%s", rpt.report_id)
