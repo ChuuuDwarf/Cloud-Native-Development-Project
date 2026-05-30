@@ -22,12 +22,14 @@ import type {
   MasterData,
   ModalState,
   Order,
+  DeliveryDestination,
   OrderAction,
   OrderHistory,
   OrderStatus,
   OrderStatusFilter,
   OrderTemplate,
   PriorityLevel,
+  WipDependencyNextData,
   QuotaCheck,
   QuotaSetting,
   SampleFormGroup,
@@ -42,12 +44,60 @@ type OrderWithEditableFields = Order & {
   items?: OrderItemWithApproval[];
 };
 
+const deliveryDestinationStoragePrefix = "order-delivery-destination";
+
 function getOrderItems(order: Order): OrderItemWithApproval[] {
   return (order as OrderWithEditableFields).items ?? [];
 }
 
 function getOrderPriority(order: Order): PriorityLevel {
   return (order as OrderWithEditableFields).priority ?? "normal";
+}
+
+function getUniqueSampleItems(order: Order) {
+  const seen = new Set<string>();
+
+  return getOrderItems(order).filter((item) => {
+    const sampleId = item.sampleId?.trim();
+
+    if (!sampleId || seen.has(sampleId)) {
+      return false;
+    }
+
+    seen.add(sampleId);
+    return true;
+  });
+}
+
+function getDeliveryDestinationStorageKey(orderNo: string, sampleId: string) {
+  return `${deliveryDestinationStoragePrefix}:${orderNo}:${sampleId}`;
+}
+
+function readCachedDeliveryDestination(
+  orderNo: string,
+  sampleId: string
+): DeliveryDestination | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const value = window.localStorage.getItem(getDeliveryDestinationStorageKey(orderNo, sampleId));
+    return value ? (JSON.parse(value) as DeliveryDestination) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedDeliveryDestination(orderNo: string, destination: DeliveryDestination) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      getDeliveryDestinationStorageKey(orderNo, destination.sampleId),
+      JSON.stringify(destination)
+    );
+  } catch {
+    // Ignore storage failures; the in-memory state still keeps the UI stable.
+  }
 }
 
 export function useOrdersPage() {
@@ -78,6 +128,15 @@ export function useOrdersPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateName, setTemplateName] = useState("");
   const [usersById, setUsersById] = useState<Record<string, string | undefined>>({});
+  const [deliveryDestinationsByOrderId, setDeliveryDestinationsByOrderId] = useState<
+    Record<number, DeliveryDestination[]>
+  >({});
+  const [deliveryDestinationLoadingByOrderId, setDeliveryDestinationLoadingByOrderId] = useState<
+    Record<number, boolean>
+  >({});
+  const [deliveryDestinationErrorByOrderId, setDeliveryDestinationErrorByOrderId] = useState<
+    Record<number, string | undefined>
+  >({});
 
   const resolveDepartmentId = useCallback(
     (source: MasterData) => {
@@ -171,6 +230,78 @@ export function useOrdersPage() {
       }));
     },
     [currentUserId, usersById]
+  );
+
+  const loadDeliveryDestinations = useCallback(
+    async (order: Order) => {
+      if (order.status !== "approved") return;
+      if (deliveryDestinationLoadingByOrderId[order.id]) return;
+      if (order.id in deliveryDestinationsByOrderId) return;
+
+      const sampleItems = getUniqueSampleItems(order);
+
+      if (sampleItems.length === 0) {
+        setDeliveryDestinationsByOrderId((current) => ({ ...current, [order.id]: [] }));
+        return;
+      }
+
+      setDeliveryDestinationLoadingByOrderId((current) => ({ ...current, [order.id]: true }));
+      setDeliveryDestinationErrorByOrderId((current) => ({ ...current, [order.id]: undefined }));
+
+      try {
+        const destinations = await Promise.all(
+          sampleItems.map(async (item) => {
+            const cachedDestination = readCachedDeliveryDestination(order.orderNo, item.sampleId);
+
+            if (cachedDestination) {
+              return cachedDestination;
+            }
+
+            const response = await requestJson<WipDependencyNextData | null>(
+              "/api/wips/dependency/next",
+              {
+                method: "POST",
+                body: JSON.stringify({
+                  sampleId: item.sampleId,
+                  orderNo: order.orderNo,
+                }),
+              }
+            );
+
+            const destination = response.data
+              ? ({
+                  sampleId: item.sampleId,
+                  sampleName: item.sampleName,
+                  labName: response.data.labName || "尚未取得送樣地點",
+                  experimentName: response.data.experimentName,
+                  targetGroup: response.data.targetGroup,
+                  target: response.data.target,
+                } satisfies DeliveryDestination)
+              : ({
+                  sampleId: item.sampleId,
+                  sampleName: item.sampleName,
+                  labName: "尚未取得送樣地點",
+                  experimentName: null,
+                  targetGroup: item.targetGroup,
+                  target: item.target,
+                } satisfies DeliveryDestination);
+
+            writeCachedDeliveryDestination(order.orderNo, destination);
+            return destination;
+          })
+        );
+
+        setDeliveryDestinationsByOrderId((current) => ({ ...current, [order.id]: destinations }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "取得送樣地點失敗";
+
+        setDeliveryDestinationErrorByOrderId((current) => ({ ...current, [order.id]: message }));
+        setDeliveryDestinationsByOrderId((current) => ({ ...current, [order.id]: [] }));
+      } finally {
+        setDeliveryDestinationLoadingByOrderId((current) => ({ ...current, [order.id]: false }));
+      }
+    },
+    [deliveryDestinationLoadingByOrderId, deliveryDestinationsByOrderId]
   );
 
   function loadTemplatesForUser(userId: string) {
@@ -660,6 +791,14 @@ export function useOrdersPage() {
     queueMicrotask(() => void loadUserNames(userIds));
   }, [visibleOrders, quotaSettings, modal, loadUserNames]);
 
+  useEffect(() => {
+    const approvedOrders = visibleOrders.filter((order) => order.status === "approved");
+
+    approvedOrders.forEach((order) => {
+      void loadDeliveryDestinations(order);
+    });
+  }, [visibleOrders, loadDeliveryDestinations]);
+
   const statusCounts = useMemo(
     () =>
       orderStatusFilters.reduce<Record<OrderStatusFilter, number>>(
@@ -696,6 +835,9 @@ export function useOrdersPage() {
     items,
     masterData,
     usersById,
+    deliveryDestinationsByOrderId,
+    deliveryDestinationLoadingByOrderId,
+    deliveryDestinationErrorByOrderId,
     editingOrderId,
     editingOrderNo,
     loading,

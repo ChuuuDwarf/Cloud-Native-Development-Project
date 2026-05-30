@@ -98,6 +98,30 @@ export type Order = {
   items?: OrderItem[];
 };
 
+export type WipDependencyNextData = {
+  orderItemId: number;
+  orderNo?: string | null;
+  sampleId: string;
+  sampleNo: string;
+  labId?: string | null;
+  labName?: string | null;
+  experimentId?: string | null;
+  experimentName?: string | null;
+  targetGroup?: string | null;
+  target?: number | null;
+  check?: boolean;
+  reason?: string | null;
+};
+
+export type DeliveryDestination = {
+  sampleId: string;
+  sampleName?: string | null;
+  labName: string;
+  experimentName?: string | null;
+  targetGroup?: string | null;
+  target?: number | null;
+};
+
 export type OrderHistory = {
   id: number;
   orderId: number;
