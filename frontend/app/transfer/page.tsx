@@ -71,15 +71,42 @@ import {
   statusBadgeStyle,
 } from "./styles";
 
+type WipDependencyNextData = {
+  orderItemId: number;
+  orderNo?: string | null;
+  sampleId: string;
+  sampleNo: string;
+  labId?: string | null;
+  labName?: string | null;
+  experimentId?: string | null;
+  experimentName?: string | null;
+  targetGroup?: string | null;
+  target?: number | null;
+  check?: boolean;
+  reason?: string | null;
+};
+
+type DependencyNextBySampleKey = Record<string, WipDependencyNextData | null>;
+
 export default function SampleTransferPage() {
   const { user: authUser, isLoading: authLoading } = useAuth();
+
   const masterQuery = useQuery({
     queryKey: ["master-data"],
     queryFn: masterDataApi.fetch,
   });
+
   const [samples, setSamples] = useState<Sample[]>([]);
   const [wips, setWips] = useState<Wip[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
+
+  const [dependencyNextBySampleKey, setDependencyNextBySampleKey] =
+    useState<DependencyNextBySampleKey>({});
+  const [dependencyNextLoadingBySampleKey, setDependencyNextLoadingBySampleKey] =
+    useState<Record<string, boolean>>({});
+  const [dependencyNextErrorBySampleKey, setDependencyNextErrorBySampleKey] =
+    useState<Record<string, string>>({});
+
   const [selectedCandidateKey, setSelectedCandidateKey] = useState("");
   const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,6 +115,7 @@ export default function SampleTransferPage() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const currentLabData = masterQuery.data?.labs.find((lab) => lab.id === authUser?.labId);
+
   const currentDepartment = masterQuery.data?.departments.find(
     (department) => department.id === authUser?.departmentId
   );
@@ -121,6 +149,10 @@ export default function SampleTransferPage() {
 
   const isIncomingTransfer = (transfer: Transfer) =>
     normalizeLab(transfer.to_lab) === normalizeLab(currentLab);
+
+  function getSampleDependencyKey(sample: Sample) {
+    return `${sample.order_no}:${sample.sample_no}`;
+  }
 
   function getTransferStatusText(transfer: Transfer) {
     if (transfer.status === "pending") {
@@ -215,6 +247,11 @@ export default function SampleTransferPage() {
           normalizeLab(wip.lab_name) !== normalizeLab(currentLab) && wip.status !== "completed"
       );
 
+      const dependencyKey = getSampleDependencyKey(sample);
+      const dependencyNext = dependencyNextBySampleKey[dependencyKey] ?? null;
+      const apiNextLab = dependencyNext?.labName?.trim();
+      const apiNextExperiment = dependencyNext?.experimentName?.trim();
+
       if (requestedExperiments.length > 0) {
         const currentLabCompletedBoundary = findCompletedTransferBoundaryIndex(
           requestedExperiments,
@@ -260,8 +297,12 @@ export default function SampleTransferPage() {
           currentLabCompletedWips,
           remainingWips,
           remainingExperiments,
-          nextLab: nextExperiment.lab_name,
-          nextExperiment,
+          nextLab: apiNextLab || nextExperiment.lab_name,
+          nextExperiment: {
+            ...nextExperiment,
+            lab_name: apiNextLab || nextExperiment.lab_name,
+            experiment_item: apiNextExperiment || nextExperiment.experiment_item,
+          },
           nextWip,
           existingTransfer,
         });
@@ -277,8 +318,8 @@ export default function SampleTransferPage() {
       if (!nextWip.lab_name) return;
 
       const nextExperiment = {
-        lab_name: nextWip.lab_name,
-        experiment_item: nextWip.experiment_item ?? "未命名實驗",
+        lab_name: apiNextLab || nextWip.lab_name,
+        experiment_item: apiNextExperiment || nextWip.experiment_item || "未命名實驗",
       };
 
       const relatedTransfers = [
@@ -296,7 +337,7 @@ export default function SampleTransferPage() {
         currentLabCompletedWips,
         remainingWips,
         remainingExperiments: [nextExperiment],
-        nextLab: nextWip.lab_name,
+        nextLab: apiNextLab || nextWip.lab_name,
         nextExperiment,
         nextWip,
         existingTransfer,
@@ -304,7 +345,90 @@ export default function SampleTransferPage() {
     });
 
     return result;
-  }, [samples, wipsBySampleId, transfersByTargetId, currentLab]);
+  }, [
+    samples,
+    wipsBySampleId,
+    transfersByTargetId,
+    currentLab,
+    dependencyNextBySampleKey,
+  ]);
+
+  async function fetchDependencyNextForSamples(targetSamples: Sample[]) {
+    const uniqueSamples = targetSamples.filter((sample, index, array) => {
+      const key = getSampleDependencyKey(sample);
+      return array.findIndex((item) => getSampleDependencyKey(item) === key) === index;
+    });
+
+    const samplesToFetch = uniqueSamples.filter((sample) => {
+      const key = getSampleDependencyKey(sample);
+
+      return (
+        dependencyNextBySampleKey[key] === undefined &&
+        !dependencyNextLoadingBySampleKey[key]
+      );
+    });
+
+    if (samplesToFetch.length === 0) return;
+
+    setDependencyNextLoadingBySampleKey((previous) => {
+      const next = { ...previous };
+
+      samplesToFetch.forEach((sample) => {
+        next[getSampleDependencyKey(sample)] = true;
+      });
+
+      return next;
+    });
+
+    await Promise.all(
+      samplesToFetch.map(async (sample) => {
+        const key = getSampleDependencyKey(sample);
+
+        try {
+          const response = await apiPost<WipDependencyNextData | null>(
+            "/api/wips/dependency/next",
+            {
+              sampleId: sample.sample_no,
+              orderNo: sample.order_no,
+            }
+          );
+
+          setDependencyNextBySampleKey((previous) => ({
+            ...previous,
+            [key]: response,
+          }));
+
+          setDependencyNextErrorBySampleKey((previous) => ({
+            ...previous,
+            [key]: "",
+          }));
+        } catch (err) {
+          logClientError("fetchDependencyNextForSamples failed", err);
+
+          setDependencyNextErrorBySampleKey((previous) => ({
+            ...previous,
+            [key]: getErrorMessage(err, "取得下一個交接地點失敗"),
+          }));
+        } finally {
+          setDependencyNextLoadingBySampleKey((previous) => ({
+            ...previous,
+            [key]: false,
+          }));
+        }
+      })
+    );
+  }
+
+  useEffect(() => {
+    const targetSamples = transferCandidates
+      .filter((candidate) => !candidate.existingTransfer)
+      .map((candidate) => candidate.sample);
+
+    if (targetSamples.length === 0) return;
+
+    void fetchDependencyNextForSamples(targetSamples);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transferCandidates]);
 
   const returnCandidates = useMemo<ReturnCandidate[]>(() => {
     const result: ReturnCandidate[] = [];
@@ -656,6 +780,9 @@ export default function SampleTransferPage() {
               {transferCandidates.map((candidate) => {
                 const candidateKey = getCandidateKey(candidate);
                 const selected = selectedCandidateKey === candidateKey;
+                const dependencyKey = getSampleDependencyKey(candidate.sample);
+                const isLoadingNext = dependencyNextLoadingBySampleKey[dependencyKey];
+                const nextError = dependencyNextErrorBySampleKey[dependencyKey];
 
                 return (
                   <button
@@ -686,11 +813,19 @@ export default function SampleTransferPage() {
                         label="目前完成"
                         value={`${currentLab} · ${candidate.currentLabCompletedWips.length} 個 WIP`}
                       />
-                      <InfoLine label="送往" value={`${candidate.nextLab} 收樣區`} />
+                      <InfoLine
+                        label="送往"
+                        value={
+                          isLoadingNext
+                            ? "取得下一站中..."
+                            : `${candidate.nextLab} 收樣區`
+                        }
+                      />
                       <InfoLine
                         label="下一 WIP"
                         value={candidate.nextWip?.wip_no ?? "尚未建立 WIP"}
                       />
+                      {nextError && <InfoLine label="下一站錯誤" value={nextError} />}
                     </div>
                   </button>
                 );
