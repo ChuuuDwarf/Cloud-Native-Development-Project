@@ -83,6 +83,27 @@ export function SampleExperimentEditor({
           });
         }
 
+        function deleteFlow(flowId: string) {
+          const targetFlow = dependencyState.flows.find((flow) => flow.id === flowId);
+
+          if (!targetFlow) return;
+
+          if (targetFlow.items.length > 0) {
+            window.alert("此相依流程內仍有實驗，請先移除或移到其他流程後再刪除。");
+            return;
+          }
+
+          setExplicitFlowIdsByGroup((current) => ({
+            ...current,
+            [groupKey]: (current[groupKey] || []).filter((id) => id !== flowId),
+          }));
+
+          updateDependencyState({
+            ...dependencyState,
+            flows: dependencyState.flows.filter((flow) => flow.id !== flowId),
+          });
+        }
+
         return (
           <div key={`${group.startIndex}-${group.sampleId}`} style={itemCardStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
@@ -114,6 +135,7 @@ export function SampleExperimentEditor({
               group={group}
               masterData={masterData}
               onAddFlow={addFlow}
+              onDeleteFlow={deleteFlow}
               onAddExperiment={(flowId, experimentId) => {
                 const experiment = masterData.experiments.find((item) => item.id === experimentId);
                 if (!experiment) return;
@@ -185,6 +207,7 @@ function DependencyFlowEditor({
   masterData,
   onAddFlow,
   onAddExperiment,
+  onDeleteFlow,
   onMoveItem,
   onMoveItemToFlow,
   onRemoveItem,
@@ -194,6 +217,7 @@ function DependencyFlowEditor({
   group: SampleFormGroup;
   masterData: Pick<MasterData, "labs" | "experiments">;
   onAddFlow: () => void;
+  onDeleteFlow: (flowId: string) => void;
   onAddExperiment: (flowId: string, experimentId: string) => void;
   onMoveItem: (flowId: string, itemIndex: number, direction: -1 | 1) => void;
   onMoveItemToFlow: (sourceFlowId: string, itemIndex: number, targetFlowId: string) => void;
@@ -237,7 +261,30 @@ function DependencyFlowEditor({
                 flexWrap: "wrap",
               }}
             >
-              <div style={{ fontWeight: 800, fontSize: 13 }}>{flow.name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ fontWeight: 800, fontSize: 13 }}>{flow.name}</div>
+
+                {flow.items.length === 0 && state.flows.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteFlow(flow.id)}
+                    title="刪除流程"
+                    aria-label="刪除流程"
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "#dc2626",
+                      fontSize: 24,
+                      fontWeight: 900,
+                      lineHeight: 1,
+                      cursor: "pointer",
+                      padding: "0 2px",
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
               <div
                 style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}
               >
