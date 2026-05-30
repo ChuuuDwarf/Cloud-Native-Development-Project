@@ -388,25 +388,20 @@ def select_dependency_candidate(candidates: list[dict], machines: list[dict]) ->
 async def claim_next_dependency_experiment(
     db: AsyncSession,
     sample_id: str,
+    order_no: str | None = None,
 ) -> dict:
-    validate_uuid(sample_id, "sampleId")
+    # sample_id intentionally maps to order_items.sample_id (sample number) so the
+    # next destination can be resolved before samples.id exists.
+    sample_no = sample_id.strip()
+    if not sample_no:
+        raise HTTPException(status_code=400, detail="sampleId is required")
 
-    sample = await get_sample_by_id(sample_id, db)
-    if sample is None:
-        raise HTTPException(status_code=404, detail="Sample not found")
-
-    order_no = sample.get("order_no")
-    sample_no = sample.get("sample_no")
-    if not order_no or not sample_no:
-        raise HTTPException(
-            status_code=400,
-            detail="Sample is missing order_no or sample_no",
-        )
+    normalized_order_no = order_no.strip() if order_no else None
 
     order_items = await wip_repo.list_dependency_order_items_for_sample(
         db,
-        order_no=str(order_no),
-        sample_no=str(sample_no),
+        sample_no=sample_no,
+        order_no=normalized_order_no,
     )
     if not order_items:
         raise HTTPException(status_code=404, detail="Dependency order items not found")
@@ -456,8 +451,8 @@ async def claim_next_dependency_experiment(
             "success": True,
             "data": {
                 "orderItemId": candidate["id"],
-                "orderNo": order_no,
-                "sampleId": sample_id,
+                "orderNo": candidate.get("order_no") or normalized_order_no,
+                "sampleId": sample_no,
                 "sampleNo": sample_no,
                 "labId": candidate.get("lab_id"),
                 "labName": candidate.get("lab_name"),

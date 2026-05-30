@@ -41,6 +41,9 @@ export default function OrdersPage() {
             masterData={page.masterData}
             currentUser={{ id: page.currentUserId, name: page.currentUserName }}
             usersById={page.usersById}
+            deliveryDestinationsByOrderId={page.deliveryDestinationsByOrderId}
+            deliveryDestinationLoadingByOrderId={page.deliveryDestinationLoadingByOrderId}
+            deliveryDestinationErrorByOrderId={page.deliveryDestinationErrorByOrderId}
             loading={page.loading}
             activeStatusFilter={page.activeStatusFilter}
             statusCounts={page.statusCounts}

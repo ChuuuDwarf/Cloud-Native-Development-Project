@@ -15,6 +15,7 @@ router = APIRouter(
 
 class WipDependencyNextRequest(BaseModel):
     sample_id: str = Field(alias="sampleId")
+    order_no: str | None = Field(default=None, alias="orderNo")
 
     model_config = {"populate_by_name": True}
 
@@ -29,6 +30,7 @@ async def claim_next_dependency_experiment(
     return await wip_service.claim_next_dependency_experiment(
         db=db,
         sample_id=payload.sample_id,
+        order_no=payload.order_no,
     )
 
 

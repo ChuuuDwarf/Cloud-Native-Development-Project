@@ -13,17 +13,23 @@ def rows_to_dicts(rows):
 async def list_dependency_order_items_for_sample(
     db: AsyncSession,
     *,
-    order_no: str,
     sample_no: str,
+    order_no: str | None = None,
 ) -> list[dict]:
+    where_order_no = "AND o.order_no = :order_no" if order_no else ""
+    params = {"sample_no": sample_no}
+    if order_no:
+        params["order_no"] = order_no
+
     result = await db.execute(
         text(
-            """
+            f"""
             SELECT
                 oi.id,
                 oi.order_id,
                 o.order_no,
                 oi.sample_id AS sample_no,
+                oi.sample_name,
                 oi.lab_id,
                 COALESCE(l.name, oi.lab_id) AS lab_name,
                 COALESCE(l.code, oi.lab_id) AS lab_code,
@@ -41,15 +47,12 @@ async def list_dependency_order_items_for_sample(
                 OR l.code = oi.lab_id
             LEFT JOIN lab_capabilities lc
                 ON CAST(lc.id AS TEXT) = oi.experiment_id
-            WHERE o.order_no = :order_no
-              AND oi.sample_id = :sample_no
-            ORDER BY oi.target ASC, oi.created_at ASC, oi.id ASC
+            WHERE oi.sample_id = :sample_no
+              {where_order_no}
+            ORDER BY o.created_at DESC, oi.target ASC, oi.created_at ASC, oi.id ASC
             """
         ),
-        {
-            "order_no": order_no,
-            "sample_no": sample_no,
-        },
+        params,
     )
 
     return rows_to_dicts(result.fetchall())
