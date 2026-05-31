@@ -6,31 +6,41 @@ export type ExperimentRequirement = {
 
 const ROUTE_PREFIX_PATTERN = /^([^|]+)\|(.+)$/;
 
-export function stripExperimentRoutePrefix(value: string) {
+function isNonNullable<T>(value: T): value is NonNullable<T> {
+  return value != null;
+}
+
+export function stripExperimentRoutePrefix(value: string): {
+  value: string;
+  route_prefix?: string;
+} {
   const trimmed = value.trim();
   const match = trimmed.match(ROUTE_PREFIX_PATTERN);
 
   if (!match) {
     return {
       value: trimmed,
-      route_prefix: undefined,
     };
   }
 
+  const routePrefix = match[1]?.trim();
+
   return {
-    value: match[2].trim(),
-    route_prefix: match[1].trim(),
+    value: match[2]?.trim() ?? "",
+    ...(routePrefix ? { route_prefix: routePrefix } : {}),
   };
 }
 
-export function parseExperimentSummary(summary: string | null | undefined): ExperimentRequirement[] {
+export function parseExperimentSummary(
+  summary: string | null | undefined
+): ExperimentRequirement[] {
   if (!summary) return [];
 
   return summary
     .split("、")
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => {
+    .map((part): ExperimentRequirement | null => {
       const { value, route_prefix } = stripExperimentRoutePrefix(part);
       const separatorIndex = value.indexOf(":");
 
@@ -44,10 +54,10 @@ export function parseExperimentSummary(summary: string | null | undefined): Expe
       return {
         lab_name: labName,
         experiment_item: experimentItem,
-        route_prefix,
+        ...(route_prefix ? { route_prefix } : {}),
       };
     })
-    .filter((item): item is ExperimentRequirement => Boolean(item));
+    .filter(isNonNullable);
 }
 
 export function formatExperimentSummary(summary: string | null | undefined) {

@@ -345,9 +345,7 @@ export default function DispatchPage() {
         {wipsQuery.isLoading ? (
           <div style={hintTextStyle}>讀取中…</div>
         ) : waitingWips.length === 0 ? (
-          <div style={hintTextStyle}>
-            目前沒有待排程的 WIP。請先到「分貨 / WIP」頁建立 WIP
-          </div>
+          <div style={hintTextStyle}>目前沒有待排程的 WIP。請先到「分貨 / WIP」頁建立 WIP</div>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {waitingWips.map((wip) => (

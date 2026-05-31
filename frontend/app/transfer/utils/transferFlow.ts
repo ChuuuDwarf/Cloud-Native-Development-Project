@@ -26,9 +26,7 @@ export function getRequestedExperiments(sample: Sample | null) {
     .map((part) => {
       const { value: experimentPart, route_prefix } = stripExperimentRoutePrefix(part);
       const maybeMeta = route_prefix ?? "G1#1";
-      const [rawGroup, rawTarget] = maybeMeta.includes("#")
-        ? maybeMeta.split("#", 2)
-        : ["G1", "1"];
+      const [rawGroup, rawTarget] = maybeMeta.includes("#") ? maybeMeta.split("#", 2) : ["G1", "1"];
 
       const separatorIndex = experimentPart.indexOf(":");
       const labName = separatorIndex === -1 ? "" : experimentPart.slice(0, separatorIndex);

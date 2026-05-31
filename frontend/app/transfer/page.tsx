@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiGet, apiPost } from "@/lib/api";
@@ -109,10 +109,12 @@ export default function SampleTransferPage() {
 
   const [dependencyNextBySampleKey, setDependencyNextBySampleKey] =
     useState<DependencyNextBySampleKey>({});
-  const [dependencyNextLoadingBySampleKey, setDependencyNextLoadingBySampleKey] =
-    useState<Record<string, boolean>>({});
-  const [dependencyNextErrorBySampleKey, setDependencyNextErrorBySampleKey] =
-    useState<Record<string, string>>({});
+  const [dependencyNextLoadingBySampleKey, setDependencyNextLoadingBySampleKey] = useState<
+    Record<string, boolean>
+  >({});
+  const [dependencyNextErrorBySampleKey, setDependencyNextErrorBySampleKey] = useState<
+    Record<string, string>
+  >({});
 
   const [selectedCandidateKey, setSelectedCandidateKey] = useState("");
   const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
@@ -161,7 +163,7 @@ export default function SampleTransferPage() {
     return `${sample.order_no}:${sample.sample_no}`;
   }
 
-  function getExperimentGroup(experiment: RequestedExperiment) {
+  const getExperimentGroup = useCallback((experiment: RequestedExperiment) => {
     const record = experiment as RequestedExperiment & {
       targetGroup?: string | null;
       target_group?: string | null;
@@ -169,9 +171,9 @@ export default function SampleTransferPage() {
     };
 
     return record.targetGroup || record.target_group || record.group || "G1";
-  }
+  }, []);
 
-  function getExperimentTarget(experiment: RequestedExperiment) {
+  const getExperimentTarget = useCallback((experiment: RequestedExperiment) => {
     const record = experiment as RequestedExperiment & {
       target?: number | string | null;
       target_order?: number | string | null;
@@ -181,47 +183,47 @@ export default function SampleTransferPage() {
     const target = Number(rawTarget);
 
     return Number.isFinite(target) ? target : 1;
-  }
+  }, []);
 
-  function getNextUnlockedExperiments(
-    experiments: RequestedExperiment[],
-    sampleWips: Wip[]
-  ) {
-    const groups = new Map<
-      string,
-      Array<{
-        experiment: RequestedExperiment;
-        index: number;
-      }>
-    >();
+  const getNextUnlockedExperiments = useCallback(
+    (experiments: RequestedExperiment[], sampleWips: Wip[]) => {
+      const groups = new Map<
+        string,
+        Array<{
+          experiment: RequestedExperiment;
+          index: number;
+        }>
+      >();
 
-    experiments.forEach((experiment, index) => {
-      const group = getExperimentGroup(experiment);
+      experiments.forEach((experiment, index) => {
+        const group = getExperimentGroup(experiment);
 
-      if (!groups.has(group)) {
-        groups.set(group, []);
-      }
+        if (!groups.has(group)) {
+          groups.set(group, []);
+        }
 
-      groups.get(group)!.push({ experiment, index });
-    });
+        groups.get(group)!.push({ experiment, index });
+      });
 
-    return Array.from(groups.values())
-      .map((groupExperiments) => {
-        const unfinishedExperiments = groupExperiments
-          .filter(({ experiment }) => !isExperimentCompleted(sampleWips, experiment))
-          .sort((left, right) => {
-            const targetDiff =
-              getExperimentTarget(left.experiment) - getExperimentTarget(right.experiment);
+      return Array.from(groups.values())
+        .map((groupExperiments) => {
+          const unfinishedExperiments = groupExperiments
+            .filter(({ experiment }) => !isExperimentCompleted(sampleWips, experiment))
+            .sort((left, right) => {
+              const targetDiff =
+                getExperimentTarget(left.experiment) - getExperimentTarget(right.experiment);
 
-            if (targetDiff !== 0) return targetDiff;
+              if (targetDiff !== 0) return targetDiff;
 
-            return left.index - right.index;
-          });
+              return left.index - right.index;
+            });
 
-        return unfinishedExperiments[0]?.experiment ?? null;
-      })
-      .filter((experiment): experiment is RequestedExperiment => experiment !== null);
-  }
+          return unfinishedExperiments[0]?.experiment ?? null;
+        })
+        .filter((experiment): experiment is RequestedExperiment => experiment !== null);
+    },
+    [getExperimentGroup, getExperimentTarget]
+  );
 
   function findExistingBlockingTransfer(
     sample: Sample,
@@ -234,9 +236,8 @@ export default function SampleTransferPage() {
     ];
 
     return (
-      relatedTransfers.find((transfer) =>
-        blockingTransferStatuses.includes(transfer.status)
-      ) ?? null
+      relatedTransfers.find((transfer) => blockingTransferStatuses.includes(transfer.status)) ??
+      null
     );
   }
 
@@ -337,15 +338,11 @@ export default function SampleTransferPage() {
 
       if (currentLabWips.length === 0) return;
 
-      const currentLabCompletedWips = currentLabWips.filter(
-        (wip) => wip.status === "completed"
-      );
+      const currentLabCompletedWips = currentLabWips.filter((wip) => wip.status === "completed");
 
       if (currentLabCompletedWips.length === 0) return;
 
-      const currentLabUnfinishedWips = currentLabWips.filter(
-        (wip) => wip.status !== "completed"
-      );
+      const currentLabUnfinishedWips = currentLabWips.filter((wip) => wip.status !== "completed");
 
       if (currentLabUnfinishedWips.length > 0) return;
 
@@ -358,8 +355,7 @@ export default function SampleTransferPage() {
 
       const hasOtherLabUnfinishedWip = sampleWips.some(
         (wip) =>
-          wip.status !== "completed" &&
-          normalizeLab(wip.lab_name) !== normalizeLab(currentLab)
+          wip.status !== "completed" && normalizeLab(wip.lab_name) !== normalizeLab(currentLab)
       );
 
       if (!hasOtherLabUnfinishedWip) return;
@@ -388,14 +384,11 @@ export default function SampleTransferPage() {
         (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab)
       );
 
-      const currentLabCompletedWips = currentLabWips.filter(
-        (wip) => wip.status === "completed"
-      );
+      const currentLabCompletedWips = currentLabWips.filter((wip) => wip.status === "completed");
 
       const remainingWips = sampleWips.filter((wip) => wip.status !== "completed");
 
-      const dependencyNextLoaded =
-        dependencyNextBySampleKey[dependencyKey] !== undefined;
+      const dependencyNextLoaded = dependencyNextBySampleKey[dependencyKey] !== undefined;
       const dependencyNext = dependencyNextBySampleKey[dependencyKey] ?? null;
 
       if (!dependencyNextLoaded) return;
@@ -421,18 +414,15 @@ export default function SampleTransferPage() {
           (experiment) =>
             normalizeLab(experiment.lab_name) === normalizeLab(apiNextLab) &&
             (!apiNextExperiment ||
-              normalizeLab(experiment.experiment_item) ===
-                normalizeLab(apiNextExperiment))
+              normalizeLab(experiment.experiment_item) === normalizeLab(apiNextExperiment))
         );
 
-        const nextExperiment =
-          apiMatchedExperiment ??
+        const nextExperiment = apiMatchedExperiment ??
           unfinishedExperiments.find(
             (experiment) =>
               normalizeLab(experiment.lab_name) === normalizeLab(apiNextLab) &&
               (!apiNextExperiment ||
-                normalizeLab(experiment.experiment_item) ===
-                  normalizeLab(apiNextExperiment))
+                normalizeLab(experiment.experiment_item) === normalizeLab(apiNextExperiment))
           ) ?? {
             lab_name: apiNextLab,
             experiment_item: apiNextExperiment || "未命名實驗",
@@ -451,11 +441,7 @@ export default function SampleTransferPage() {
           ) ??
           null;
 
-        const existingTransfer = findExistingBlockingTransfer(
-          sample,
-          nextWip,
-          transfersByTargetId
-        );
+        const existingTransfer = findExistingBlockingTransfer(sample, nextWip, transfersByTargetId);
 
         result.push({
           kind: "transfer",
@@ -487,15 +473,10 @@ export default function SampleTransferPage() {
 
       const nextExperiment = {
         lab_name: apiNextLab,
-        experiment_item:
-          apiNextExperiment || nextWip?.experiment_item || "未命名實驗",
+        experiment_item: apiNextExperiment || nextWip?.experiment_item || "未命名實驗",
       };
 
-      const existingTransfer = findExistingBlockingTransfer(
-        sample,
-        nextWip,
-        transfersByTargetId
-      );
+      const existingTransfer = findExistingBlockingTransfer(sample, nextWip, transfersByTargetId);
 
       result.push({
         kind: "transfer",
@@ -518,8 +499,8 @@ export default function SampleTransferPage() {
     currentLab,
     displayableTransferSamples,
     dependencyNextBySampleKey,
+    getNextUnlockedExperiments,
   ]);
-
 
   const sameLabNextCandidates = useMemo<SameLabNextCandidate[]>(() => {
     const result: SameLabNextCandidate[] = [];
@@ -539,14 +520,11 @@ export default function SampleTransferPage() {
         (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab)
       );
 
-      const currentLabCompletedWips = currentLabWips.filter(
-        (wip) => wip.status === "completed"
-      );
+      const currentLabCompletedWips = currentLabWips.filter((wip) => wip.status === "completed");
 
       const remainingWips = sampleWips.filter((wip) => wip.status !== "completed");
 
-      const dependencyNextLoaded =
-        dependencyNextBySampleKey[dependencyKey] !== undefined;
+      const dependencyNextLoaded = dependencyNextBySampleKey[dependencyKey] !== undefined;
       const dependencyNext = dependencyNextBySampleKey[dependencyKey] ?? null;
 
       if (!dependencyNextLoaded) return;
@@ -572,18 +550,15 @@ export default function SampleTransferPage() {
           (experiment) =>
             normalizeLab(experiment.lab_name) === normalizeLab(apiNextLab) &&
             (!apiNextExperiment ||
-              normalizeLab(experiment.experiment_item) ===
-                normalizeLab(apiNextExperiment))
+              normalizeLab(experiment.experiment_item) === normalizeLab(apiNextExperiment))
         );
 
-        const nextExperiment =
-          apiMatchedExperiment ??
+        const nextExperiment = apiMatchedExperiment ??
           unfinishedExperiments.find(
             (experiment) =>
               normalizeLab(experiment.lab_name) === normalizeLab(apiNextLab) &&
               (!apiNextExperiment ||
-                normalizeLab(experiment.experiment_item) ===
-                  normalizeLab(apiNextExperiment))
+                normalizeLab(experiment.experiment_item) === normalizeLab(apiNextExperiment))
           ) ?? {
             lab_name: apiNextLab,
             experiment_item: apiNextExperiment || "未命名實驗",
@@ -629,8 +604,7 @@ export default function SampleTransferPage() {
 
       const nextExperiment = {
         lab_name: apiNextLab,
-        experiment_item:
-          apiNextExperiment || nextWip?.experiment_item || "未命名實驗",
+        experiment_item: apiNextExperiment || nextWip?.experiment_item || "未命名實驗",
       };
 
       result.push({
@@ -650,8 +624,8 @@ export default function SampleTransferPage() {
     currentLab,
     displayableTransferSamples,
     dependencyNextBySampleKey,
+    getNextUnlockedExperiments,
   ]);
-
 
   async function fetchDependencyNextForSamples(targetSamples: Sample[]) {
     const uniqueSamples = targetSamples.filter((sample, index, array) => {
@@ -666,8 +640,7 @@ export default function SampleTransferPage() {
         cachedNext !== undefined && isDependencyNextCompleted(sample, cachedNext);
 
       return (
-        (cachedNext === undefined || selectedCompleted) &&
-        !dependencyNextLoadingBySampleKey[key]
+        (cachedNext === undefined || selectedCompleted) && !dependencyNextLoadingBySampleKey[key]
       );
     });
 
@@ -688,13 +661,10 @@ export default function SampleTransferPage() {
         const key = getSampleDependencyKey(sample);
 
         try {
-          const response = await apiPost<WipDependencyNextResponse>(
-            "/api/wips/dependency/next",
-            {
-              sampleId: sample.sample_no,
-              orderNo: sample.order_no,
-            }
-          );
+          const response = await apiPost<WipDependencyNextResponse>("/api/wips/dependency/next", {
+            sampleId: sample.sample_no,
+            orderNo: sample.order_no,
+          });
 
           setDependencyNextBySampleKey((previous) => ({
             ...previous,
@@ -740,8 +710,7 @@ export default function SampleTransferPage() {
 
       return (
         dependencyNextLoadingBySampleKey[key] ||
-        (dependencyNextBySampleKey[key] === undefined &&
-          !dependencyNextErrorBySampleKey[key])
+        (dependencyNextBySampleKey[key] === undefined && !dependencyNextErrorBySampleKey[key])
       );
     });
   }, [
@@ -1010,7 +979,6 @@ export default function SampleTransferPage() {
   // only shows status while the lab waits.
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role, currentUser?.lab_name]);
@@ -1094,9 +1062,7 @@ export default function SampleTransferPage() {
           <div style={panelHeaderStyle}>
             <div>
               <div style={panelTitleStyle}>待續行實驗</div>
-              <div style={hintStyle}>
-                已完成目前作業階段，後續仍有實驗需於本 Lab 接續處理。
-              </div>
+              <div style={hintStyle}>已完成目前作業階段，後續仍有實驗需於本 Lab 接續處理。</div>
             </div>
 
             <span style={countBadgeStyle}>{sameLabNextCandidates.length} 筆</span>
@@ -1133,10 +1099,7 @@ export default function SampleTransferPage() {
                         label="下一實驗"
                         value={`${candidate.nextLab} · ${candidate.nextExperiment.experiment_item}`}
                       />
-                      <InfoLine
-                        label="WIP 狀態"
-                        value={candidate.nextWip?.wip_no ?? "尚未建立"}
-                      />
+                      <InfoLine label="WIP 狀態" value={candidate.nextWip?.wip_no ?? "尚未建立"} />
                       <InfoLine label="作業狀態" value="待本 Lab 接續處理" />
                     </div>
                   </div>
@@ -1150,14 +1113,10 @@ export default function SampleTransferPage() {
           <div style={panelHeaderStyle}>
             <div>
               <div style={panelTitleStyle}>可交接</div>
-              <div style={hintStyle}>
-                目前階段已完成，可建立交接並送往下一個 Lab。
-              </div>
+              <div style={hintStyle}>目前階段已完成，可建立交接並送往下一個 Lab。</div>
             </div>
 
-            <span style={countBadgeStyle}>
-              {transferCandidates.length} 筆
-            </span>
+            <span style={countBadgeStyle}>{transferCandidates.length} 筆</span>
           </div>
 
           {loading ? (
@@ -1210,20 +1169,13 @@ export default function SampleTransferPage() {
                       />
                       <InfoLine
                         label="送往"
-                        value={
-                          isLoadingNext
-                            ? "取得下一站中..."
-                            : `${candidate.nextLab} 收樣區`
-                        }
+                        value={isLoadingNext ? "取得下一站中..." : `${candidate.nextLab} 收樣區`}
                       />
                       <InfoLine
                         label="下一實驗"
                         value={`${candidate.nextLab} · ${candidate.nextExperiment.experiment_item}`}
                       />
-                      <InfoLine
-                        label="WIP 狀態"
-                        value={candidate.nextWip?.wip_no ?? "尚未建立"}
-                      />
+                      <InfoLine label="WIP 狀態" value={candidate.nextWip?.wip_no ?? "尚未建立"} />
                       {nextError && <InfoLine label="下一站錯誤" value={nextError} />}
                     </div>
                   </button>

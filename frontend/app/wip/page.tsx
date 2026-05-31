@@ -168,9 +168,14 @@ export default function WipPage() {
     return location.includes(normalizedLab);
   }
 
-  function isSampleInCurrentLab(sample: Sample) {
-    return isSampleInLab(sample, currentLab);
-  }
+  const isSampleInCurrentLab = useCallback(
+    (sample: Sample) => {
+      if (!currentLab) return true;
+
+      return normalizeLocation(sample.current_location).startsWith(normalizeLocation(currentLab));
+    },
+    [currentLab]
+  );
 
   function isSameLab(left: string | null | undefined, right: string | null | undefined) {
     return normalizeLocation(left) === normalizeLocation(right);
@@ -186,7 +191,7 @@ export default function WipPage() {
 
       return true;
     });
-  }, [samples, currentLab]);
+  }, [samples, isSampleInCurrentLab]);
 
   const selectedSample = useMemo(() => {
     return activeSamples.find((sample) => sample.id === selectedSampleId) ?? null;
@@ -484,9 +489,7 @@ export default function WipPage() {
     const duplicated = new Set<string>();
 
     for (const form of forms) {
-      const key = `${normalizeLocation(form.lab_name)}::${normalizeLocation(
-        form.experiment_item
-      )}`;
+      const key = `${normalizeLocation(form.lab_name)}::${normalizeLocation(form.experiment_item)}`;
 
       if (duplicated.has(key)) {
         return `WIP 項目重複：${form.lab_name} / ${form.experiment_item}`;

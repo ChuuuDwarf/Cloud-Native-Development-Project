@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
 import Btn from "@/components/ui/Btn";
 import Panel from "@/components/ui/Panel";
 import { formatLab } from "@/components/labDisplay";
