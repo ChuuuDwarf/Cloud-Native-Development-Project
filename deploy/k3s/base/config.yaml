@@ -17,9 +17,8 @@ data:
   # Kept for safety / non-browser clients; overlay can point it at the real URL.
   CORS_ORIGINS: "http://localhost"
   
-  EMAIL_BACKEND: "smtp"
+  EMAIL_BACKEND: "file"
   EMAIL_FROM: "noreply@lims.local"
-  SMTP_PORT: "587"
   UPLOADS_DIR: "/app/uploads"
  
   CHT_BASE_URL: "https://tasapi.cht.com.tw/apis/CHTIoT"
