@@ -27,6 +27,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: lims-config
+            - secretRef:
+                name: lims-secrets
           env:
             - name: JWT_SECRET
               valueFrom:

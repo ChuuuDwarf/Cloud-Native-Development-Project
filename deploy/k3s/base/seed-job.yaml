@@ -20,6 +20,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: lims-config
+            - secretRef:
+                name: lims-secrets
           env:
             - name: DATABASE_URL
               valueFrom:

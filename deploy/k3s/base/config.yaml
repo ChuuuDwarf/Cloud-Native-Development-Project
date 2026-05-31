@@ -16,9 +16,12 @@ data:
   # Same-origin: browser hits /api on the same host, so CORS isn't exercised.
   # Kept for safety / non-browser clients; overlay can point it at the real URL.
   CORS_ORIGINS: "http://localhost"
+  
   EMAIL_BACKEND: "file"
   EMAIL_FROM: "noreply@lims.local"
   UPLOADS_DIR: "/app/uploads"
+ 
+  CHT_BASE_URL: "https://tasapi.cht.com.tw/apis/CHTIoT"
   # DB connection (non-secret parts). Password is injected from the Secret via
   # the Deployment env; the full DATABASE_URL is assembled there.
   POSTGRES_HOST: "postgres"
