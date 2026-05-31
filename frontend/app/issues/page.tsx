@@ -174,7 +174,15 @@ function IssueDetailModal({ issue, onClose }: { issue: IssueResponse; onClose: (
           <Value style={{ fontFamily: "monospace" }}>{issue.targetId}</Value>
 
           <Label>所屬實驗室</Label>
-          <Value style={{ fontFamily: "monospace", fontSize: 11 }}>{issue.labId}</Value>
+          <Value
+            style={
+              issue.labCode
+                ? undefined
+                : { fontFamily: "monospace", fontSize: 11 }
+            }
+          >
+            {issue.labCode ?? issue.labId}
+          </Value>
 
           <Label>建立時間</Label>
           <Value>{new Date(issue.createdAt).toLocaleString("zh-TW")}</Value>

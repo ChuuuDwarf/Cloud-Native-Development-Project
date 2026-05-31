@@ -37,6 +37,7 @@ export const OrderStatusLabel: Record<OrderStatus, string> = {
   waiting_pickup: "待送件",
   closed: "已結案",
   cancelled: "已取消",
+  terminated: "已終止",
 };
 
 export const OrderActionLabel: Record<OrderAction, string> = {

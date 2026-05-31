@@ -5,10 +5,11 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.common.enums import IssueStatus, IssueType, Severity
 from app.db.base import Base, TimestampMixin
+from app.db.models.labs import Lab
 
 
 class Issue(Base, TimestampMixin):
@@ -22,6 +23,11 @@ class Issue(Base, TimestampMixin):
     lab_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("labs.id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    # Read-side relationship for serializing Issue → API:資料表外鍵已經有,
+    # 這裡只是 ORM 端的 navigation,讓 IssueRead 可以走 lab.code 直接拿到
+    # "LAB-A" 而不必把 UUID 暴露給前端。lazy="raise" 強制 caller eager-load,
+    # 避免 N+1 query in async context。
+    lab: Mapped[Lab] = relationship(Lab, lazy="raise")
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     severity: Mapped[Severity] = mapped_column(String(20), nullable=False, default=Severity.MEDIUM)

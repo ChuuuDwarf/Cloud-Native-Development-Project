@@ -178,6 +178,7 @@ export const MOCK_CLOSURES: ClosureCheck[] = [
     orderId: "WO-2024-0896",
     status: "待取件",
     canClose: true,
+    labClosed: false,
     conditions: [
       { name: "所有實驗明細完成或終止", ok: true },
       { name: "所有 WIP 已結束", ok: true },
@@ -191,6 +192,7 @@ export const MOCK_CLOSURES: ClosureCheck[] = [
     orderId: "WO-2024-0894",
     status: "待結果確認",
     canClose: false,
+    labClosed: false,
     conditions: [
       { name: "所有實驗明細完成或終止", ok: false },
       { name: "所有 WIP 已結束", ok: false },
@@ -204,6 +206,7 @@ export const MOCK_CLOSURES: ClosureCheck[] = [
     orderId: "WO-2024-0893",
     status: "已結案",
     canClose: true,
+    labClosed: true,
     conditions: [
       { name: "所有實驗明細完成或終止", ok: true },
       { name: "所有 WIP 已結束", ok: true },

@@ -14,6 +14,7 @@ export const sampleStatusText: Record<string, string> = {
   pending_receive: "待收樣",
   received: "已收樣",
   split: "已分貨",
+  terminated: "已終止",
   pending_transfer: "可交接",
   transferring: "交接中",
   in_storage: "已入庫",

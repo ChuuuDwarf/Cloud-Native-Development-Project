@@ -4,25 +4,7 @@
 //
 // Chinese display labels live in `./status-labels.ts`.
 
-export type AuditTargetType =
-  | "order"
-  | "sample"
-  | "wip"
-  | "machine"
-  | "recipe"
-  | "schedule"
-  | "dispatch"
-  | "experiment_run"
-  | "report"
-  | "issue"
-  | "notification"
-  | "user"
-  | "role"
-  | "lab"
-  | "department"
-  | "storage_location"
-  | "system_setting"
-  | "file";
+export type AuditTargetType = "order" | "sample" | "wip" | "machine" | "recipe" | "schedule" | "dispatch" | "experiment_run" | "report" | "issue" | "notification" | "user" | "role" | "lab" | "department" | "storage_location" | "system_setting" | "file";
 export const AuditTargetType = {
   Order: "order",
   Sample: "sample",
@@ -43,26 +25,7 @@ export const AuditTargetType = {
   SystemSetting: "system_setting",
   File: "file",
 } as const;
-export const AuditTargetTypeValues: readonly AuditTargetType[] = [
-  "order",
-  "sample",
-  "wip",
-  "machine",
-  "recipe",
-  "schedule",
-  "dispatch",
-  "experiment_run",
-  "report",
-  "issue",
-  "notification",
-  "user",
-  "role",
-  "lab",
-  "department",
-  "storage_location",
-  "system_setting",
-  "file",
-] as const;
+export const AuditTargetTypeValues: readonly AuditTargetType[] = ["order", "sample", "wip", "machine", "recipe", "schedule", "dispatch", "experiment_run", "report", "issue", "notification", "user", "role", "lab", "department", "storage_location", "system_setting", "file"] as const;
 
 export type IssueAction = "approve" | "reject" | "close" | "escalate" | "assign" | "reopen";
 export const IssueAction = {
@@ -73,14 +36,7 @@ export const IssueAction = {
   Assign: "assign",
   Reopen: "reopen",
 } as const;
-export const IssueActionValues: readonly IssueAction[] = [
-  "approve",
-  "reject",
-  "close",
-  "escalate",
-  "assign",
-  "reopen",
-] as const;
+export const IssueActionValues: readonly IssueAction[] = ["approve", "reject", "close", "escalate", "assign", "reopen"] as const;
 
 export type IssueStatus = "open" | "assigned" | "escalated" | "acknowledged" | "closed";
 export const IssueStatus = {
@@ -90,13 +46,7 @@ export const IssueStatus = {
   Acknowledged: "acknowledged",
   Closed: "closed",
 } as const;
-export const IssueStatusValues: readonly IssueStatus[] = [
-  "open",
-  "assigned",
-  "escalated",
-  "acknowledged",
-  "closed",
-] as const;
+export const IssueStatusValues: readonly IssueStatus[] = ["open", "assigned", "escalated", "acknowledged", "closed"] as const;
 
 export type IssueType = "abnormal" | "warning" | "termination_request";
 export const IssueType = {
@@ -104,11 +54,7 @@ export const IssueType = {
   Warning: "warning",
   TerminationRequest: "termination_request",
 } as const;
-export const IssueTypeValues: readonly IssueType[] = [
-  "abnormal",
-  "warning",
-  "termination_request",
-] as const;
+export const IssueTypeValues: readonly IssueType[] = ["abnormal", "warning", "termination_request"] as const;
 
 export type MachineStatus = "idle" | "in_use" | "maintenance" | "faulty" | "disabled";
 export const MachineStatus = {
@@ -118,13 +64,7 @@ export const MachineStatus = {
   Faulty: "faulty",
   Disabled: "disabled",
 } as const;
-export const MachineStatusValues: readonly MachineStatus[] = [
-  "idle",
-  "in_use",
-  "maintenance",
-  "faulty",
-  "disabled",
-] as const;
+export const MachineStatusValues: readonly MachineStatus[] = ["idle", "in_use", "maintenance", "faulty", "disabled"] as const;
 
 export type NotificationChannel = "in_app" | "email" | "phone";
 export const NotificationChannel = {
@@ -132,11 +72,7 @@ export const NotificationChannel = {
   Email: "email",
   Phone: "phone",
 } as const;
-export const NotificationChannelValues: readonly NotificationChannel[] = [
-  "in_app",
-  "email",
-  "phone",
-] as const;
+export const NotificationChannelValues: readonly NotificationChannel[] = ["in_app", "email", "phone"] as const;
 
 export type NotificationStatus = "unread" | "read";
 export const NotificationStatus = {
@@ -145,16 +81,7 @@ export const NotificationStatus = {
 } as const;
 export const NotificationStatusValues: readonly NotificationStatus[] = ["unread", "read"] as const;
 
-export type OrderAction =
-  | "submit"
-  | "cancel"
-  | "approve"
-  | "return"
-  | "reject"
-  | "confirm_delivery"
-  | "confirm_received"
-  | "ready_for_pickup"
-  | "close";
+export type OrderAction = "submit" | "cancel" | "approve" | "return" | "reject" | "confirm_delivery" | "confirm_received" | "ready_for_pickup" | "close";
 export const OrderAction = {
   Submit: "submit",
   Cancel: "cancel",
@@ -166,35 +93,9 @@ export const OrderAction = {
   ReadyForPickup: "ready_for_pickup",
   Close: "close",
 } as const;
-export const OrderActionValues: readonly OrderAction[] = [
-  "submit",
-  "cancel",
-  "approve",
-  "return",
-  "reject",
-  "confirm_delivery",
-  "confirm_received",
-  "ready_for_pickup",
-  "close",
-] as const;
+export const OrderActionValues: readonly OrderAction[] = ["submit", "cancel", "approve", "return", "reject", "confirm_delivery", "confirm_received", "ready_for_pickup", "close"] as const;
 
-export type OrderStatus =
-  | "draft"
-  | "pending_approval"
-  | "returned"
-  | "rejected"
-  | "approved"
-  | "waiting_sample"
-  | "received"
-  | "split"
-  | "scheduled"
-  | "in_progress"
-  | "waiting_result_confirm"
-  | "completed"
-  | "waiting_report_return"
-  | "waiting_pickup"
-  | "closed"
-  | "cancelled";
+export type OrderStatus = "draft" | "pending_approval" | "returned" | "rejected" | "approved" | "waiting_sample" | "received" | "split" | "scheduled" | "in_progress" | "waiting_result_confirm" | "completed" | "waiting_report_return" | "waiting_pickup" | "closed" | "cancelled" | "terminated";
 export const OrderStatus = {
   Draft: "draft",
   PendingApproval: "pending_approval",
@@ -212,33 +113,11 @@ export const OrderStatus = {
   WaitingPickup: "waiting_pickup",
   Closed: "closed",
   Cancelled: "cancelled",
+  Terminated: "terminated",
 } as const;
-export const OrderStatusValues: readonly OrderStatus[] = [
-  "draft",
-  "pending_approval",
-  "returned",
-  "rejected",
-  "approved",
-  "waiting_sample",
-  "received",
-  "split",
-  "scheduled",
-  "in_progress",
-  "waiting_result_confirm",
-  "completed",
-  "waiting_report_return",
-  "waiting_pickup",
-  "closed",
-  "cancelled",
-] as const;
+export const OrderStatusValues: readonly OrderStatus[] = ["draft", "pending_approval", "returned", "rejected", "approved", "waiting_sample", "received", "split", "scheduled", "in_progress", "waiting_result_confirm", "completed", "waiting_report_return", "waiting_pickup", "closed", "cancelled", "terminated"] as const;
 
-export type ReportAction =
-  | "submit_review"
-  | "approve"
-  | "reject"
-  | "publish"
-  | "return_to_user"
-  | "create_revision";
+export type ReportAction = "submit_review" | "approve" | "reject" | "publish" | "return_to_user" | "create_revision";
 export const ReportAction = {
   SubmitReview: "submit_review",
   Approve: "approve",
@@ -247,22 +126,9 @@ export const ReportAction = {
   ReturnToUser: "return_to_user",
   CreateRevision: "create_revision",
 } as const;
-export const ReportActionValues: readonly ReportAction[] = [
-  "submit_review",
-  "approve",
-  "reject",
-  "publish",
-  "return_to_user",
-  "create_revision",
-] as const;
+export const ReportActionValues: readonly ReportAction[] = ["submit_review", "approve", "reject", "publish", "return_to_user", "create_revision"] as const;
 
-export type ReportStatus =
-  | "draft"
-  | "pending_review"
-  | "confirmed"
-  | "published"
-  | "returned"
-  | "revised";
+export type ReportStatus = "draft" | "pending_review" | "confirmed" | "published" | "returned" | "revised";
 export const ReportStatus = {
   Draft: "draft",
   PendingReview: "pending_review",
@@ -271,14 +137,7 @@ export const ReportStatus = {
   Returned: "returned",
   Revised: "revised",
 } as const;
-export const ReportStatusValues: readonly ReportStatus[] = [
-  "draft",
-  "pending_review",
-  "confirmed",
-  "published",
-  "returned",
-  "revised",
-] as const;
+export const ReportStatusValues: readonly ReportStatus[] = ["draft", "pending_review", "confirmed", "published", "returned", "revised"] as const;
 
 export type Severity = "low" | "medium" | "high" | "critical";
 export const Severity = {
@@ -289,6 +148,15 @@ export const Severity = {
 } as const;
 export const SeverityValues: readonly Severity[] = ["low", "medium", "high", "critical"] as const;
 
+export type StorageStatus = "in_lab" | "stored" | "pending_return" | "picked_up";
+export const StorageStatus = {
+  InLab: "in_lab",
+  Stored: "stored",
+  PendingReturn: "pending_return",
+  PickedUp: "picked_up",
+} as const;
+export const StorageStatusValues: readonly StorageStatus[] = ["in_lab", "stored", "pending_return", "picked_up"] as const;
+
 export type UserStatus = "active" | "disabled";
 export const UserStatus = {
   Active: "active",
@@ -296,14 +164,7 @@ export const UserStatus = {
 } as const;
 export const UserStatusValues: readonly UserStatus[] = ["active", "disabled"] as const;
 
-export type WipAction =
-  | "dispatch"
-  | "schedule"
-  | "load"
-  | "unload"
-  | "confirm"
-  | "terminate"
-  | "reopen";
+export type WipAction = "dispatch" | "schedule" | "load" | "unload" | "confirm" | "terminate" | "reopen";
 export const WipAction = {
   Dispatch: "dispatch",
   Schedule: "schedule",
@@ -313,26 +174,9 @@ export const WipAction = {
   Terminate: "terminate",
   Reopen: "reopen",
 } as const;
-export const WipActionValues: readonly WipAction[] = [
-  "dispatch",
-  "schedule",
-  "load",
-  "unload",
-  "confirm",
-  "terminate",
-  "reopen",
-] as const;
+export const WipActionValues: readonly WipAction[] = ["dispatch", "schedule", "load", "unload", "confirm", "terminate", "reopen"] as const;
 
-export type WipStatus =
-  | "created"
-  | "waiting_dispatch"
-  | "in_schedule"
-  | "waiting_load"
-  | "running"
-  | "unloaded"
-  | "waiting_confirm"
-  | "completed"
-  | "terminated";
+export type WipStatus = "created" | "waiting_dispatch" | "in_schedule" | "waiting_load" | "running" | "unloaded" | "waiting_confirm" | "completed" | "terminated";
 export const WipStatus = {
   Created: "created",
   WaitingDispatch: "waiting_dispatch",
@@ -344,14 +188,4 @@ export const WipStatus = {
   Completed: "completed",
   Terminated: "terminated",
 } as const;
-export const WipStatusValues: readonly WipStatus[] = [
-  "created",
-  "waiting_dispatch",
-  "in_schedule",
-  "waiting_load",
-  "running",
-  "unloaded",
-  "waiting_confirm",
-  "completed",
-  "terminated",
-] as const;
+export const WipStatusValues: readonly WipStatus[] = ["created", "waiting_dispatch", "in_schedule", "waiting_load", "running", "unloaded", "waiting_confirm", "completed", "terminated"] as const;

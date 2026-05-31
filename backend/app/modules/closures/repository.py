@@ -50,6 +50,54 @@ class ClosureRepository:
         result = await self._session.execute(select(Wip).where(Wip.order_no == order_no))
         return result.scalars().all()
 
+    async def list_wips_for_order_and_lab(self, order_no: str, lab_name: str) -> Sequence[Wip]:
+        """Cross-lab closure: each lab only sees its own WIPs when checking
+        closure conditions / marking them as closed. ``lab_name`` is the
+        Chinese display name (matches ``Wip.lab_name``)."""
+        result = await self._session.execute(
+            select(Wip).where(Wip.order_no == order_no, Wip.lab_name == lab_name)
+        )
+        return result.scalars().all()
+
+    async def all_wips_lab_closed(self, order_no: str) -> bool:
+        """True iff every WIP on the order has ``lab_closed=True`` — i.e. every
+        lab has called ``to-pickup`` on its portion. Order advances to
+        WAITING_PICKUP only when this gate flips True."""
+        total = (
+            await self._session.execute(
+                select(func.count()).select_from(Wip).where(Wip.order_no == order_no)
+            )
+        ).scalar_one()
+        if total == 0:
+            return False
+        closed = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(Wip)
+                .where(Wip.order_no == order_no, Wip.lab_closed.is_(True))
+            )
+        ).scalar_one()
+        return closed == total
+
+    async def count_returned_reports_per_wip(self, order_no: str) -> dict[str, int]:
+        """For the closure ``has_report`` gate: per-WIP count of RETURNED
+        reports. Used to verify EVERY WIP has a published report — not just
+        that the order has at least one (Phase L review #2 fix)."""
+        from app.common.enums import ReportStatus
+        from app.common.enums.role_d_zh import REPORT_ZH
+
+        rows = (
+            await self._session.execute(
+                select(Report.wip_id, func.count())
+                .where(
+                    Report.order_id == order_no,
+                    Report.status == REPORT_ZH[ReportStatus.RETURNED],
+                )
+                .group_by(Report.wip_id)
+            )
+        ).all()
+        return {row[0]: int(row[1]) for row in rows}
+
     async def get_execs_map(self, wip_nos: Sequence[str]) -> dict[str, WipExecution]:
         if not wip_nos:
             return {}

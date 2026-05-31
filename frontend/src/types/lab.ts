@@ -91,6 +91,12 @@ export interface ClosureCheck {
   orderId: string;
   status: string;
   canClose: boolean;
+  // True when THIS lab has already pressed to_pickup but other labs on the
+  // same order haven't — used by ClosureTable to show a "waiting for other
+  // labs" hint instead of the active 送件 button. Cross-lab roles
+  // (system_admin / general_supervisor) only see labClosed=true once every
+  // lab's WIPs are marked closed.
+  labClosed: boolean;
   conditions: ClosureCondition[];
 }
 

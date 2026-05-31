@@ -27,6 +27,7 @@ class OrderStatus(StrEnum):
     COMPLETED = "completed"
     WAITING_REPORT_RETURN = "waiting_report_return"
     WAITING_PICKUP = "waiting_pickup"
+    TERMINATED = "terminated"
 
 
 class OrderAction(StrEnum):

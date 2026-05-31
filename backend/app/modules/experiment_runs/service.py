@@ -15,19 +15,22 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from sqlalchemy import select
 
 from app.common.dependencies.lab_scope import LabScope
-from app.common.enums import OrderStatus, WipStatus
+from app.common.enums import NotificationChannel, OrderStatus, Severity, WipStatus
 from app.common.enums.role_d_zh import WIP_EXEC_TO_B
 from app.common.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.db.models import Wip, WipExecution, WipHistory
 from app.db.models.labs import Lab
+from app.db.models.users import User
 from app.modules.dashboard.publisher import publish_dashboard_event
 from app.modules.experiment_runs.repository import ExperimentRunRepository
 from app.modules.experiment_runs.serializers import wip_dict
 from app.modules.reports.fake_data import generate_for_items
+from app.services.notifications import NotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +97,72 @@ class ExperimentRunService:
             raise ForbiddenError("無權存取其他實驗室的 WIP")
         return wip
 
+    async def _notify_applicant_of_termination(
+        self, wip: Wip, wip_no: str, note: str | None
+    ) -> None:
+        """In-app notify the order's plant_user that their WIP was terminated.
+
+        Best-effort: the termination is already committed by the caller, so a
+        failure here must not roll back the abort approval. We resolve:
+
+        - applicant_id (String(50) on OrderModel) is set via order_repo to
+          ``str(user.id)`` — i.e. a UUID string. A malformed value (bad seed
+          row, manual fixture) is skipped with a warning rather than 500'd.
+        - the User row may have been deleted; we skip if missing.
+        - Notification.lab_id is NOT NULL. plant_users are intentionally
+          lab-less, so the fallback chain is: applicant.lab_id ->
+          resolve the WIP's lab_name to Lab.id -> skip with warning if we
+          can't satisfy the constraint.
+        """
+        session = self._repo.session
+        try:
+            order = await self._repo.get_order(wip.order_no)
+            if order is None or not order.applicant_id:
+                return
+
+            try:
+                applicant_uuid = UUID(order.applicant_id)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "skip termination notify: applicant_id is not a UUID (wip=%s, applicant_id=%r)",
+                    wip_no,
+                    order.applicant_id,
+                )
+                return
+
+            applicant = await session.get(User, applicant_uuid)
+            if applicant is None:
+                logger.warning(
+                    "skip termination notify: applicant user not found (wip=%s, applicant_id=%s)",
+                    wip_no,
+                    applicant_uuid,
+                )
+                return
+
+            lab_id = applicant.lab_id
+            if lab_id is None and wip.lab_name:
+                lab_id = await session.scalar(select(Lab.id).where(Lab.name == wip.lab_name))
+            if lab_id is None:
+                logger.warning(
+                    "skip termination notify: could not resolve a lab_id (wip=%s)",
+                    wip_no,
+                )
+                return
+
+            notification_service = NotificationService(session)
+            await notification_service.notify(
+                recipient_ids=[applicant_uuid],
+                lab_id=lab_id,
+                source_type="order",
+                source_id=wip.order_no,
+                title=f"委託單 {wip.order_no} 已終止",
+                body=f"WIP {wip_no} 經主管核准終止實驗。\n備註：{note or '(無)'}",
+                severity=Severity.MEDIUM,
+                channels=[NotificationChannel.IN_APP],
+            )
+        except Exception:
+            logger.exception("notify applicant of termination failed for wip=%s", wip_no)
+
     async def _publish_wip_pipeline_change(self, wip: Wip, event_name: str) -> None:
         """Best-effort dashboard SSE fanout for a WIP pipeline transition.
 
@@ -134,10 +203,22 @@ class ExperimentRunService:
             order.status = OrderStatus.WAITING_RESULT_CONFIRM.value
 
     async def _refresh_order_after_confirm(self, order_no: str) -> None:
+        """Roll up the order's status once every WIP has reached an end state.
+
+        Three cases:
+        - Every WIP TERMINATED → order is TERMINATED. The plant_user needs to
+          see "已終止" instead of "已完成" on a fully aborted order.
+        - At least one COMPLETED among an otherwise ENDED_EXEC set (mixed
+          COMPLETED + TERMINATED) → order is COMPLETED. Real experimental
+          output exists, so the order is delivered.
+        - Order isn't yet all-ended → no transition.
+        """
         order = await self._repo.get_order(order_no)
         if order is None:
             return
-        if await self._all_wips_in(order_no, ENDED_EXEC):
+        if await self._all_wips_in(order_no, {WipStatus.TERMINATED.value}):
+            order.status = OrderStatus.TERMINATED.value
+        elif await self._all_wips_in(order_no, ENDED_EXEC):
             order.status = OrderStatus.COMPLETED.value
 
     async def list_wips(self, status: str | None = None) -> list[dict]:
@@ -318,6 +399,77 @@ class ExperimentRunService:
                 wip.sample_id,
             )
 
+    async def _advance_sample_on_termination(self, wip: Wip, operator: str) -> None:
+        """Mirror of ``_advance_sample_flow`` for the abort path.
+
+        When supervisor approves a WIP termination, the sibling WIPs on the
+        same sample may still be in flight (e.g. a multi-lab split where only
+        LAB-A aborted). Only flip ``sample.status`` to ``terminated`` when
+        ALL siblings are off-the-board (terminated OR cancelled). Otherwise
+        leave the sample alone — it's still actively used by the other WIPs.
+
+        Without this, the requester's ``/sample`` page stayed on
+        ``split (已分貨)`` even after the abort was approved, which is the
+        bug the TODO calls out.
+
+        Best-effort: abort already committed by ``review_abort`` upstream,
+        so a sample-flow hiccup must not fail the supervisor's approval.
+        """
+        if wip.sample_id is None:
+            return
+        try:
+            from sqlalchemy import text
+
+            from app.repos import sample_repo
+
+            session = self._repo.session
+            # Active = anything other than terminated/cancelled. Cancelled is
+            # the plant_user's own withdrawal pre-execution; counting it as
+            # "off-the-board" matches OrderStatus rollup semantics elsewhere.
+            active_count = await session.scalar(
+                text(
+                    """
+                    SELECT COUNT(*) FROM wips
+                    WHERE sample_id = :sid
+                      AND status NOT IN ('terminated', 'cancelled')
+                    """
+                ),
+                {"sid": str(wip.sample_id)},
+            )
+            if active_count and int(active_count) > 0:
+                return  # other WIPs still running — leave sample alone
+            sample = await sample_repo.get_sample_by_id(session, str(wip.sample_id))
+            if sample is None or sample.get("status") == "terminated":
+                return  # idempotent
+            from_status = sample.get("status")
+            await session.execute(
+                text(
+                    """
+                    UPDATE samples
+                    SET status = 'terminated', updated_at = NOW()
+                    WHERE id = :sid
+                    """
+                ),
+                {"sid": str(wip.sample_id)},
+            )
+            await sample_repo.create_sample_history(
+                session,
+                sample_id=str(wip.sample_id),
+                action="terminated",
+                from_status=from_status,
+                to_status="terminated",
+                description="所有 WIP 已終止，樣品終止",
+                operator_name=operator,
+                lab_name=wip.lab_name,
+            )
+            await self._repo.commit()
+        except Exception:
+            logger.exception(
+                "Sample-termination advance failed for WIP %s (sample %s); abort already committed",
+                wip.wip_no,
+                wip.sample_id,
+            )
+
     async def request_abort(self, wip_no: str, reason: str, by: str) -> dict:
         wip = await self._require_wip(wip_no)
         exec_row = await self._repo.ensure_exec(wip_no)
@@ -365,6 +517,15 @@ class ExperimentRunService:
             # Only fire the SSE on actual termination — a rejected abort
             # leaves the WIP running and doesn't change the dashboard slice.
             await self._publish_wip_pipeline_change(wip, "wip_terminated")
+            # Tell the order's plant_user their experiment was killed. This
+            # is the only in-app signal they get — the supervisor's approval
+            # doesn't flow through any other notification channel today.
+            await self._notify_applicant_of_termination(wip, wip_no, note)
+            # Flip the underlying sample to 'terminated' when all sibling WIPs
+            # on the same sample are off-the-board. Without this the
+            # requester's /sample page stays on '已分貨' even after the
+            # order is terminated.
+            await self._advance_sample_on_termination(wip, by)
         return wip_dict(wip, exec_row)
 
     async def apply_machine_completion(self, wip_no: str) -> bool:
