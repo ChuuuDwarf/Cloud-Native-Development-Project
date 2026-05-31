@@ -14,6 +14,7 @@ import {
   getDisplaySampleStatus,
   isFactoryUser as checkIsFactoryUser,
   isSampleInCurrentLab,
+  formatSampleExperimentRequirement,
 } from "../utils/sampleDisplay";
 
 type SampleTableProps = {
@@ -75,7 +76,7 @@ export function SampleTable({
                 <td style={monoTdStyle}>{sample.sample_no}</td>
                 <td style={monoTdStyle}>{sample.order_no}</td>
                 <td style={tdStyle}>{sample.sample_name ?? "-"}</td>
-                <td style={tdStyle}>{sample.experiment_item ?? "-"}</td>
+                <td style={tdStyle}>{formatSampleExperimentRequirement(sample.experiment_item)}</td>
                 <td style={tdStyle}>
                   <StatusBadge status={displayStatus} />
                 </td>

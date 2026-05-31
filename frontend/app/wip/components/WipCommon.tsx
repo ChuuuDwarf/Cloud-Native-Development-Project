@@ -61,7 +61,7 @@ export function CollapsibleSection({
   );
 }
 
-export function InfoItem({ label, value }: { label: string; value: string | number | null }) {
+export function InfoItem({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div style={infoItemStyle}>
       <div style={infoLabelStyle}>{label}</div>

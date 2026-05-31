@@ -21,9 +21,9 @@ from app.services.temporary_others_service import (
     resolve_real_lab_name,
 )
 from app.services.wip_service import (
-    build_ordered_wip_slots,
-    get_creatable_wip_slots_for_current_segment,
+    get_creatable_wip_slots_by_group,
     get_sample_wips_in_flow_order,
+    parse_requested_experiments,
     update_sample_to_pending_transfer_if_ready,
     validate_wip_can_complete_in_order,
 )
@@ -212,7 +212,7 @@ async def generate_missing_wips_for_sample(
             detail="只有已收樣 received、已分貨 split 或可交接 pending_transfer 的樣品可以補齊 WIP",
         )
 
-    requested_experiments = parse_requested_experiments_from_sample(sample)
+    requested_experiments = parse_requested_experiments(sample.get("experiment_item"))
 
     if len(requested_experiments) == 0:
         raise HTTPException(
@@ -238,16 +238,20 @@ async def generate_missing_wips_for_sample(
             {
                 "lab_name": lab_name,
                 "experiment_item": item["experiment_item"],
+                "target_group": item.get("target_group") or "G1",
+                "target": item.get("target") or 1,
             }
         )
 
     existing_sample_wips = await get_sample_wips_in_flow_order(sample_id, db)
-    ordered_slots = build_ordered_wip_slots(
+    creatable_by_group = get_creatable_wip_slots_by_group(
         normalized_requested_experiments,
         existing_sample_wips,
     )
     requested_experiments = [
-        slot["experiment"] for slot in get_creatable_wip_slots_for_current_segment(ordered_slots)
+        slot["experiment"]
+        for group in sorted(creatable_by_group)
+        for slot in creatable_by_group[group]
     ]
 
     if len(requested_experiments) == 0:

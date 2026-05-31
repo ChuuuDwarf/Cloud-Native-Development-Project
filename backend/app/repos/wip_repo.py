@@ -202,6 +202,64 @@ async def get_sample_by_id(
 
     return row_to_dict(result.fetchone())
 
+async def get_sample_by_no(
+    db: AsyncSession,
+    *,
+    sample_no: str,
+    order_no: str | None = None,
+) -> dict | None:
+    where_order_no = "AND order_no = :order_no" if order_no else ""
+    params = {"sample_no": sample_no}
+
+    if order_no:
+        params["order_no"] = order_no
+
+    result = await db.execute(
+        text(
+            f"""
+            SELECT *
+            FROM samples
+            WHERE sample_no = :sample_no
+              {where_order_no}
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ),
+        params,
+    )
+
+    return row_to_dict(result.fetchone())
+
+
+async def list_wips_for_sample_no(
+    db: AsyncSession,
+    *,
+    sample_no: str,
+    order_no: str | None = None,
+) -> list[dict]:
+    where_order_no = "AND s.order_no = :order_no" if order_no else ""
+    params = {"sample_no": sample_no}
+
+    if order_no:
+        params["order_no"] = order_no
+
+    result = await db.execute(
+        text(
+            f"""
+            SELECT
+                w.*
+            FROM wips w
+            JOIN samples s
+                ON s.id = w.sample_id
+            WHERE s.sample_no = :sample_no
+              {where_order_no}
+            ORDER BY w.created_at ASC, w.id ASC
+            """
+        ),
+        params,
+    )
+
+    return rows_to_dicts(result.fetchall())
 
 async def has_transfer_to_lab_for_sample(
     db: AsyncSession,

@@ -38,17 +38,19 @@ import {
   getUserLab,
   isLabUser as checkIsLabUser,
   shouldMaskSampleForLab,
+  formatSampleExperimentRequirement,
 } from "../utils/sampleDisplay";
 
 function formatExperimentRequirement(experimentItem: string | null) {
-  if (!experimentItem) return "-";
+  const displayText = formatSampleExperimentRequirement(experimentItem);
+  if (displayText === "-") return "-";
 
-  const items = experimentItem
+  const items = displayText
     .split("、")
     .map((item) => item.trim())
     .filter(Boolean);
 
-  if (items.length <= 1) return experimentItem;
+  if (items.length <= 1) return displayText;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

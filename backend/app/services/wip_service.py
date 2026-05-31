@@ -262,27 +262,72 @@ async def get_sample_by_id(sample_id: str, db: AsyncSession):
     return await wip_repo.get_sample_by_id(db, sample_id=sample_id)
 
 
-def parse_requested_experiments(experiment_item: str | None) -> list[dict[str, str]]:
+def strip_experiment_route_prefix(value: str) -> str:
+    value = value.strip()
+
+    if "|" not in value:
+        return value
+
+    _, clean_value = value.split("|", 1)
+    return clean_value.strip()
+
+
+def parse_experiment_route_meta(part: str, fallback_index: int) -> tuple[str, int, str]:
+    """Parse optional route prefix like G1#2|Lab A:A2.
+
+    target_group represents one dependency chain. Items in different groups are
+    independent and can be split by their owning Lab separately.
+    """
+
+    raw_part = part.strip()
+    if "|" not in raw_part:
+        return f"G{fallback_index}", 1, raw_part
+
+    meta, clean_value = raw_part.split("|", 1)
+    meta = meta.strip()
+    clean_value = clean_value.strip()
+
+    if "#" not in meta:
+        return meta or f"G{fallback_index}", 1, clean_value
+
+    raw_group, raw_target = meta.split("#", 1)
+    raw_group = raw_group.strip() or f"G{fallback_index}"
+
+    try:
+        target = int(str(raw_target).strip() or "1")
+    except (TypeError, ValueError):
+        target = 1
+
+    return raw_group, target, clean_value
+
+
+def parse_requested_experiments(experiment_item: str | None) -> list[dict[str, object]]:
     if not experiment_item:
         return []
 
-    experiments: list[dict[str, str]] = []
+    experiments: list[dict[str, object]] = []
 
-    for part in experiment_item.split("、"):
-        part = part.strip()
+    for index, part in enumerate(experiment_item.split("、"), start=1):
+        target_group, target, clean_part = parse_experiment_route_meta(part, index)
 
-        if ":" not in part:
+        if ":" not in clean_part:
             continue
 
-        lab_name, item_name = part.split(":", 1)
+        lab_name, item_name = clean_part.split(":", 1)
         lab_name = lab_name.strip()
         item_name = item_name.strip()
 
         if lab_name and item_name:
-            experiments.append({"lab_name": lab_name, "experiment_item": item_name})
+            experiments.append(
+                {
+                    "lab_name": lab_name,
+                    "experiment_item": item_name,
+                    "target_group": target_group,
+                    "target": target,
+                }
+            )
 
     return experiments
-
 
 def normalize_flow_value(value: str | None) -> str:
     return (value or "").strip().lower()
@@ -320,16 +365,37 @@ def normalize_dependency_item(item: dict) -> dict:
     }
 
 
-def select_pending_dependency_candidates(order_items: list[dict]) -> list[dict]:
-    pending_by_group: dict[str, dict] = {}
+def is_same_dependency_experiment(order_item: dict, wip: dict) -> bool:
+    return (
+        normalize_flow_value(order_item.get("lab_name"))
+        == normalize_flow_value(wip.get("lab_name"))
+        and normalize_flow_value(order_item.get("experiment_name"))
+        == normalize_flow_value(wip.get("experiment_item"))
+    )
+
+
+def is_dependency_item_completed(order_item: dict, sample_wips: list[dict]) -> bool:
+    return any(
+        is_same_dependency_experiment(order_item, wip)
+        and wip.get("status") == "completed"
+        for wip in sample_wips
+    )
+
+
+def select_next_dependency_candidates(
+    order_items: list[dict],
+    sample_wips: list[dict],
+) -> list[dict]:
+    next_by_group: dict[str, dict] = {}
 
     for raw_item in order_items:
         item = normalize_dependency_item(raw_item)
-        if item["dependency_check"]:
+
+        if is_dependency_item_completed(item, sample_wips):
             continue
 
         group = item["target_group"]
-        current = pending_by_group.get(group)
+        current = next_by_group.get(group)
 
         if current is None or (
             item["target"],
@@ -340,9 +406,9 @@ def select_pending_dependency_candidates(order_items: list[dict]) -> list[dict]:
             str(current.get("created_at") or ""),
             int(current["id"]),
         ):
-            pending_by_group[group] = item
+            next_by_group[group] = item
 
-    return list(pending_by_group.values())
+    return list(next_by_group.values())
 
 
 def machine_utilization_score(candidate: dict, machines: list[dict]) -> int:
@@ -406,7 +472,13 @@ async def claim_next_dependency_experiment(
     if not order_items:
         raise HTTPException(status_code=404, detail="Dependency order items not found")
 
-    candidates = select_pending_dependency_candidates(order_items)
+    sample_wips = await wip_repo.list_wips_for_sample_no(
+        db,
+        sample_no=sample_no,
+        order_no=normalized_order_no,
+    )
+
+    candidates = select_next_dependency_candidates(order_items, sample_wips)
     if not candidates:
         return {
             "success": True,
@@ -439,14 +511,17 @@ async def claim_next_dependency_experiment(
             int(item["id"]),
         ),
     ):
-        claimed = await wip_repo.claim_order_item_dependency_check(
-            db,
-            order_item_id=int(candidate["id"]),
-        )
-        if claimed is None:
-            continue
+        if not candidate.get("dependency_check"):
+            claimed = await wip_repo.claim_order_item_dependency_check(
+                db,
+                order_item_id=int(candidate["id"]),
+            )
 
-        await db.commit()
+            if claimed is None:
+                continue
+
+            await db.commit()
+
         return {
             "success": True,
             "data": {
@@ -612,6 +687,67 @@ def get_creatable_wip_slots_for_current_segment(slots: list[dict]) -> list[dict]
     return creatable_slots
 
 
+def experiment_group_key(experiment: dict) -> str:
+    return str(experiment.get("target_group") or "G1")
+
+
+def experiment_target_order(experiment: dict) -> tuple[int, str, str]:
+    try:
+        target = int(experiment.get("target") or 1)
+    except (TypeError, ValueError):
+        target = 1
+
+    return (
+        target,
+        normalize_flow_value(experiment.get("lab_name")),
+        normalize_flow_value(experiment.get("experiment_item")),
+    )
+
+
+def build_grouped_wip_slots(
+    experiments: list[dict],
+    existing_wips: list[dict],
+) -> dict[str, list[dict]]:
+    grouped_experiments: dict[str, list[dict]] = {}
+
+    for experiment in experiments:
+        grouped_experiments.setdefault(experiment_group_key(experiment), []).append(experiment)
+
+    grouped_slots: dict[str, list[dict]] = {}
+    unused_wips = list(existing_wips)
+
+    for group, group_experiments in grouped_experiments.items():
+        ordered_experiments = sorted(group_experiments, key=experiment_target_order)
+        slots: list[dict] = []
+
+        for experiment in ordered_experiments:
+            matched_wip = None
+
+            for index, candidate in enumerate(unused_wips):
+                if is_same_experiment_wip(experiment, candidate):
+                    matched_wip = candidate
+                    unused_wips.pop(index)
+                    break
+
+            slots.append({"experiment": experiment, "wip": matched_wip})
+
+        grouped_slots[group] = slots
+
+    return grouped_slots
+
+
+def get_creatable_wip_slots_by_group(
+    experiments: list[dict],
+    existing_wips: list[dict],
+) -> dict[str, list[dict]]:
+    grouped_slots = build_grouped_wip_slots(experiments, existing_wips)
+
+    return {
+        group: get_creatable_wip_slots_for_current_segment(slots)
+        for group, slots in grouped_slots.items()
+    }
+
+
 def validate_wip_create_items_in_order(
     sample: dict,
     existing_wips: list[dict],
@@ -622,18 +758,44 @@ def validate_wip_create_items_in_order(
     if not experiments:
         return
 
-    slots = build_ordered_wip_slots(experiments, existing_wips)
-    creatable_slots = get_creatable_wip_slots_for_current_segment(slots)
-    creatable_experiments = [slot["experiment"] for slot in creatable_slots]
+    creatable_by_group = get_creatable_wip_slots_by_group(experiments, existing_wips)
+    used_slots: set[tuple[str, int]] = set()
+    selected_indices_by_group: dict[str, list[int]] = {}
 
-    if len(requested_items) > len(creatable_experiments):
-        raise HTTPException(
-            status_code=400,
-            detail=WIP_ORDER_GUARD_MESSAGE,
-        )
+    for item in requested_items:
+        matched: tuple[str, int] | None = None
 
-    for index, item in enumerate(requested_items):
-        if not is_same_experiment_wip(creatable_experiments[index], item):
+        for group, creatable_slots in creatable_by_group.items():
+            for index, slot in enumerate(creatable_slots):
+                slot_key = (group, index)
+
+                if slot_key in used_slots:
+                    continue
+
+                if is_same_experiment_wip(slot["experiment"], item):
+                    matched = slot_key
+                    break
+
+            if matched is not None:
+                break
+
+        if matched is None:
+            raise HTTPException(
+                status_code=400,
+                detail=WIP_ORDER_GUARD_MESSAGE,
+            )
+
+        used_slots.add(matched)
+        selected_indices_by_group.setdefault(matched[0], []).append(matched[1])
+
+    # Within one dependency group, users may create a prefix of the currently
+    # unlocked same-Lab segment, but cannot skip an earlier item in that group.
+    # Different groups are independent, so choosing G1 and G3 without G2 is OK.
+    for indices in selected_indices_by_group.values():
+        ordered_indices = sorted(indices)
+        expected_prefix = list(range(0, len(ordered_indices)))
+
+        if ordered_indices != expected_prefix:
             raise HTTPException(
                 status_code=400,
                 detail=WIP_ORDER_GUARD_MESSAGE,

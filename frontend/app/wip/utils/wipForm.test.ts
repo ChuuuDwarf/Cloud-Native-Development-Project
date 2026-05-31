@@ -85,14 +85,35 @@ describe("wipForm 功能測試", () => {
 
   it("只從 experiment_item 解析實驗需求，支援多 Lab 與冒號後面的內容", () => {
     expect(parseExperimentsFromSummary("Lab A:SEM:高倍率、Lab B:光學量測")).toEqual([
-      { lab_name: "Lab A", experiment_item: "SEM:高倍率" },
-      { lab_name: "Lab B", experiment_item: "光學量測" },
+      { lab_name: "Lab A", experiment_item: "SEM:高倍率", targetGroup: "G1", target: 1 },
+      { lab_name: "Lab B", experiment_item: "光學量測", targetGroup: "G1", target: 2 },
     ]);
 
     expect(getRequestedExperiments(baseSample)).toHaveLength(3);
     expect(formatRequestedExperiments(baseSample)).toBe(
       "Lab A:SEM 觀察、Lab B:光學量測、Lab A:EDS 分析"
     );
+  });
+
+  it("解析帶有群組/站點前綴的實驗需求時，會去掉 G2#1| 前綴再比對 Lab", () => {
+    expect(
+      parseExperimentsFromSummary(
+        "G2#1|電性測試實驗室:Probe、G1#1|材料分析實驗室:EDX、G1#2|材料分析實驗室:SEM、G1#3|電性測試實驗室:IV"
+      )
+    ).toEqual([
+      { lab_name: "電性測試實驗室", experiment_item: "Probe", targetGroup: "G2", target: 1 },
+      { lab_name: "材料分析實驗室", experiment_item: "EDX", targetGroup: "G1", target: 1 },
+      { lab_name: "材料分析實驗室", experiment_item: "SEM", targetGroup: "G1", target: 2 },
+      { lab_name: "電性測試實驗室", experiment_item: "IV", targetGroup: "G1", target: 3 },
+    ]);
+
+    expect(
+      formatRequestedExperiments({
+        ...baseSample,
+        experiment_item:
+          "G2#1|電性測試實驗室:Probe、G1#1|材料分析實驗室:EDX、G1#2|材料分析實驗室:SEM、G1#3|電性測試實驗室:IV",
+      })
+    ).toBe("電性測試實驗室:Probe、材料分析實驗室:EDX、材料分析實驗室:SEM、電性測試實驗室:IV");
   });
 
   it("A -> B -> A 時不會跨過 B 自動產生最後一個 A", () => {
@@ -108,6 +129,33 @@ describe("wipForm 功能測試", () => {
     };
 
     const forms = makeAutoFormsForSample(aabSample, "Lab A", []);
+
+    expect(forms).toEqual([
+      {
+        lab_name: "Lab A",
+        experiment_item: "SEM 觀察",
+        priority: "normal",
+        note: "由委託單實驗需求自動帶入",
+        auto_generated: true,
+      },
+      {
+        lab_name: "Lab A",
+        experiment_item: "EDS 分析",
+        priority: "normal",
+        note: "由委託單實驗需求自動帶入",
+        auto_generated: true,
+      },
+    ]);
+  });
+
+
+  it("不同群組視為不相依，同一 Lab 的未建 WIP 可一起帶入", () => {
+    const independentSample = {
+      ...baseSample,
+      experiment_item: "G1#1|Lab A:SEM 觀察、G2#1|Lab B:光學量測、G3#1|Lab A:EDS 分析",
+    };
+
+    const forms = makeAutoFormsForSample(independentSample, "Lab A", []);
 
     expect(forms).toEqual([
       {
