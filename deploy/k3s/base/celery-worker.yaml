@@ -27,6 +27,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: lims-config
+            - secretRef:
+                name: lims-secrets
           env:
             - name: JWT_SECRET
               valueFrom:
@@ -41,6 +43,10 @@ spec:
           volumeMounts:
             - name: uploads
               mountPath: /app/uploads
+          # `celery inspect ping` 走 Redis 廣播 + 等 pong，在 worker 忙著跑
+          # tick_progress (每 2s) 或被 Cloud SQL 慢查詢卡住時，10s 內可能回不來。
+          # 過去這個 probe 偶爾誤判 Unhealthy 觸發 rolling update 反彈。
+          # 放寬參數 + 加大 failureThreshold，連續 3 次失敗才算真的壞。
           readinessProbe:
             exec:
               command:
@@ -49,9 +55,10 @@ spec:
                   "-c",
                   "celery -A app.core.celery_app inspect ping -d celery@$HOSTNAME",
                 ]
-            initialDelaySeconds: 20
-            periodSeconds: 30
-            timeoutSeconds: 10
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 3
           resources:
             requests:
               cpu: 100m
