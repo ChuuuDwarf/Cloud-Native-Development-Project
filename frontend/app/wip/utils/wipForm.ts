@@ -27,6 +27,10 @@ function isSameExperiment(left: string | null | undefined, right: string | null 
   return normalize(left) === normalize(right);
 }
 
+function isNonNullable<T>(value: T): value is NonNullable<T> {
+  return value != null;
+}
+
 function parseRoutePrefix(routePrefix: string | undefined, fallbackIndex: number) {
   const fallback = {
     targetGroup: "G1",
@@ -54,7 +58,7 @@ export function parseExperimentsFromSummary(summary: string | null): RequestedEx
     .split("、")
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part, index) => {
+    .map((part, index): RequestedExperiment | null => {
       const { value: experimentPart, route_prefix: routePrefix } = stripExperimentRoutePrefix(part);
       const separatorIndex = experimentPart.indexOf(":");
 
@@ -74,7 +78,7 @@ export function parseExperimentsFromSummary(summary: string | null): RequestedEx
         target: route.target,
       };
     })
-    .filter((experiment): experiment is RequestedExperiment => Boolean(experiment));
+    .filter(isNonNullable);
 }
 
 export function getRequestedExperiments(sample: Sample | null): RequestedExperiment[] {
@@ -152,7 +156,8 @@ export function makeAutoFormsForSample(
 
   Array.from(groups.values()).forEach((groupExperiments) => {
     const orderedExperiments = [...groupExperiments].sort((left, right) => {
-      const targetDiff = getExperimentTarget(left.experiment) - getExperimentTarget(right.experiment);
+      const targetDiff =
+        getExperimentTarget(left.experiment) - getExperimentTarget(right.experiment);
 
       if (targetDiff !== 0) return targetDiff;
 

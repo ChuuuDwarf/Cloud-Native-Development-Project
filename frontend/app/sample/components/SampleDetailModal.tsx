@@ -270,18 +270,18 @@ export function SampleDetailModal({
 
   const isIncomingTransferWaitingReceive = Boolean(
     isLabUser &&
-      selectedSampleInCurrentLab &&
-      selectedSampleOutgoingTransfer &&
-      selectedSampleOutgoingTransfer.to_lab === currentLab &&
-      selectedSampleOutgoingTransfer.status === "transferring" &&
-      sample.status === "pending_receive"
+    selectedSampleInCurrentLab &&
+    selectedSampleOutgoingTransfer &&
+    selectedSampleOutgoingTransfer.to_lab === currentLab &&
+    selectedSampleOutgoingTransfer.status === "transferring" &&
+    sample.status === "pending_receive"
   );
 
   const displayReceivedBy =
     ownLabReceiveHistory?.operator_name ??
     (shouldMaskForCurrentLab
-      ? selectedSampleOutgoingTransfer?.handed_by ?? sample.received_by ?? "尚未收樣"
-      : sample.received_by ?? "尚未收樣");
+      ? (selectedSampleOutgoingTransfer?.handed_by ?? sample.received_by ?? "尚未收樣")
+      : (sample.received_by ?? "尚未收樣"));
 
   const displayReceivedAt = ownLabReceiveHistory?.created_at ?? sample.received_at;
 
@@ -295,9 +295,7 @@ export function SampleDetailModal({
     if (!selectedSampleOutgoingTransfer) return "已離開本實驗室";
 
     if (selectedSampleOutgoingTransfer.status === "pending") {
-      return `交接單已建立，尚未送出至 ${
-        selectedSampleOutgoingTransfer.to_lab ?? "接收實驗室"
-      }`;
+      return `交接單已建立，尚未送出至 ${selectedSampleOutgoingTransfer.to_lab ?? "接收實驗室"}`;
     }
 
     if (selectedSampleOutgoingTransfer.status === "transferring") {
@@ -351,7 +349,10 @@ export function SampleDetailModal({
             <InfoItem label="樣品編號" value={sample.sample_no} />
             <InfoItem label="委託單編號" value={sample.order_no} />
             <InfoItem label="樣品名稱" value={sample.sample_name ?? "-"} />
-            <InfoItem label="實驗需求" value={formatExperimentRequirement(sample.experiment_item)} />
+            <InfoItem
+              label="實驗需求"
+              value={formatExperimentRequirement(sample.experiment_item)}
+            />
             <InfoItem label="申請人" value={sample.applicant_name ?? "-"} />
             <InfoItem label="申請部門" value={sample.applicant_department ?? "-"} />
             <InfoItem

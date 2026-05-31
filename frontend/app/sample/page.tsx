@@ -72,9 +72,9 @@ export default function SamplePage() {
   const [wips, setWips] = useState<Wip[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [sampleHistories, setSampleHistories] = useState<SampleHistory[]>([]);
-  const [wipExecutionDetails, setWipExecutionDetails] = useState<Record<string, WipExecutionDetail>>(
-    {}
-  );
+  const [wipExecutionDetails, setWipExecutionDetails] = useState<
+    Record<string, WipExecutionDetail>
+  >({});
   const [wipExecutionLoading, setWipExecutionLoading] = useState(false);
   const [selectedSampleId, setSelectedSampleId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -85,7 +85,6 @@ export default function SamplePage() {
   const [sampleFilter, setSampleFilter] = useState<SampleFilter>("current");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  
 
   const currentLab = masterQuery.data?.labs.find((lab) => lab.id === authUser?.labId);
   const currentDepartment = masterQuery.data?.departments.find(
@@ -515,10 +514,7 @@ export default function SamplePage() {
     setError("");
     setSuccessMessage("");
 
-    await Promise.all([
-      loadSampleHistory(sampleId),
-      loadWipExecutionDetails(sampleId),
-    ]);
+    await Promise.all([loadSampleHistory(sampleId), loadWipExecutionDetails(sampleId)]);
   }
 
   function closeDetail() {

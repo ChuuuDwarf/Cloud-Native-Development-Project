@@ -148,7 +148,6 @@ describe("wipForm 功能測試", () => {
     ]);
   });
 
-
   it("不同群組視為不相依，同一 Lab 的未建 WIP 可一起帶入", () => {
     const independentSample = {
       ...baseSample,

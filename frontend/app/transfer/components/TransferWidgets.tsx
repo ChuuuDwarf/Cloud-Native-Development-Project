@@ -43,11 +43,7 @@ import {
   modalNoticeStyle,
 } from "../styles";
 
-function ExperimentRequirementLines({
-  value,
-}: {
-  value: string | null | undefined;
-}) {
+function ExperimentRequirementLines({ value }: { value: string | null | undefined }) {
   const displayText = formatExperimentSummary(value);
 
   if (displayText === "-") return "-";

@@ -135,7 +135,6 @@ describe("sampleDisplay 功能測試", () => {
     ).toBe(false);
   });
 
-
   it("顯示實驗需求時會隱藏群組/站點前綴", () => {
     expect(
       formatSampleExperimentRequirement(
