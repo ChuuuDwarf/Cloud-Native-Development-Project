@@ -3,6 +3,7 @@ from fastapi import HTTPException
 
 from app.services.wip_service import (
     build_ordered_wip_slots,
+    build_wip_owner_lab_visibility_filter,
     build_wip_visibility_filter,
     can_manage_wip,
     can_view_wip,
@@ -231,3 +232,18 @@ def test_wip_create_order_guard_blocks_skipping_first_contiguous_wip():
 
     assert exc.value.status_code == 400
     assert exc.value.detail == "目前尚未輪到此 WIP，請先完成前一站實驗或交接流程"
+
+def test_wip_owner_lab_visibility_filter_is_strict_for_dispatch_pick_list():
+    lab_user = {"role": "lab_supervisor", "lab_name": "Lab A", "department": "Lab A"}
+    clauses, params = build_wip_owner_lab_visibility_filter(lab_user)
+
+    assert clauses == ["w.lab_name = :current_lab"]
+    assert params == {"current_lab": "Lab A"}
+
+    assert build_wip_owner_lab_visibility_filter({"role": "system_admin"}) == ([], {})
+
+    factory_clauses, factory_params = build_wip_owner_lab_visibility_filter(
+        {"role": "plant_user", "name": "王小明"}
+    )
+    assert factory_clauses == ["1 = 0"]
+    assert factory_params == {}
