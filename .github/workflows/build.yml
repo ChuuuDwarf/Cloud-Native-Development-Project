@@ -79,3 +79,26 @@ jobs:
           echo "### Built images" >> $GITHUB_STEP_SUMMARY
           echo "- backend:${IMAGE_TAG} (+ ${SHA_TAG})" >> $GITHUB_STEP_SUMMARY
           echo "- frontend:${IMAGE_TAG} (+ ${SHA_TAG})" >> $GITHUB_STEP_SUMMARY
+
+  # Create a GitHub Release for stable tags only (skip -rc). rc tags still
+  # build images and promote to staging — they just don't show up on the
+  # Releases page, which is reserved for production-shipped versions.
+  release:
+    needs: build
+    if: ${{ !contains(github.ref_name, '-rc') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            ## Images
+            ```
+            docker pull asia-east1-docker.pkg.dev/lims-497613/lims/backend:${{ github.ref_name }}
+            docker pull asia-east1-docker.pkg.dev/lims-497613/lims/frontend:${{ github.ref_name }}
+            ```
