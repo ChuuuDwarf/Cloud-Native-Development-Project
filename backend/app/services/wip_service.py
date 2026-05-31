@@ -109,8 +109,8 @@ def build_wip_visibility_filter(current_user: dict):
                     SELECT 1
                     FROM transfers t
                     WHERE t.target_type = 'sample'
-                      AND t.target_id = w.sample_id
-                      AND t.to_lab = :current_lab
+                    AND t.target_id = w.sample_id
+                    AND t.to_lab = :current_lab
                 )
             )
             """
@@ -120,6 +120,7 @@ def build_wip_visibility_filter(current_user: dict):
 
     where_clauses.append("1 = 0")
     return where_clauses, params
+
 
 def build_wip_owner_lab_visibility_filter(current_user: dict):
     """Strict WIP owner-lab scope for dispatch scheduling pick lists.
@@ -149,6 +150,7 @@ def build_wip_owner_lab_visibility_filter(current_user: dict):
 
     where_clauses.append("1 = 0")
     return where_clauses, params
+
 
 def build_wip_flow_visibility_filter(current_user: dict):
     """給 transfer flow 使用的 WIP 查詢範圍。
@@ -187,27 +189,27 @@ def build_wip_flow_visibility_filter(current_user: dict):
                     SELECT 1
                     FROM wips related_wips
                     WHERE related_wips.sample_id = w.sample_id
-                      AND related_wips.lab_name = :current_lab
+                    AND related_wips.lab_name = :current_lab
                 )
                 OR EXISTS (
                     SELECT 1
                     FROM transfers sample_transfers
                     WHERE sample_transfers.target_type = 'sample'
-                      AND sample_transfers.target_id = s.id
-                      AND (
-                          sample_transfers.from_lab = :current_lab
-                          OR sample_transfers.to_lab = :current_lab
-                      )
+                    AND sample_transfers.target_id = s.id
+                    AND (
+                        sample_transfers.from_lab = :current_lab
+                        OR sample_transfers.to_lab = :current_lab
+                    )
                 )
                 OR EXISTS (
                     SELECT 1
                     FROM transfers wip_transfers
                     WHERE wip_transfers.target_type = 'wip'
-                      AND wip_transfers.target_id = w.id
-                      AND (
-                          wip_transfers.from_lab = :current_lab
-                          OR wip_transfers.to_lab = :current_lab
-                      )
+                    AND wip_transfers.target_id = w.id
+                    AND (
+                        wip_transfers.from_lab = :current_lab
+                        OR wip_transfers.to_lab = :current_lab
+                    )
                 )
             )
             """
@@ -357,8 +359,9 @@ def parse_requested_experiments(experiment_item: str | None) -> list[dict[str, o
 
     return experiments
 
-def normalize_flow_value(value: str | None) -> str:
-    return (value or "").strip().lower()
+
+def normalize_flow_value(value: object | None) -> str:
+    return str(value or "").strip().lower()
 
 
 def parse_supported_items(value: Any) -> list[str]:
@@ -394,18 +397,16 @@ def normalize_dependency_item(item: dict) -> dict:
 
 
 def is_same_dependency_experiment(order_item: dict, wip: dict) -> bool:
-    return (
-        normalize_flow_value(order_item.get("lab_name"))
-        == normalize_flow_value(wip.get("lab_name"))
-        and normalize_flow_value(order_item.get("experiment_name"))
-        == normalize_flow_value(wip.get("experiment_item"))
+    return normalize_flow_value(order_item.get("lab_name")) == normalize_flow_value(
+        wip.get("lab_name")
+    ) and normalize_flow_value(order_item.get("experiment_name")) == normalize_flow_value(
+        wip.get("experiment_item")
     )
 
 
 def is_dependency_item_completed(order_item: dict, sample_wips: list[dict]) -> bool:
     return any(
-        is_same_dependency_experiment(order_item, wip)
-        and wip.get("status") == "completed"
+        is_same_dependency_experiment(order_item, wip) and wip.get("status") == "completed"
         for wip in sample_wips
     )
 
@@ -577,7 +578,7 @@ async def claim_next_dependency_experiment(
 
 
 def find_current_experiment_index(
-    experiments: list[dict[str, str]],
+    experiments: list[dict[str, object]],
     wip: dict,
 ) -> int | None:
     wip_lab = normalize_flow_value(wip.get("lab_name"))
@@ -602,7 +603,7 @@ def is_same_experiment_wip(experiment: dict, wip: dict) -> bool:
 
 
 def build_ordered_wip_slots(
-    experiments: list[dict[str, str]],
+    experiments: list[dict[str, object]],
     wips: list[dict],
 ) -> list[dict]:
     unused_wips = list(wips)

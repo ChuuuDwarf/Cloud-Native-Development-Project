@@ -202,6 +202,7 @@ async def get_sample_by_id(
 
     return row_to_dict(result.fetchone())
 
+
 async def get_sample_by_no(
     db: AsyncSession,
     *,
@@ -260,6 +261,7 @@ async def list_wips_for_sample_no(
     )
 
     return rows_to_dicts(result.fetchall())
+
 
 async def has_transfer_to_lab_for_sample(
     db: AsyncSession,

@@ -14,7 +14,6 @@ from app.services.temporary_others_service import (
     get_real_users,
     master_data,
     normalize_requested_experiments,
-    parse_requested_experiments_from_sample,
     receive_location,
     removed_endpoint_response,
     resolve_current_user,
@@ -32,6 +31,12 @@ router = APIRouter(
     prefix="/api",
     tags=["others"],
 )
+
+
+def as_optional_str(value: object | None) -> str | None:
+    if value is None:
+        return None
+    return str(value)
 
 
 @router.get("/me")
@@ -226,7 +231,7 @@ async def generate_missing_wips_for_sample(
     normalized_requested_experiments = []
 
     for item in requested_experiments:
-        lab_name = await resolve_real_lab_name(db, item["lab_name"])
+        lab_name = await resolve_real_lab_name(db, as_optional_str(item["lab_name"]))
 
         if not lab_name:
             raise HTTPException(
@@ -266,7 +271,7 @@ async def generate_missing_wips_for_sample(
     for index, item in enumerate(requested_experiments, start=1):
         raw_lab_name = item["lab_name"]
         experiment_item = item["experiment_item"]
-        lab_name = await resolve_real_lab_name(db, raw_lab_name)
+        lab_name = await resolve_real_lab_name(db, as_optional_str(raw_lab_name))
 
         if not lab_name:
             raise HTTPException(
@@ -392,7 +397,9 @@ async def generate_missing_wips_for_sample(
     sample_location = sample.get("current_location")
 
     if not sample_location:
-        first_lab = await resolve_real_lab_name(db, requested_experiments[0]["lab_name"])
+        first_lab = await resolve_real_lab_name(
+            db, as_optional_str(requested_experiments[0]["lab_name"])
+        )
         sample_location = experiment_temp_location(first_lab)
 
     await db.execute(
@@ -440,7 +447,9 @@ async def generate_missing_wips_for_sample(
             "from_status": sample["status"],
             "description": f"由 /others 功能補齊 WIP，樣品狀態改為已分貨，位置：{sample_location}",
             "operator_name": current_user.get("name") or "系統",
-            "lab_name": await resolve_real_lab_name(db, requested_experiments[0]["lab_name"]),
+            "lab_name": await resolve_real_lab_name(
+                db, as_optional_str(requested_experiments[0]["lab_name"])
+            ),
         },
     )
 
@@ -717,7 +726,7 @@ async def confirm_order_delivery(
     normalized_experiments = []
 
     for item in requested_experiments:
-        lab_name = await resolve_real_lab_name(db, item["lab_name"])
+        lab_name = await resolve_real_lab_name(db, as_optional_str(item["lab_name"]))
 
         if not lab_name:
             raise HTTPException(

@@ -3,10 +3,9 @@ from __future__ import annotations
 import os
 import random
 import string
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import psycopg
-
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -17,7 +16,12 @@ DEBUG_ORDERS = [
     {
         "sample_id": "DEBUG-DEP-001",
         "sample_name": "DEBUG dependency 001",
-        "items": "G2#1|電性測試實驗室:Probe、G1#1|材料分析實驗室:EDX、G1#2|材料分析實驗室:SEM、G1#3|電性測試實驗室:IV",
+        "items": (
+            "G2#1|電性測試實驗室:Probe、"
+            "G1#1|材料分析實驗室:EDX、"
+            "G1#2|材料分析實驗室:SEM、"
+            "G1#3|電性測試實驗室:IV"
+        ),
     },
     {
         "sample_id": "DEBUG-DEP-002",
@@ -28,7 +32,7 @@ DEBUG_ORDERS = [
 
 
 def now():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def random_suffix(length: int = 4) -> str:
@@ -327,7 +331,16 @@ def insert_order(conn, *, applicant_id: str, department_id: str, debug_order: di
             VALUES
                 (%s, %s, 'create', NULL, 'draft', 'debug seed', FALSE, %s),
                 (%s, %s, 'submit', 'draft', 'pending_approval', 'debug seed', FALSE, %s),
-                (%s, %s, 'approve', 'pending_approval', 'approved', 'debug seed approved', FALSE, %s)
+                (
+                    %s,
+                    %s,
+                    'approve',
+                    'pending_approval',
+                    'approved',
+                    'debug seed approved',
+                    FALSE,
+                    %s
+                )
             """,
             (
                 order_id,
