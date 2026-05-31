@@ -16,7 +16,7 @@ from app.services.wip_service import (
     machine_utilization_score,
     parse_requested_experiments,
     select_dependency_candidate,
-    select_pending_dependency_candidates,
+    select_next_dependency_candidates,
     validate_uuid,
     validate_wip_create_items_in_order,
 )
@@ -80,7 +80,7 @@ def test_validate_uuid_rejects_invalid_wip_id():
     assert exc.value.detail == "wip_id must be a valid UUID"
 
 
-def test_dependency_candidates_pick_smallest_unchecked_target_per_group():
+def test_dependency_candidates_pick_smallest_incomplete_target_per_group():
     items = [
         {"id": 1, "target_group": "G1", "target": 1, "dependency_check": True},
         {"id": 2, "target_group": "G1", "target": 2, "dependency_check": False},
@@ -88,9 +88,50 @@ def test_dependency_candidates_pick_smallest_unchecked_target_per_group():
         {"id": 4, "target_group": "G2", "target": 1, "dependency_check": False},
     ]
 
-    candidates = select_pending_dependency_candidates(items)
+    candidates = select_next_dependency_candidates(items, [])
 
-    assert [candidate["id"] for candidate in candidates] == [2, 4]
+    assert [candidate["id"] for candidate in candidates] == [1, 4]
+
+
+def test_dependency_candidates_skip_completed_wip_and_pick_next_target():
+    items = [
+        {
+            "id": 1,
+            "lab_name": "Lab A",
+            "experiment_name": "SEM",
+            "target_group": "G1",
+            "target": 1,
+            "dependency_check": True,
+        },
+        {
+            "id": 2,
+            "lab_name": "Lab A",
+            "experiment_name": "EDX",
+            "target_group": "G1",
+            "target": 2,
+            "dependency_check": False,
+        },
+        {
+            "id": 3,
+            "lab_name": "Lab B",
+            "experiment_name": "CV",
+            "target_group": "G2",
+            "target": 1,
+            "dependency_check": False,
+        },
+    ]
+
+    sample_wips = [
+        {
+            "lab_name": "Lab A",
+            "experiment_item": "SEM",
+            "status": "completed",
+        }
+    ]
+
+    candidates = select_next_dependency_candidates(items, sample_wips)
+
+    assert [candidate["id"] for candidate in candidates] == [2, 3]
 
 
 def test_dependency_tie_break_uses_lowest_machine_utilization():
@@ -201,26 +242,34 @@ def test_wip_create_order_guard_allows_contiguous_same_lab_wips():
     )
 
 
-def test_wip_create_order_guard_blocks_same_lab_after_intermediate_lab():
+def test_wip_create_order_guard_allows_aba_implicit_groups():
     sample = {"experiment_item": "Lab A:SEM、Lab B:CV、Lab A:EDX"}
 
-    with pytest.raises(HTTPException) as exc:
-        validate_wip_create_items_in_order(
-            sample=sample,
-            existing_wips=[],
-            requested_items=[
-                {"lab_name": "Lab A", "experiment_item": "SEM"},
-                {"lab_name": "Lab A", "experiment_item": "EDX"},
-            ],
-        )
-
-    assert exc.value.status_code == 400
-    assert exc.value.detail == "目前尚未輪到此 WIP，請先完成前一站實驗或交接流程"
+    validate_wip_create_items_in_order(
+        sample=sample,
+        existing_wips=[],
+        requested_items=[
+            {"lab_name": "Lab A", "experiment_item": "SEM"},
+            {"lab_name": "Lab A", "experiment_item": "EDX"},
+        ],
+    )
 
 
-def test_wip_create_order_guard_blocks_skipping_first_contiguous_wip():
+def test_wip_create_order_guard_allows_skip_in_implicit_groups():
     sample = {"experiment_item": "Lab A:SEM、Lab A:EDX、Lab B:CV"}
 
+    validate_wip_create_items_in_order(
+        sample=sample,
+        existing_wips=[],
+        requested_items=[
+            {"lab_name": "Lab A", "experiment_item": "EDX"},
+        ],
+    )
+
+
+def test_wip_create_order_guard_blocks_skipping_first_contiguous_wip_in_explicit_group():
+    sample = {"experiment_item": "G1#1|Lab A:SEM、G1#2|Lab A:EDX、G1#3|Lab B:CV"}
+
     with pytest.raises(HTTPException) as exc:
         validate_wip_create_items_in_order(
             sample=sample,
@@ -232,6 +281,7 @@ def test_wip_create_order_guard_blocks_skipping_first_contiguous_wip():
 
     assert exc.value.status_code == 400
     assert exc.value.detail == "目前尚未輪到此 WIP，請先完成前一站實驗或交接流程"
+
 
 def test_wip_owner_lab_visibility_filter_is_strict_for_dispatch_pick_list():
     lab_user = {"role": "lab_supervisor", "lab_name": "Lab A", "department": "Lab A"}

@@ -258,7 +258,6 @@ MACHINES: list[dict[str, object]] = [
         "utilization": 30,
         "owner": "李大明",
         "last_maintenance": "2026-05-08",
-
     },
     {
         "machine_id": "EDX-A-001",
@@ -280,7 +279,6 @@ MACHINES: list[dict[str, object]] = [
         "owner": "李大明",
         "last_maintenance": "2026-05-15",
     },
-
     # LAB-B：電性測試實驗室
     {
         "machine_id": "IV-B-001",
@@ -322,7 +320,6 @@ MACHINES: list[dict[str, object]] = [
         "owner": "林妏媞",
         "last_maintenance": "2026-05-16",
     },
-
     # LAB-C：可靠度實驗室
     {
         "machine_id": "TC-C-001",
@@ -469,11 +466,10 @@ async def upsert_lab(session, code: str, name: str, capacity: int, capabilities:
             session.add(LabCapability(lab_id=lab.id, experiment_item=item))
     return lab
 
+
 async def upsert_machine(session, spec: dict[str, object]) -> Machine:
     existing = (
-        await session.execute(
-            select(Machine).where(Machine.machine_id == spec["machine_id"])
-        )
+        await session.execute(select(Machine).where(Machine.machine_id == spec["machine_id"]))
     ).scalar_one_or_none()
 
     if existing:
@@ -484,9 +480,7 @@ async def upsert_machine(session, spec: dict[str, object]) -> Machine:
         existing.utilization = int(spec.get("utilization") or 0)
         existing.owner = str(spec.get("owner") or "")
         existing.last_maintenance = (
-            str(spec["last_maintenance"])
-            if spec.get("last_maintenance") is not None
-            else None
+            str(spec["last_maintenance"]) if spec.get("last_maintenance") is not None else None
         )
         return existing
 
@@ -499,9 +493,7 @@ async def upsert_machine(session, spec: dict[str, object]) -> Machine:
         utilization=int(spec.get("utilization") or 0),
         owner=str(spec.get("owner") or ""),
         last_maintenance=(
-            str(spec["last_maintenance"])
-            if spec.get("last_maintenance") is not None
-            else None
+            str(spec["last_maintenance"]) if spec.get("last_maintenance") is not None else None
         ),
     )
 
@@ -665,7 +657,7 @@ async def main() -> None:
         lab_map: dict[str, Lab] = {}
         for code, name, capacity, caps in LABS:
             lab_map[code] = await upsert_lab(session, code, name, capacity, caps)
-        
+
         # Machines
         for spec in MACHINES:
             await upsert_machine(session, spec)
