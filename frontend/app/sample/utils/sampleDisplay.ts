@@ -1,4 +1,5 @@
 import { sampleStatusText } from "../constants";
+import { formatExperimentSummary } from "@/lib/experimentSummary";
 import type { CurrentUser, Sample, SampleFilter, Transfer } from "../types";
 
 export function isSystemAdmin(user: CurrentUser) {
@@ -234,4 +235,8 @@ export function formatStatusChange(fromStatus: string | null, toStatus: string |
   const toText = toStatus ? (sampleStatusText[toStatus] ?? toStatus) : "無";
 
   return `${fromText} → ${toText}`;
+}
+
+export function formatSampleExperimentRequirement(experimentItem: string | null | undefined) {
+  return formatExperimentSummary(experimentItem);
 }

@@ -27,6 +27,7 @@ from app.db.models import (  # noqa: E402
     Department,
     Lab,
     LabCapability,
+    Machine,
     Permission,
     QuotaSettingModel,
     Role,
@@ -216,6 +217,145 @@ STORAGE_LOCATIONS: list[tuple[str, str, str]] = [
     ("STG-B1", "B 區待測架", "電性測試待測樣品"),
 ]
 
+MACHINES: list[dict[str, object]] = [
+    # LAB-A：材料分析實驗室
+    {
+        "machine_id": "SEM-A-001",
+        "name": "掃描式電子顯微鏡 A01",
+        "lab": "LAB-A",
+        "status": "閒置",
+        "supported_items": ["SEM"],
+        "utilization": 20,
+        "owner": "李大明",
+        "last_maintenance": "2026-05-12",
+    },
+    {
+        "machine_id": "SEM-A-002",
+        "name": "掃描式電子顯微鏡 A02",
+        "lab": "LAB-A",
+        "status": "使用中",
+        "supported_items": ["SEM"],
+        "utilization": 80,
+        "owner": "李大明",
+        "last_maintenance": "2026-05-12",
+    },
+    {
+        "machine_id": "FIB-A-001",
+        "name": "聚焦離子束系統 A01",
+        "lab": "LAB-A",
+        "status": "使用中",
+        "supported_items": ["FIB"],
+        "utilization": 68,
+        "owner": "李大明",
+        "last_maintenance": "2026-05-08",
+    },
+    {
+        "machine_id": "FIB-A-002",
+        "name": "聚焦離子束系統 A02",
+        "lab": "LAB-A",
+        "status": "閒置",
+        "supported_items": ["FIB"],
+        "utilization": 30,
+        "owner": "李大明",
+        "last_maintenance": "2026-05-08",
+
+    },
+    {
+        "machine_id": "EDX-A-001",
+        "name": "能量散射光譜儀 A01",
+        "lab": "LAB-A",
+        "status": "閒置",
+        "supported_items": ["EDX"],
+        "utilization": 35,
+        "owner": "李大明",
+        "last_maintenance": "2026-05-15",
+    },
+    {
+        "machine_id": "EDX-A-001",
+        "name": "能量散射光譜儀 A01",
+        "lab": "LAB-A",
+        "status": "閒置",
+        "supported_items": ["EDX"],
+        "utilization": 50,
+        "owner": "李大明",
+        "last_maintenance": "2026-05-15",
+    },
+
+    # LAB-B：電性測試實驗室
+    {
+        "machine_id": "IV-B-001",
+        "name": "半導體參數量測儀 B01",
+        "lab": "LAB-B",
+        "status": "閒置",
+        "supported_items": ["IV"],
+        "utilization": 28,
+        "owner": "林妏媞",
+        "last_maintenance": "2026-05-14",
+    },
+    {
+        "machine_id": "IV-B-001",
+        "name": "半導體參數量測儀 B01",
+        "lab": "LAB-B",
+        "status": "閒置",
+        "supported_items": ["IV"],
+        "utilization": 28,
+        "owner": "林妏媞",
+        "last_maintenance": "2026-05-14",
+    },
+    {
+        "machine_id": "CV-B-001",
+        "name": "電容電壓量測儀 B01",
+        "lab": "LAB-B",
+        "status": "使用中",
+        "supported_items": ["CV"],
+        "utilization": 72,
+        "owner": "林妏媞",
+        "last_maintenance": "2026-05-10",
+    },
+    {
+        "machine_id": "PROBE-B-001",
+        "name": "探針台 B01",
+        "lab": "LAB-B",
+        "status": "閒置",
+        "supported_items": ["Probe"],
+        "utilization": 18,
+        "owner": "林妏媞",
+        "last_maintenance": "2026-05-16",
+    },
+
+    # LAB-C：可靠度實驗室
+    {
+        "machine_id": "TC-C-001",
+        "name": "溫度循環試驗機 C01",
+        "lab": "LAB-C",
+        "status": "閒置",
+        "supported_items": ["TC"],
+        "utilization": 32,
+        "owner": "周秉倫",
+        "last_maintenance": "2026-05-11",
+    },
+    {
+        "machine_id": "HTOL-C-001",
+        "name": "高溫操作壽命測試機 C01",
+        "lab": "LAB-C",
+        "status": "使用中",
+        "supported_items": ["HTOL"],
+        "utilization": 80,
+        "owner": "周秉倫",
+        "last_maintenance": "2026-05-06",
+    },
+    {
+        "machine_id": "ESD-C-001",
+        "name": "靜電放電測試機 C01",
+        "lab": "LAB-C",
+        "status": "保養中",
+        "supported_items": ["ESD"],
+        "utilization": 45,
+        "owner": "周秉倫",
+        "last_maintenance": "2026-05-20",
+    },
+]
+
 # email, name, role-name, department-code, lab-code, password
 USERS: list[tuple[str, str, str, str | None, str | None, str]] = [
     ("admin@example.com", "Sys Admin", "system_admin", None, None, "Admin1234"),
@@ -328,6 +468,46 @@ async def upsert_lab(session, code: str, name: str, capacity: int, capabilities:
         if item not in existing_items:
             session.add(LabCapability(lab_id=lab.id, experiment_item=item))
     return lab
+
+async def upsert_machine(session, spec: dict[str, object]) -> Machine:
+    existing = (
+        await session.execute(
+            select(Machine).where(Machine.machine_id == spec["machine_id"])
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        existing.name = str(spec["name"])
+        existing.lab = str(spec["lab"])
+        existing.status = str(spec.get("status") or "閒置")
+        existing.supported_items = list(spec.get("supported_items") or [])
+        existing.utilization = int(spec.get("utilization") or 0)
+        existing.owner = str(spec.get("owner") or "")
+        existing.last_maintenance = (
+            str(spec["last_maintenance"])
+            if spec.get("last_maintenance") is not None
+            else None
+        )
+        return existing
+
+    machine = Machine(
+        machine_id=str(spec["machine_id"]),
+        name=str(spec["name"]),
+        lab=str(spec["lab"]),
+        status=str(spec.get("status") or "閒置"),
+        supported_items=list(spec.get("supported_items") or []),
+        utilization=int(spec.get("utilization") or 0),
+        owner=str(spec.get("owner") or ""),
+        last_maintenance=(
+            str(spec["last_maintenance"])
+            if spec.get("last_maintenance") is not None
+            else None
+        ),
+    )
+
+    session.add(machine)
+    await session.flush()
+    return machine
 
 
 async def upsert_storage(session, code: str, name: str, description: str) -> StorageLocation:
@@ -485,6 +665,10 @@ async def main() -> None:
         lab_map: dict[str, Lab] = {}
         for code, name, capacity, caps in LABS:
             lab_map[code] = await upsert_lab(session, code, name, capacity, caps)
+        
+        # Machines
+        for spec in MACHINES:
+            await upsert_machine(session, spec)
 
         # Storage
         for code, name, desc in STORAGE_LOCATIONS:
@@ -558,6 +742,8 @@ async def main() -> None:
         "  engineer3@example.com  / Engin1234   (lab_engineer)\n"
         "  requester@example.com  / Reque1234   (plant_user)\n"
         "  requester2@example.com / Reque1234   (plant_user)\n"
+        "Machines:\n"
+        f"  seeded {len(MACHINES)} machines\n"
         "Quota defaults:\n"
         "  requester@example.com  monthly_limit=10\n"
         "  DEPT-RD                monthly_limit=50\n"

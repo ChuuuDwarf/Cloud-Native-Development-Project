@@ -11,6 +11,8 @@ export type CurrentUser = {
 export type RequestedExperiment = {
   lab_name: string;
   experiment_item: string;
+  targetGroup?: string;
+  target?: number;
 };
 
 export type SampleNote = {

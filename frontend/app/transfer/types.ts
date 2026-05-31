@@ -11,6 +11,8 @@ export type CurrentUser = {
 export type RequestedExperiment = {
   lab_name: string;
   experiment_item: string;
+  targetGroup?: string;
+  target?: number;
 };
 
 export type Sample = {
@@ -84,6 +86,15 @@ export type TransferCandidate = {
   nextExperiment: RequestedExperiment;
   nextWip: Wip | null;
   existingTransfer: Transfer | null;
+};
+
+export type SameLabNextCandidate = {
+  sample: Sample;
+  currentLabCompletedWips: Wip[];
+  remainingWips: Wip[];
+  nextLab: string;
+  nextExperiment: RequestedExperiment;
+  nextWip: Wip | null;
 };
 
 export type ReturnCandidate = {

@@ -642,15 +642,17 @@ class OrderRepository:
         self,
         order: OrderModel,
         current_user: CurrentUser,
-    ) -> None:
+        ) -> None:
         """Create pending samples when the applicant confirms delivery.
 
         Business rule:
         - One physical sample should only create one row in `samples`.
         - Multiple approved order items with the same `sample_id` are merged into the
-          same sample row.
+            same sample row.
         - The merged `experiment_item` keeps lab/experiment information so the sample
-          module can split/dispatch the sample into WIPs later.
+            module can split/dispatch the sample into WIPs later.
+        - If `/api/wips/dependency/next` already picked a destination, that order item
+            will have `dependency_check = true`, and it must become the first receiving Lab.
         """
 
         approved_items = [item for item in order.items if item.status == OrderStatus.APPROVED.value]
@@ -710,6 +712,32 @@ class OrderRepository:
             if existing_sample is not None:
                 continue
 
+            # IMPORTANT:
+            # `/api/wips/dependency/next` 會把被選中的第一站 order_item 標成
+            # dependency_check = true。
+            #
+            # 確認送樣建立 sample 時，必須優先使用這筆當第一個 Lab，
+            # 否則畫面顯示送往 B，但這裡會因為原始 order_items 順序又落到 A。
+            selected_first_item = next(
+                (item for item in sample_items if item.dependency_check),
+                None,
+            )
+
+            if selected_first_item is not None:
+                sample_items = [
+                    selected_first_item,
+                    *[item for item in sample_items if item.id != selected_first_item.id],
+                ]
+            else:
+                sample_items = sorted(
+                    sample_items,
+                    key=lambda item: (
+                        item.target or 1,
+                        item.created_at,
+                        item.id,
+                    ),
+                )
+
             experiment_parts: list[str] = []
             first_lab_name: str | None = None
 
@@ -725,7 +753,11 @@ class OrderRepository:
                 if first_lab_name is None:
                     first_lab_name = lab_name
 
-                part = f"{lab_name}:{experiment_name}"
+                target_group = item.target_group or "G1"
+                target = item.target or 1
+
+                part = f"{target_group}#{target}|{lab_name}:{experiment_name}"
+
                 if part not in experiment_parts:
                     experiment_parts.append(part)
 
@@ -820,13 +852,13 @@ class OrderRepository:
                     "sample_id": sample_id,
                     "description": (
                         f"確認送樣，待收樣品 {sample_no}，"
-                        f"目前位置：{first_lab_name or current_location}"
+                        f"目前位置：{current_location}"
                     ),
                     "operator_name": current_user.name,
                     "lab_name": first_lab_name,
                 },
             )
-
+    
     async def _quota_check(
         self,
         scope_type: str,

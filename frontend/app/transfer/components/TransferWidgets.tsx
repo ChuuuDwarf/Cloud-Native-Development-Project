@@ -1,3 +1,5 @@
+import type { CSSProperties, ReactNode } from "react";
+import { formatExperimentSummary } from "@/lib/experimentSummary";
 import type { Transfer, TransferCandidate, ReturnCandidate, Wip } from "../types";
 import { priorityText, sampleStatusText, transferStatusText, wipStatusText } from "../constants";
 import { formatDateTime } from "../utils/transferFlow";
@@ -40,7 +42,31 @@ import {
   iconButtonStyle,
   modalNoticeStyle,
 } from "../styles";
-import type { CSSProperties } from "react";
+
+function ExperimentRequirementLines({
+  value,
+}: {
+  value: string | null | undefined;
+}) {
+  const displayText = formatExperimentSummary(value);
+
+  if (displayText === "-") return "-";
+
+  const items = displayText
+    .split("、")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (items.length <= 1) return displayText;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {items.map((item, index) => (
+        <div key={`${item}-${index}`}>{item}</div>
+      ))}
+    </div>
+  );
+}
 
 export function TransferModal({
   transfer,
@@ -162,7 +188,10 @@ export function TransferDetail({
         <InfoBlock label="樣品編號" value={candidate.sample.sample_no} />
         <InfoBlock label="委託單號" value={candidate.sample.order_no} />
         <InfoBlock label="樣品名稱" value={candidate.sample.sample_name ?? "-"} />
-        <InfoBlock label="實驗需求" value={candidate.sample.experiment_item ?? "-"} />
+        <InfoBlock
+          label="實驗需求"
+          value={<ExperimentRequirementLines value={candidate.sample.experiment_item} />}
+        />
         <InfoBlock label="目前位置" value={candidate.sample.current_location ?? "-"} />
         <InfoBlock label="送往" value={`${candidate.nextLab} 收樣區`} />
       </div>
@@ -297,7 +326,11 @@ export function ReturnDetail({
         <InfoBlock label="樣品編號" value={candidate.sample.sample_no} />
         <InfoBlock label="委託單號" value={candidate.sample.order_no} />
         <InfoBlock label="樣品名稱" value={candidate.sample.sample_name ?? "-"} />
-        <InfoBlock label="實驗需求" value={candidate.sample.experiment_item ?? "-"} />
+        <InfoBlock
+          label="實驗需求"
+          value={<ExperimentRequirementLines value={candidate.sample.experiment_item} />}
+          style={{ gridColumn: "1 / -1" }}
+        />
         <InfoBlock label="目前位置" value={candidate.sample.current_location ?? "-"} />
         <InfoBlock
           label="樣品狀態"
@@ -386,7 +419,7 @@ export function InfoBlock({
   style,
 }: {
   label: string;
-  value: string | number | null | undefined;
+  value: ReactNode | null | undefined;
   style?: CSSProperties;
 }) {
   return (
