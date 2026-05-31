@@ -88,9 +88,14 @@ export function SampleExperimentEditor({
 
           if (!targetFlow) return;
 
+          // 流程裡有實驗時跳 confirm,確認後一併移除 — 比之前「先逐筆
+          // 刪實驗再刪流程」少一個步驟。最後一個流程不准刪(系統永遠
+          // 需要一個容器來放新加的實驗)。
           if (targetFlow.items.length > 0) {
-            window.alert("此相依流程內仍有實驗，請先移除或移到其他流程後再刪除。");
-            return;
+            const ok = window.confirm(
+              `「${targetFlow.name}」內還有 ${targetFlow.items.length} 個實驗。刪除流程會一併移除這些實驗,確定?`
+            );
+            if (!ok) return;
           }
 
           setExplicitFlowIdsByGroup((current) => ({
@@ -264,7 +269,7 @@ function DependencyFlowEditor({
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <div style={{ fontWeight: 800, fontSize: 13 }}>{flow.name}</div>
 
-                {flow.items.length === 0 && state.flows.length > 1 && (
+                {state.flows.length > 1 && (
                   <button
                     type="button"
                     onClick={() => onDeleteFlow(flow.id)}

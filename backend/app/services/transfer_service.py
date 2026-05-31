@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repos import transfer_repo
+from app.repos import transfer_repo, wip_repo
 
 fallback_user = {
     "id": "system",
@@ -518,6 +518,33 @@ async def cancel_transfer(
             operator_name=operator_name,
             lab_name=transfer_data.get("from_lab"),
         )
+
+        # The transfer's destination was chosen via
+        # POST /api/wips/dependency/next which atomically flipped one
+        # order_items row's dependency_check to True. There's no FK from
+        # transfers to order_items, so we roll back the most-recent claim
+        # for (sample_id, to_lab). If no claim exists (pre-feature transfer
+        # or already-rolled-back), this is a no-op.
+        released = await wip_repo.release_order_item_dependency_check_for_sample(
+            db,
+            sample_id=transfer_data["target_id"],
+            to_lab_id_or_name=transfer_data.get("to_lab"),
+        )
+
+        if released is not None:
+            await transfer_repo.create_sample_history(
+                db,
+                sample_id=transfer_data["target_id"],
+                action="dependency_check_rollback",
+                from_status=sample.get("status"),
+                to_status=sample.get("status"),
+                description=(
+                    f"取消交接單 {transfer_data.get('transfer_no')}：釋出 order_item "
+                    f"#{released.get('id')} 的 dependency_check 佔位"
+                ),
+                operator_name=operator_name,
+                lab_name=transfer_data.get("to_lab"),
+            )
 
     if transfer_data["target_type"] == "wip":
         wip = await get_wip_or_404(transfer_data["target_id"], db)

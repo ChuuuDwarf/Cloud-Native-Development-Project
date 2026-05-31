@@ -117,6 +117,86 @@ async def claim_order_item_dependency_check(
     return row_to_dict(result.fetchone())
 
 
+async def release_order_item_dependency_check_for_sample(
+    db: AsyncSession,
+    *,
+    sample_id: str,
+    to_lab_id_or_name: str | None,
+) -> dict | None:
+    """Roll back the most-recently-claimed dependency_check for ``sample_id``.
+
+    Design rationale
+    ----------------
+    A transfer's destination is chosen via ``POST /api/wips/dependency/next``,
+    which atomically flips one ``order_items`` row's ``dependency_check`` to
+    True. There is no FK from ``transfers`` to ``order_items``, so when a
+    transfer is cancelled we can't directly reverse "the claim". Instead we
+    use a tight heuristic: for the given sample and destination lab, undo the
+    single most-recently-claimed item (``ORDER BY updated_at DESC LIMIT 1``).
+
+    Lab matching
+    ------------
+    ``transfers.to_lab`` is the Chinese display name (matches ``Wip.lab_name``)
+    while ``order_items.lab_id`` is a free-form string holding either a UUID
+    or a code — see ``list_dependency_order_items_for_sample`` for the same
+    treatment. We bridge by joining ``labs`` on either ``labs.name`` or
+    ``labs.code`` and matching either ``oi.lab_id = CAST(labs.id AS TEXT)`` or
+    ``oi.lab_id = labs.code``. As a last-ditch fallback, we also accept a
+    direct ``oi.lab_id = :to_lab`` so callers that already hand us a code
+    aren't penalised.
+
+    No-op on miss
+    -------------
+    If no row matches (transfer pre-dates the dependency feature, or the
+    claim was already cleared by some other flow), returns None and writes
+    nothing — DON'T raise. Caller is responsible for committing the txn.
+    """
+    if not to_lab_id_or_name:
+        return None
+
+    result = await db.execute(
+        text(
+            """
+            UPDATE order_items
+            SET
+                dependency_check = false,
+                updated_at = NOW()
+            WHERE id = (
+                SELECT oi.id
+                FROM order_items oi
+                LEFT JOIN labs l
+                    ON l.name = :to_lab
+                    OR l.code = :to_lab
+                WHERE oi.sample_id = :sample_id
+                  AND oi.dependency_check = true
+                  AND (
+                    oi.lab_id = :to_lab
+                    OR (l.id IS NOT NULL AND oi.lab_id = CAST(l.id AS TEXT))
+                    OR (l.code IS NOT NULL AND oi.lab_id = l.code)
+                  )
+                ORDER BY oi.updated_at DESC, oi.id DESC
+                LIMIT 1
+            )
+            RETURNING
+                id,
+                order_id,
+                sample_id AS sample_no,
+                lab_id,
+                experiment_id,
+                target_group,
+                target,
+                dependency_check
+            """
+        ),
+        {
+            "sample_id": sample_id,
+            "to_lab": to_lab_id_or_name,
+        },
+    )
+
+    return row_to_dict(result.fetchone())
+
+
 async def list_wips(
     db: AsyncSession,
     *,

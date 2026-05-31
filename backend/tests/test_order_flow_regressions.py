@@ -818,3 +818,397 @@ async def test_canClose_stays_true_after_lab_closes_so_send_button_still_works(
     )
     assert check["labClosed"] is True
     assert all(c["ok"] for c in check["conditions"])
+
+
+# ---------------------------------------------------------------------------
+# Issue 7 — dependency-aware closure gate + cancel_transfer rollback.
+#
+# Bug 7a: ``all_wips_lab_closed`` previously counted only WIPs, but WIPs are
+# created on-demand in ``sample_service._split_sample`` — NOT up-front for
+# every order_item. For a multi-lab dependency chain (LAB-A -> LAB-B), LAB-A
+# closes its WIP before LAB-B's WIP even exists, the count match fires
+# prematurely, and the order jumps to WAITING_PICKUP while LAB-B's work
+# hasn't happened yet. The contract for "all the work is done" lives in
+# ``order_items.dependency_check``: every row must be claimed.
+#
+# Bug 7b: ``cancel_transfer`` reset the sample's location + wrote a history
+# row but never reversed the ``dependency_check`` claim that the
+# ``/api/wips/dependency/next`` endpoint made when the destination was
+# chosen. That left the order_item permanently flagged as "assigned" with
+# no transfer behind it — and since the dependency router only returns
+# unclaimed items, the order became unreachable.
+# ---------------------------------------------------------------------------
+
+
+async def _seed_order_item(
+    db_session,
+    *,
+    order_id: int,
+    sample_id: str,
+    lab_id: str,
+    dependency_check: bool = False,
+    experiment_id: str = "EXP-REG",
+    target_group: str = "G1",
+    target: int = 1,
+):
+    from app.db.models.order_management import OrderItemModel
+
+    item = OrderItemModel(
+        order_id=order_id,
+        sample_id=sample_id,
+        sample_name="reg sample",
+        lab_id=lab_id,
+        experiment_id=experiment_id,
+        target_group=target_group,
+        target=target,
+        dependency_check=dependency_check,
+        status="approved",
+    )
+    db_session.add(item)
+    await db_session.flush()
+    return item
+
+
+async def test_all_wips_lab_closed_false_when_order_items_unclaimed(
+    db_session,
+) -> None:
+    """Multi-lab dependency chain: 1 WIP exists and is lab_closed=True, but
+    a second order_item is still dependency_check=False (its WIP hasn't been
+    spawned yet via _split_sample). The closure gate MUST stay False so the
+    order doesn't jump to WAITING_PICKUP prematurely."""
+    suite = _suite()
+    order_no = f"REG-OF7A-O-{suite}"
+
+    lab_a = (await db_session.execute(select(Lab).where(Lab.code == "LAB-A"))).scalar_one()
+    lab_b = (await db_session.execute(select(Lab).where(Lab.code == "LAB-B"))).scalar_one()
+
+    order = await _seed_order(db_session, order_no=order_no, status=OrderStatus.IN_PROGRESS.value)
+
+    # Order item #1: already claimed (LAB-A picked it up; WIP exists, closed)
+    await _seed_order_item(
+        db_session,
+        order_id=order.id,
+        sample_id=f"SMP-OF7A-{suite}",
+        lab_id=str(lab_a.id),
+        dependency_check=True,
+    )
+    # Order item #2: NOT yet claimed (LAB-B hasn't been reached in the chain)
+    await _seed_order_item(
+        db_session,
+        order_id=order.id,
+        sample_id=f"SMP-OF7A-{suite}",
+        lab_id=str(lab_b.id),
+        dependency_check=False,
+    )
+
+    wip = await _seed_wip(
+        db_session,
+        wip_no=f"REG-OF7A-W-{suite}",
+        order_no=order_no,
+        status="completed",
+        lab_name=lab_a.name,
+    )
+    wip.lab_closed = True
+    await db_session.commit()
+
+    repo = ClosureRepository(db_session)
+    assert await repo.all_wips_lab_closed(order_no) is False, (
+        "closure gate must stay False while any order_item is still "
+        "dependency_check=False — WIPs are spawned on-demand so the wips "
+        "table alone isn't authoritative for cross-lab chains"
+    )
+
+
+async def test_all_wips_lab_closed_true_when_all_items_claimed_and_wips_closed(
+    db_session,
+) -> None:
+    """Once every order_item is claimed AND every WIP has lab_closed=True,
+    the gate flips True and the order can advance to WAITING_PICKUP."""
+    suite = _suite()
+    order_no = f"REG-OF7B-O-{suite}"
+
+    lab_a = (await db_session.execute(select(Lab).where(Lab.code == "LAB-A"))).scalar_one()
+    lab_b = (await db_session.execute(select(Lab).where(Lab.code == "LAB-B"))).scalar_one()
+
+    order = await _seed_order(db_session, order_no=order_no, status=OrderStatus.IN_PROGRESS.value)
+    await _seed_order_item(
+        db_session,
+        order_id=order.id,
+        sample_id=f"SMP-OF7B-{suite}",
+        lab_id=str(lab_a.id),
+        dependency_check=True,
+    )
+    await _seed_order_item(
+        db_session,
+        order_id=order.id,
+        sample_id=f"SMP-OF7B-{suite}",
+        lab_id=str(lab_b.id),
+        dependency_check=True,
+    )
+
+    for n, lab_name in enumerate([lab_a.name, lab_b.name]):
+        wip = await _seed_wip(
+            db_session,
+            wip_no=f"REG-OF7B-W{n}-{suite}",
+            order_no=order_no,
+            status="completed",
+            lab_name=lab_name,
+        )
+        wip.lab_closed = True
+
+    await db_session.commit()
+
+    repo = ClosureRepository(db_session)
+    assert await repo.all_wips_lab_closed(order_no) is True
+
+
+@pytest.fixture
+async def _transfer_tables(db_session) -> None:
+    """Create the ad-hoc ``samples`` / ``sample_histories`` / ``transfers``
+    tables the cancel_transfer service needs.
+
+    These tables are migration-only (raw-SQL throughout the B/C codebase),
+    so ``Base.metadata.create_all`` in conftest doesn't materialise them.
+    The schema mirrors the production migration just enough for
+    ``cancel_transfer``: ``samples`` (id, status, current_location),
+    ``sample_histories`` (insert-only audit row), ``transfers`` (the row
+    cancel_transfer flips status on).
+    """
+    from sqlalchemy import text as _text
+
+    statements = [
+        """
+        CREATE TABLE IF NOT EXISTS samples (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            status TEXT NOT NULL DEFAULT 'received',
+            current_location TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS sample_histories (
+            id BIGSERIAL PRIMARY KEY,
+            sample_id uuid NOT NULL,
+            action TEXT NOT NULL,
+            from_status TEXT,
+            to_status TEXT,
+            description TEXT,
+            operator_name TEXT,
+            lab_name TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS transfers (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            transfer_no TEXT NOT NULL UNIQUE,
+            target_type TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            order_no TEXT,
+            sample_no TEXT,
+            wip_no TEXT,
+            from_lab TEXT,
+            to_lab TEXT,
+            handed_by TEXT,
+            received_by TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            transferred_at TIMESTAMPTZ,
+            received_at TIMESTAMPTZ,
+            note TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+    ]
+    for stmt in statements:
+        await db_session.execute(_text(stmt))
+    await db_session.commit()
+
+
+async def _seed_sample_and_transfer(
+    db_session,
+    *,
+    transfer_no: str,
+    from_lab_name: str,
+    to_lab_name: str,
+) -> tuple[str, str, dict[str, object]]:
+    """Insert a sample + a pending sample-targeted transfer; return
+    ``(sample_id, transfer_id, transfer_data)`` ready to hand to
+    ``cancel_transfer``."""
+    from sqlalchemy import text as _text
+
+    sample_row = (
+        await db_session.execute(
+            _text(
+                "INSERT INTO samples (status, current_location) "
+                "VALUES ('received', :location) RETURNING id"
+            ),
+            {"location": f"{from_lab_name} 交接待送區"},
+        )
+    ).fetchone()
+    sample_id = str(sample_row[0])
+
+    transfer_row = (
+        await db_session.execute(
+            _text(
+                """
+                INSERT INTO transfers (
+                    transfer_no, target_type, target_id, from_lab, to_lab, status
+                )
+                VALUES (:no, 'sample', :tid, :from_lab, :to_lab, 'pending')
+                RETURNING id
+                """
+            ),
+            {
+                "no": transfer_no,
+                "tid": sample_id,
+                "from_lab": from_lab_name,
+                "to_lab": to_lab_name,
+            },
+        )
+    ).fetchone()
+    transfer_id = str(transfer_row[0])
+    await db_session.commit()
+
+    transfer_data = {
+        "transfer_no": transfer_no,
+        "target_type": "sample",
+        "target_id": sample_id,
+        "from_lab": from_lab_name,
+        "to_lab": to_lab_name,
+        "status": "pending",
+    }
+    return sample_id, transfer_id, transfer_data
+
+
+async def test_cancel_transfer_resets_most_recent_dependency_check_for_sample(
+    db_session,
+    _transfer_tables,
+) -> None:
+    """When a pending sample-transfer is cancelled, the dependency_check
+    claim that was made for (sample_id, to_lab) at /api/wips/dependency/next
+    must be rolled back — otherwise the order_item is permanently flagged
+    as 'assigned' with no actual transfer behind it, and the dependency
+    router (which only returns unclaimed items) can never re-surface it.
+    """
+    from app.db.models import OrderItemModel as _OrderItemModel
+    from app.services import transfer_service
+
+    suite = _suite()
+    order_no = f"REG-OF7C-O-{suite}"
+    transfer_no = f"REG-OF7C-T-{suite}"
+    lab_b = (await db_session.execute(select(Lab).where(Lab.code == "LAB-B"))).scalar_one()
+
+    order = await _seed_order(db_session, order_no=order_no, status=OrderStatus.IN_PROGRESS.value)
+    sample_id, transfer_id, transfer_data = await _seed_sample_and_transfer(
+        db_session,
+        transfer_no=transfer_no,
+        from_lab_name="材料分析實驗室",
+        to_lab_name=lab_b.name,
+    )
+    # Seed the order_item already claimed (claim happened when the destination
+    # was chosen before this transfer was created).
+    item = await _seed_order_item(
+        db_session,
+        order_id=order.id,
+        sample_id=sample_id,
+        lab_id=str(lab_b.id),
+        dependency_check=True,
+    )
+    item_id = item.id  # capture before expire_all invalidates the ORM row
+    await db_session.commit()
+
+    await transfer_service.cancel_transfer(
+        db_session,
+        transfer_id=transfer_id,
+        transfer_data=transfer_data,
+        operator_name="tester",
+    )
+
+    db_session.expire_all()
+    refreshed = (
+        await db_session.execute(select(_OrderItemModel).where(_OrderItemModel.id == item_id))
+    ).scalar_one()
+    assert refreshed.dependency_check is False, (
+        "cancel_transfer on a sample-targeted transfer must reset the "
+        "dependency_check claim that /api/wips/dependency/next made for "
+        "the same (sample_id, to_lab) — otherwise the order_item is "
+        "stranded forever"
+    )
+
+
+async def test_cancel_transfer_does_not_touch_unrelated_dependency_checks(
+    db_session,
+    _transfer_tables,
+) -> None:
+    """The rollback heuristic must be scoped to the cancelled transfer's
+    (sample_id, to_lab). A second sample's claim — even to the same
+    destination lab — must NOT be released by the unrelated cancel."""
+    from app.db.models import OrderItemModel as _OrderItemModel
+    from app.services import transfer_service
+
+    suite = _suite()
+    order_no = f"REG-OF7D-O-{suite}"
+    transfer_no = f"REG-OF7D-T-{suite}"
+    lab_b = (await db_session.execute(select(Lab).where(Lab.code == "LAB-B"))).scalar_one()
+
+    order = await _seed_order(db_session, order_no=order_no, status=OrderStatus.IN_PROGRESS.value)
+    sample_1_id, transfer_id, transfer_data = await _seed_sample_and_transfer(
+        db_session,
+        transfer_no=transfer_no,
+        from_lab_name="材料分析實驗室",
+        to_lab_name=lab_b.name,
+    )
+    # Sample #2 — different sample, same destination lab. Its claim should
+    # NOT be released when sample #1's transfer is cancelled.
+    from sqlalchemy import text as _text
+
+    sample_2_row = (
+        await db_session.execute(
+            _text(
+                "INSERT INTO samples (status, current_location) "
+                "VALUES ('received', :location) RETURNING id"
+            ),
+            {"location": "材料分析實驗室 交接待送區"},
+        )
+    ).fetchone()
+    sample_2_id = str(sample_2_row[0])
+
+    item_1 = await _seed_order_item(
+        db_session,
+        order_id=order.id,
+        sample_id=sample_1_id,
+        lab_id=str(lab_b.id),
+        dependency_check=True,
+    )
+    item_2 = await _seed_order_item(
+        db_session,
+        order_id=order.id,
+        sample_id=sample_2_id,
+        lab_id=str(lab_b.id),
+        dependency_check=True,
+    )
+    item_1_id = item_1.id  # capture before expire_all
+    item_2_id = item_2.id
+    await db_session.commit()
+
+    await transfer_service.cancel_transfer(
+        db_session,
+        transfer_id=transfer_id,
+        transfer_data=transfer_data,
+        operator_name="tester",
+    )
+
+    db_session.expire_all()
+    refreshed_1 = (
+        await db_session.execute(select(_OrderItemModel).where(_OrderItemModel.id == item_1_id))
+    ).scalar_one()
+    refreshed_2 = (
+        await db_session.execute(select(_OrderItemModel).where(_OrderItemModel.id == item_2_id))
+    ).scalar_one()
+    assert refreshed_1.dependency_check is False, "sample #1's claim must be released"
+    assert refreshed_2.dependency_check is True, (
+        "sample #2's claim — for a different sample — must be left alone; "
+        "the rollback heuristic is scoped to (sample_id, to_lab)"
+    )

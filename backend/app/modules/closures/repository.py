@@ -16,7 +16,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import OrderModel, Report, Storage, User, Wip, WipExecution
+from app.db.models import OrderItemModel, OrderModel, Report, Storage, User, Wip, WipExecution
 
 
 class ClosureRepository:
@@ -60,9 +60,46 @@ class ClosureRepository:
         return result.scalars().all()
 
     async def all_wips_lab_closed(self, order_no: str) -> bool:
-        """True iff every WIP on the order has ``lab_closed=True`` — i.e. every
-        lab has called ``to-pickup`` on its portion. Order advances to
-        WAITING_PICKUP only when this gate flips True."""
+        """True iff (a) every order_item on the order has been claimed
+        (``dependency_check=true``) AND (b) every WIP on the order has
+        ``lab_closed=True``.
+
+        Why the order_items gate matters
+        --------------------------------
+        WIPs are NOT seeded up-front for every order_item — they're created
+        on-demand inside ``sample_service._split_sample`` as each downstream
+        lab actually receives the sample. So for a multi-lab dependency
+        chain (e.g. LAB-A -> LAB-B), LAB-A closes its WIP before LAB-B's
+        WIP even exists, and the old ``COUNT(wips) == COUNT(closed)``
+        check fires prematurely -> the order jumps to WAITING_PICKUP while
+        LAB-B's work hasn't happened yet.
+
+        The contract for "all the work is done" lives in ``order_items``:
+        every row's ``dependency_check`` must be True (= a destination
+        lab has been assigned for it). We short-circuit on the
+        order_items count first to keep the cheaper query in front.
+
+        Schema note
+        -----------
+        ``order_items.order_id`` is the FK to ``orders.id``; ``order_no``
+        lives on ``orders``, not ``order_items``. We join via the FK
+        rather than denormalising.
+        """
+        # Condition 1 — every order_item must be claimed.
+        unclaimed = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(OrderItemModel)
+                .join(OrderModel, OrderModel.id == OrderItemModel.order_id)
+                .where(OrderModel.order_no == order_no)
+                .where(OrderItemModel.dependency_check.is_(False))
+            )
+        ).scalar_one()
+        if unclaimed > 0:
+            return False
+
+        # Condition 2 — every existing WIP must be lab_closed, and at least
+        # one WIP must exist (an order with zero WIPs hasn't started yet).
         total = (
             await self._session.execute(
                 select(func.count()).select_from(Wip).where(Wip.order_no == order_no)
