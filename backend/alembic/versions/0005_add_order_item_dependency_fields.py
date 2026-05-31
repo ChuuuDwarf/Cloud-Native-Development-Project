@@ -1,7 +1,7 @@
 """add order item dependency fields
 
 Revision ID: 0005_order_item_deps
-Revises: 0004_d_exec_experiment_data
+Revises: 35aeb03a89e9
 Create Date: 2026-05-27
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "0005_order_item_deps"
-down_revision = "0004_d_exec_experiment_data"
+down_revision = "35aeb03a89e9"
 branch_labels = None
 depends_on = None
 

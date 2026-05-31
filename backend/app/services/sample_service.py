@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repos import sample_repo, transfer_repo
+from app.repos import sample_repo, transfer_repo, wip_repo
 from app.services.wip_service import (
     normalize_flow_value,
     parse_requested_experiments,
@@ -974,6 +974,26 @@ async def _split_sample(
                 f"由樣品 {sample['sample_no']} 分貨建立 WIP："
                 f"{lab_name} / {experiment_item}，位置：{next_location}"
             ),
+            operator_name=operator_name,
+        )
+
+        # 建立 WIP 後直接送入待排程。
+        # 派工排程頁的待排程清單查的是 status = waiting_schedule，
+        # 若停在 created，就必須再按「前往排程 / 派工」才會出現。
+        scheduled_wip = await wip_repo.update_wip_status(
+            db,
+            wip_id=created_wip["id"],
+            new_status="waiting_schedule",
+        )
+        created_wips[-1] = scheduled_wip
+
+        await sample_repo.create_wip_history(
+            db,
+            wip_id=created_wip["id"],
+            action="send_to_schedule",
+            from_status="created",
+            to_status="waiting_schedule",
+            description="WIP 建立後自動送入待排程",
             operator_name=operator_name,
         )
 

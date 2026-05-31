@@ -14,6 +14,7 @@ import type {
   SampleHistory,
   Transfer,
   Wip,
+  WipExecutionDetail,
 } from "./types";
 import { SampleDetailModal } from "./components/SampleDetailModal";
 import { SampleTable } from "./components/SampleTable";
@@ -54,6 +55,7 @@ import {
 } from "../transfer/utils/transferFlow";
 
 type ApiListResponse<T> = T[] | { data?: T[] };
+type ApiDataResponse<T> = { data?: T };
 
 function normalizeApiArray<T>(payload: ApiListResponse<T>): T[] {
   if (Array.isArray(payload)) return payload;
@@ -70,6 +72,10 @@ export default function SamplePage() {
   const [wips, setWips] = useState<Wip[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [sampleHistories, setSampleHistories] = useState<SampleHistory[]>([]);
+  const [wipExecutionDetails, setWipExecutionDetails] = useState<Record<string, WipExecutionDetail>>(
+    {}
+  );
+  const [wipExecutionLoading, setWipExecutionLoading] = useState(false);
   const [selectedSampleId, setSelectedSampleId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -79,6 +85,7 @@ export default function SamplePage() {
   const [sampleFilter, setSampleFilter] = useState<SampleFilter>("current");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  
 
   const currentLab = masterQuery.data?.labs.find((lab) => lab.id === authUser?.labId);
   const currentDepartment = masterQuery.data?.departments.find(
@@ -459,18 +466,64 @@ export default function SamplePage() {
     }
   }
 
+  async function loadWipExecutionDetails(sampleId: string) {
+    const targetWips = wips.filter((wip) => wip.sample_id === sampleId);
+
+    if (targetWips.length === 0) {
+      setWipExecutionDetails({});
+      return;
+    }
+
+    try {
+      setWipExecutionLoading(true);
+
+      const results = await Promise.allSettled(
+        targetWips.map(async (wip) => {
+          const payload = await apiGet<ApiDataResponse<WipExecutionDetail>>(
+            `/api/experiment-runs/${wip.wip_no}`
+          );
+
+          return [wip.wip_no, payload.data] as const;
+        })
+      );
+
+      const nextDetails: Record<string, WipExecutionDetail> = {};
+
+      results.forEach((result) => {
+        if (result.status !== "fulfilled") return;
+
+        const [wipNo, detail] = result.value;
+        if (detail) {
+          nextDetails[wipNo] = detail;
+        }
+      });
+
+      setWipExecutionDetails(nextDetails);
+    } catch (err) {
+      setError(getErrorMessage(err, "載入 WIP 機台履歷失敗"));
+    } finally {
+      setWipExecutionLoading(false);
+    }
+  }
+
   async function openDetail(sampleId: string) {
     setSelectedSampleId(sampleId);
     setDetailOpen(true);
     setSampleHistories([]);
+    setWipExecutionDetails({});
     setHistoryVisibleCount(5);
     setError("");
     setSuccessMessage("");
-    await loadSampleHistory(sampleId);
+
+    await Promise.all([
+      loadSampleHistory(sampleId),
+      loadWipExecutionDetails(sampleId),
+    ]);
   }
 
   function closeDetail() {
     setDetailOpen(false);
+    setWipExecutionDetails({});
   }
 
   async function runSampleAction(sampleId: string, action: SampleAction) {
@@ -740,6 +793,8 @@ export default function SamplePage() {
           selectedSampleOutgoingTransfer={selectedSampleOutgoingTransfer}
           visibleSelectedWips={visibleSelectedWips}
           wipsByLab={wipsByLab}
+          wipExecutionDetails={wipExecutionDetails}
+          wipExecutionLoading={wipExecutionLoading}
           sampleHistories={sampleHistories}
           visibleHistories={visibleHistories}
           historyLoading={historyLoading}

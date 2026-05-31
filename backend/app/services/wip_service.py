@@ -121,6 +121,34 @@ def build_wip_visibility_filter(current_user: dict):
     where_clauses.append("1 = 0")
     return where_clauses, params
 
+def build_wip_owner_lab_visibility_filter(current_user: dict):
+    """Strict WIP owner-lab scope for dispatch scheduling pick lists.
+
+    Unlike the general WIP list (which may include transfer-related WIPs so
+    handoff flows can reason about incoming samples), the dispatch scheduler
+    must only expose WIPs owned by the current user's own lab.
+    """
+
+    role = current_user.get("role")
+    where_clauses: list[str] = []
+    params: dict[str, object] = {}
+
+    if role == "system_admin":
+        return where_clauses, params
+
+    if is_lab_role(role):
+        current_lab = get_user_lab(current_user)
+
+        if not current_lab:
+            where_clauses.append("1 = 0")
+            return where_clauses, params
+
+        where_clauses.append("w.lab_name = :current_lab")
+        params["current_lab"] = current_lab
+        return where_clauses, params
+
+    where_clauses.append("1 = 0")
+    return where_clauses, params
 
 def build_wip_flow_visibility_filter(current_user: dict):
     """給 transfer flow 使用的 WIP 查詢範圍。
@@ -975,8 +1003,11 @@ async def list_wips(
     current_user: dict,
     status: str | None = None,
     include_all_for_flow: bool = False,
+    own_lab_only: bool = False,
 ):
-    if include_all_for_flow:
+    if own_lab_only:
+        where_clauses, params = build_wip_owner_lab_visibility_filter(current_user)
+    elif include_all_for_flow:
         where_clauses, params = build_wip_flow_visibility_filter(current_user)
     else:
         where_clauses, params = build_wip_visibility_filter(current_user)

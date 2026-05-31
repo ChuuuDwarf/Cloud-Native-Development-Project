@@ -918,7 +918,7 @@ export default function WipPage() {
                   {selectedWips.length > 0 && (
                     <div style={submitBarStyle}>
                       <button onClick={goToSchedulePage} style={primaryButtonStyle}>
-                        前往排程 / 派工
+                        查看排程 / 派工
                       </button>
                     </div>
                   )}

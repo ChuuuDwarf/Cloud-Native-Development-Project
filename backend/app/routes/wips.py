@@ -38,6 +38,7 @@ async def claim_next_dependency_experiment(
 async def get_wips(
     status: str | None = Query(default=None),
     include_all_for_flow: bool = Query(default=False),
+    own_lab_only: bool = Query(default=False),
     current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -47,6 +48,7 @@ async def get_wips(
         current_user=wip_current_user,
         status=status,
         include_all_for_flow=include_all_for_flow,
+        own_lab_only=own_lab_only,
     )
 
 

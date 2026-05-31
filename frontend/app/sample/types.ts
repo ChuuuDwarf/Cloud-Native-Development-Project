@@ -81,6 +81,39 @@ export type CurrentUser = {
   email?: string;
 };
 
+export type WipExecutionHistory = {
+  time: string | null;
+  action: string;
+  by: string | null;
+  note: string | null;
+};
+
+export type WipExecutionDetail = {
+  wipId: string;
+  orderId: string;
+  sample: string | null;
+  experimentItem: string | null;
+  machineId: string | null;
+  recipe: string | null;
+  status: string;
+  progress: number;
+  operator: string | null;
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  resultNote: string | null;
+  rawDataUrl: string | null;
+  experimentData?: Record<string, Record<string, string>>;
+  dataVerified: boolean;
+  abort: {
+    reason: string | null;
+    by: string | null;
+    status: string | null;
+    requestedAt: string | null;
+    resolution?: string | null;
+  } | null;
+  history: WipExecutionHistory[];
+};
+
 export type SampleFilter = "current" | "active" | "outbound" | "picked_up" | "all";
 
 export type SampleAction = "receive" | "outbound" | "pickup_confirmed";

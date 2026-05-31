@@ -70,7 +70,10 @@ export default function DispatchPage() {
   const wipsQuery = useQuery({
     queryKey: ["wips", "for-dispatch"],
     // B 的 /api/wips 回傳裸陣列（或 { data: [...] }），不是 { items }。
-    queryFn: () => apiGet<WipLite[] | { data?: WipLite[] }>("/api/wips"),
+    queryFn: () =>
+      apiGet<WipLite[] | { data?: WipLite[] }>(
+        "/api/wips?status=waiting_schedule&own_lab_only=true"
+      ),
   });
 
   const [prefill, setPrefill] = useState<Record<string, string> | null>(null);
@@ -343,7 +346,7 @@ export default function DispatchPage() {
           <div style={hintTextStyle}>讀取中…</div>
         ) : waitingWips.length === 0 ? (
           <div style={hintTextStyle}>
-            目前沒有待排程的 WIP。請先到「分貨 / WIP」頁建立 WIP 並按「前往排程 / 派工」。
+            目前沒有待排程的 WIP。請先到「分貨 / WIP」頁建立 WIP
           </div>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
