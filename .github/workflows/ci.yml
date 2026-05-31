@@ -377,6 +377,21 @@ jobs:
               working-directory: tests/e2e
               run: npx playwright install-deps chromium
 
+            - name: Verify frontend before Playwright
+              run: |
+                  for i in $(seq 1 60); do
+                    if curl -fsS http://localhost:3000/ >/dev/null; then
+                      echo "frontend reachable before Playwright after ${i}s"
+                      exit 0
+                    fi
+                    echo "Waiting for frontend before Playwright..."
+                    sleep 2
+                  done
+                  echo "frontend was not reachable before Playwright"
+                  docker compose -f docker-compose.yml -f docker-compose.ci.yml ps
+                  docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color frontend | tail -200
+                  exit 1
+
             - name: Run Playwright
               working-directory: tests/e2e
               env:
@@ -384,27 +399,14 @@ jobs:
                   BACKEND_URL: http://localhost:8000
               run: npx playwright test
 
-            - name: Verify frontend before Playwright
+            - name: Capture compose logs
+              if: always()
               run: |
-                for i in $(seq 1 60); do
-                  if curl -fsS http://localhost:3000/ >/dev/null; then
-                    echo "frontend reachable before Playwright after ${i}s"
-                    exit 0
-                  fi
-                  echo "Waiting for frontend before Playwright..."
-                  sleep 2
-                done
-                echo "frontend was not reachable before Playwright"
-                docker compose -f docker-compose.yml -f docker-compose.ci.yml ps
-                docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color frontend | tail -200
-                exit 1
-
-            - name: Run Playwright
-              working-directory: tests/e2e
-              env:
-                FRONTEND_URL: http://localhost:3000
-                BACKEND_URL: http://localhost:8000
-              run: npx playwright test
+                  mkdir -p artifacts
+                  docker compose -f docker-compose.yml -f docker-compose.ci.yml \
+                    logs --no-color --timestamps > artifacts/compose-logs.txt 2>&1 || true
+                  docker compose -f docker-compose.yml -f docker-compose.ci.yml \
+                    ps > artifacts/compose-ps.txt 2>&1 || true
 
             - name: Upload Playwright report
               if: always()

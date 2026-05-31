@@ -8,7 +8,7 @@ the allowed values and rejected the UPDATE -- the abort committed but
 the sample stayed on 'split' and /sample showed stale state.
 
 Revision ID: 4aa6d7806036
-Revises: 35aeb03a89e9
+Revises: 0005_order_item_deps
 Create Date: 2026-05-30 21:17:58.427551
 
 """
@@ -21,7 +21,9 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "4aa6d7806036"
-down_revision: str | Sequence[str] | None = "35aeb03a89e9"
+# 接在隊友的 0005_order_item_deps 後面,避免兩個 migration 同時把
+# 35aeb03a89e9 當父節點而產生 alembic multiple-heads fork。
+down_revision: str | Sequence[str] | None = "0005_order_item_deps"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
