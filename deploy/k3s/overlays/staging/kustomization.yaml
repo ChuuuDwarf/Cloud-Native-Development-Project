@@ -11,17 +11,17 @@ resources:
 # Override CORS_ORIGINS for staging's nip.io subdomain. Same-origin browser
 # requests don't trip CORS; this is for non-browser API clients calling
 # the staging URL directly.
-  # Enable the TAS MQTT listener in staging. TAS_SN_KEY must also be set
-  # here (customer key for `phone-conn/calloutResult/<key>`) — left blank
-  # for now; populate before the listener can subscribe.
-  # TODO(devops): set TAS_SN_KEY=<customer-key> once issued.
 configMapGenerator:
-- behavior: merge
+- name: lims-config
+  behavior: merge
   literals:
   - CORS_ORIGINS=https://staging.34.80.119.4.nip.io
+  # Enable the TAS MQTT listener in staging. The actual TAS_SN_KEY
+  # (customer key for `phone-conn/calloutResult/<key>`) is treated as a
+  # secret and lives in `lims-secrets` — set it via the lims-set-secrets
+  # interactive script. envFrom precedence: secret beats this configmap,
+  # so we don't need a placeholder here.
   - TAS_ENABLED=true
-  - TAS_SN_KEY=
-  name: lims-config
 
 # Staging deploys on the same VM/IP as prod, distinguished by the nip.io
 # subdomain `staging.<IP>.nip.io`. CD points these at the -rc image tags.

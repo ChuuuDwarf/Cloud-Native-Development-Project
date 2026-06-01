@@ -18,6 +18,15 @@ metadata:
     secret.reloader.stakater.com/reload: "lims-secrets"
 spec:
   replicas: 2
+  # CPU-aware rolling update: VM is e2-standard-2 (2 vCPU) so default maxSurge=25%
+  # tries to add a 3rd pod during rollout, which can't be scheduled and the
+  # rollout hangs. maxSurge=0 + maxUnavailable=1 keeps total pods ≤ replicas,
+  # trading ~30s of half-capacity for a CPU-friendly rolling update.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: backend
