@@ -990,7 +990,9 @@ def test_outbound_and_factory_pickup_complete_full_sample_lifecycle(
     )
 
     assert implicit_outbound_response.status_code == 400
-    assert "通知取件必須由使用者明確確認" in implicit_outbound_response.json()["detail"]
+    # Raw HTTPException(400) is now normalized into the nested envelope by the
+    # global handler; the original detail is preserved as error.message.
+    assert "通知取件必須由使用者明確確認" in implicit_outbound_response.json()["error"]["message"]
 
     outbound_response = client.post(
         f"/api/samples/{SAMPLE_A_ID}/actions",
@@ -1633,7 +1635,7 @@ def test_outbound_is_blocked_by_pending_transfer_and_incomplete_wip(client):
         json={"action": "outbound"},
     )
     assert incomplete_outbound_response.status_code == 400
-    assert "未完成的 WIP" in incomplete_outbound_response.json()["detail"]
+    assert "未完成的 WIP" in incomplete_outbound_response.json()["error"]["message"]
 
     complete_response = client.post(
         f"/api/wips/{wip_id}/actions",
@@ -1660,4 +1662,4 @@ def test_outbound_is_blocked_by_pending_transfer_and_incomplete_wip(client):
         json={"action": "outbound"},
     )
     assert pending_transfer_outbound_response.status_code == 400
-    assert "尚未完成的交接流程" in pending_transfer_outbound_response.json()["detail"]
+    assert "尚未完成的交接流程" in pending_transfer_outbound_response.json()["error"]["message"]

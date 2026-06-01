@@ -39,6 +39,9 @@ fastapi-mail==1.4.2
 # --- HTTP client (used by some integrations + test client) ---
 httpx==0.27.2
 
+# --- MQTT (TAS call-pickup-as-acknowledgement listener) ---
+paho-mqtt==2.1.0
+
 # --- Misc runtime helpers carried over ---
 annotated-doc==0.0.4
 annotated-types==0.7.0

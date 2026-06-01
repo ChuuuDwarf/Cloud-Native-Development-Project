@@ -40,17 +40,22 @@ class CHTTASClient:
         service_number: str | None = None,
         base_url: str | None = None,
         timeout: float = 10.0,
+        enabled: bool | None = None,
     ) -> None:
         settings = get_settings()
         self._api_key = api_key or settings.cht_api_key
         self._service_number = service_number or settings.cht_service_number
         self._base_url = (base_url or settings.cht_base_url).rstrip("/")
         self._timeout = timeout
+        # ``tas_enabled`` is the master kill-switch. When False the client
+        # short-circuits even if creds happen to be in the env — keeps CI /
+        # local dev from accidentally dialling real numbers.
+        self._enabled = settings.tas_enabled if enabled is None else enabled
 
     @property
     def configured(self) -> bool:
-        """True only when both an API key and a service number are set."""
-        return bool(self._api_key) and bool(self._service_number)
+        """True only when the master switch is on AND creds are present."""
+        return self._enabled and bool(self._api_key) and bool(self._service_number)
 
     def callout(
         self,

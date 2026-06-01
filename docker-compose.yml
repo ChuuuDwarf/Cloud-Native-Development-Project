@@ -84,6 +84,11 @@ services:
             EMAIL_FROM: ${EMAIL_FROM:-noreply@lims.local}
             EMAIL_BACKEND: ${EMAIL_BACKEND:-file} # file | smtp
             UPLOADS_DIR: /app/uploads
+            # TAS (中華電信 phone alert) creds come from backend/.env via
+            # env_file. Don't restate them here — ``environment:`` overrides
+            # env_file and ``${TAS_*}`` resolves from the host shell at
+            # compose-parse time, not from .env, so a duplicate line silently
+            # forces TAS_ENABLED=false even when .env has it true.
         volumes:
             - ./backend:/app
             - uploads:/app/uploads
@@ -132,6 +137,8 @@ services:
             EMAIL_BACKEND: ${EMAIL_BACKEND:-file}
             EMAIL_FROM: ${EMAIL_FROM:-noreply@lims.local}
             UPLOADS_DIR: /app/uploads
+            # TAS_* + CHT_* come from backend/.env via env_file — same image
+            # as backend, see comment there for why we don't restate them.
         volumes:
             - ./backend:/app
             - uploads:/app/uploads
@@ -185,6 +192,44 @@ services:
                 condition: service_completed_successfully
             seed:
                 condition: service_completed_successfully
+
+    # Long-running MQTT listener for the TAS (中華電信) phone-alert pipeline.
+    # Subscribes to `phone-conn/calloutResult/${TAS_SN_KEY}` and, on a successful
+    # answered-call event, marks the matching notification READ and stops
+    # escalation. Same image as celery-worker (just a different entrypoint);
+    # only `postgres` + `redis` are required at startup — no dependency on
+    # `migrate`/`seed`, because when TAS_ENABLED=false (the default for CI /
+    # dev) the listener exits 0 immediately, and when true it'll fail-fast
+    # and be restarted by Docker until migrations land. Outbound-only (TLS to
+    # tasapi.cht.com.tw:2883); no inbound ports and no healthcheck — paho-mqtt
+    # has no HTTP surface and the disabled-path exit-0 makes a process probe
+    # noisier than the signal it gives.
+    tas-mqtt-listener:
+        build: ./backend
+        command: ["python", "-m", "app.workers.tas_mqtt_listener"]
+        env_file:
+            - path: ./backend/.env
+              required: false
+        environment:
+            ENV: ${ENV:-development}
+            DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lims}:${POSTGRES_PASSWORD:-lims}@postgres:5432/${POSTGRES_DB:-lims}
+            REDIS_URL: redis://redis:6379/0
+            JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
+            # TAS_* + CHT_* come from backend/.env via env_file. See backend
+            # service for why we don't restate them in ``environment:``.
+        volumes:
+            - ./backend:/app
+        # Disable the image's HEALTHCHECK (curl :8000/health) — listener has
+        # no HTTP surface, and the no-op exit-0 path under TAS_ENABLED=false
+        # would mark it "unhealthy" forever.
+        healthcheck:
+            disable: true
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        restart: unless-stopped
 
     # One-shot seed runner. Populates roles / users / labs / departments +
     # (if DEMO_PHONE is set in .env) writes the demo phone into every

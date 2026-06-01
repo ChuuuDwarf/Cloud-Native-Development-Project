@@ -16,6 +16,12 @@ configMapGenerator:
   behavior: merge
   literals:
   - CORS_ORIGINS=https://staging.34.80.119.4.nip.io
+  # Enable the TAS MQTT listener in staging. TAS_SN_KEY must also be set
+  # here (customer key for `phone-conn/calloutResult/<key>`) — left blank
+  # for now; populate before the listener can subscribe.
+  # TODO(devops): set TAS_SN_KEY=<customer-key> once issued.
+  - TAS_ENABLED=true
+  - TAS_SN_KEY=
 
 # Staging deploys on the same VM/IP as prod, distinguished by the nip.io
 # subdomain `staging.<IP>.nip.io`. CD points these at the -rc image tags.
