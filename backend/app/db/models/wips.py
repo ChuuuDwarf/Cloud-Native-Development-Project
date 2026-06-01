@@ -59,6 +59,12 @@ class Wip(Base):
     completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, nullable=True)
     terminated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Per-lab closure flag — set when this WIP's lab calls /closures/.../to-pickup.
+    # The order itself only moves to WAITING_PICKUP once ALL of its WIPs are
+    # ``lab_closed=True`` (i.e. every lab has signed off). DB column added in
+    # migration 35aeb03a89e9; the ORM model was missing the field, which left
+    # all reads/writes through other modules silent (Phase L review #3).
+    lab_closed: Mapped[bool] = mapped_column(nullable=False, server_default="false", default=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, nullable=False, server_default=func.now()
     )

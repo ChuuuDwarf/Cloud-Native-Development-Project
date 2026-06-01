@@ -24,14 +24,11 @@ const SPARKLINE_COLOR_BY_THRESHOLD: Record<string, string> = {
 };
 
 const TILE_LABELS: Record<keyof KpiBarData, { label: string; drillTo: string }> = {
-  new_orders: { label: "新單", drillTo: "/orders?created=today" },
-  completed: { label: "完工", drillTo: "/execution?status=completed" },
-  returned: { label: "回傳", drillTo: "/storage?status=returned" },
+  new_orders: { label: "新單", drillTo: "/approve" },
+  completed: { label: "完工", drillTo: "/execution" },
+  returned: { label: "回傳", drillTo: "/report" },
   pending_approval: { label: "待簽", drillTo: "/approve" },
-  open_critical_high_issues: {
-    label: "告警",
-    drillTo: "/issues?severity=high,critical&status=open",
-  },
+  open_critical_high_issues: { label: "告警", drillTo: "/issues" },
 };
 
 function Arrow({ delta }: { delta: number }) {

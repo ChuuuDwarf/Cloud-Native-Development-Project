@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 # How long to wait between escalation hops once a level fires. Kept short so
 # the demo is obvious; production tuning will live in system_settings.
-RE_ESCALATION_DELAY = timedelta(seconds=10)
+RE_ESCALATION_DELAY = timedelta(seconds=30)
 
 # Maps current escalation_level → behaviour. Levels not present here are
 # terminal (no further escalation). ``recipient_scope`` is "lab" for

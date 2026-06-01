@@ -52,6 +52,9 @@ export type FormItem = {
   sampleName: string;
   labId: string;
   experimentId: string;
+  targetGroup: string;
+  target: number;
+  check: boolean;
 };
 
 export type OrderTemplate = {
@@ -68,6 +71,9 @@ export type OrderItem = {
   sampleName?: string | null;
   labId: string;
   experimentId: string;
+  targetGroup: string;
+  target: number;
+  check: boolean;
   status?: OrderStatus;
   approvedBy?: string | null;
   approvedAt?: string | null;
@@ -90,6 +96,30 @@ export type Order = {
   createdAt: string;
   updatedAt: string;
   items?: OrderItem[];
+};
+
+export type WipDependencyNextData = {
+  orderItemId: number;
+  orderNo?: string | null;
+  sampleId: string;
+  sampleNo: string;
+  labId?: string | null;
+  labName?: string | null;
+  experimentId?: string | null;
+  experimentName?: string | null;
+  targetGroup?: string | null;
+  target?: number | null;
+  check?: boolean;
+  reason?: string | null;
+};
+
+export type DeliveryDestination = {
+  sampleId: string;
+  sampleName?: string | null;
+  labName: string;
+  experimentName?: string | null;
+  targetGroup?: string | null;
+  target?: number | null;
 };
 
 export type OrderHistory = {

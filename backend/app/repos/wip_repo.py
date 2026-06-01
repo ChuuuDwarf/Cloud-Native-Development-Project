@@ -1,4 +1,4 @@
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -8,6 +8,193 @@ def row_to_dict(row):
 
 def rows_to_dicts(rows):
     return [dict(row._mapping) for row in rows]
+
+
+async def list_dependency_order_items_for_sample(
+    db: AsyncSession,
+    *,
+    sample_no: str,
+    order_no: str | None = None,
+) -> list[dict]:
+    where_order_no = "AND o.order_no = :order_no" if order_no else ""
+    params = {"sample_no": sample_no}
+    if order_no:
+        params["order_no"] = order_no
+
+    result = await db.execute(
+        text(
+            f"""
+            SELECT
+                oi.id,
+                oi.order_id,
+                o.order_no,
+                oi.sample_id AS sample_no,
+                oi.sample_name,
+                oi.lab_id,
+                COALESCE(l.name, oi.lab_id) AS lab_name,
+                COALESCE(l.code, oi.lab_id) AS lab_code,
+                oi.experiment_id,
+                COALESCE(lc.experiment_item, oi.experiment_id) AS experiment_name,
+                oi.target_group,
+                oi.target,
+                oi.dependency_check,
+                oi.created_at
+            FROM order_items oi
+            JOIN orders o
+                ON o.id = oi.order_id
+            LEFT JOIN labs l
+                ON CAST(l.id AS TEXT) = oi.lab_id
+                OR l.code = oi.lab_id
+            LEFT JOIN lab_capabilities lc
+                ON CAST(lc.id AS TEXT) = oi.experiment_id
+            WHERE oi.sample_id = :sample_no
+              {where_order_no}
+            ORDER BY o.created_at DESC, oi.target ASC, oi.created_at ASC, oi.id ASC
+            """
+        ),
+        params,
+    )
+
+    return rows_to_dicts(result.fetchall())
+
+
+async def list_machines_for_dependency_candidates(
+    db: AsyncSession,
+    *,
+    lab_names: list[str],
+    lab_codes: list[str],
+) -> list[dict]:
+    if not lab_names and not lab_codes:
+        return []
+
+    result = await db.execute(
+        text(
+            """
+            SELECT
+                machine_id,
+                lab,
+                supported_items,
+                utilization,
+                status
+            FROM machines
+            WHERE lab IN :lab_values
+            """
+        ).bindparams(bindparam("lab_values", expanding=True)),
+        {"lab_values": (*lab_names, *lab_codes)},
+    )
+
+    return rows_to_dicts(result.fetchall())
+
+
+async def claim_order_item_dependency_check(
+    db: AsyncSession,
+    *,
+    order_item_id: int,
+) -> dict | None:
+    result = await db.execute(
+        text(
+            """
+            UPDATE order_items
+            SET
+                dependency_check = true,
+                updated_at = NOW()
+            WHERE id = :order_item_id
+              AND dependency_check = false
+            RETURNING
+                id,
+                order_id,
+                sample_id AS sample_no,
+                lab_id,
+                experiment_id,
+                target_group,
+                target,
+                dependency_check
+            """
+        ),
+        {"order_item_id": order_item_id},
+    )
+
+    return row_to_dict(result.fetchone())
+
+
+async def release_order_item_dependency_check_for_sample(
+    db: AsyncSession,
+    *,
+    sample_id: str,
+    to_lab_id_or_name: str | None,
+) -> dict | None:
+    """Roll back the most-recently-claimed dependency_check for ``sample_id``.
+
+    Design rationale
+    ----------------
+    A transfer's destination is chosen via ``POST /api/wips/dependency/next``,
+    which atomically flips one ``order_items`` row's ``dependency_check`` to
+    True. There is no FK from ``transfers`` to ``order_items``, so when a
+    transfer is cancelled we can't directly reverse "the claim". Instead we
+    use a tight heuristic: for the given sample and destination lab, undo the
+    single most-recently-claimed item (``ORDER BY updated_at DESC LIMIT 1``).
+
+    Lab matching
+    ------------
+    ``transfers.to_lab`` is the Chinese display name (matches ``Wip.lab_name``)
+    while ``order_items.lab_id`` is a free-form string holding either a UUID
+    or a code — see ``list_dependency_order_items_for_sample`` for the same
+    treatment. We bridge by joining ``labs`` on either ``labs.name`` or
+    ``labs.code`` and matching either ``oi.lab_id = CAST(labs.id AS TEXT)`` or
+    ``oi.lab_id = labs.code``. As a last-ditch fallback, we also accept a
+    direct ``oi.lab_id = :to_lab`` so callers that already hand us a code
+    aren't penalised.
+
+    No-op on miss
+    -------------
+    If no row matches (transfer pre-dates the dependency feature, or the
+    claim was already cleared by some other flow), returns None and writes
+    nothing — DON'T raise. Caller is responsible for committing the txn.
+    """
+    if not to_lab_id_or_name:
+        return None
+
+    result = await db.execute(
+        text(
+            """
+            UPDATE order_items
+            SET
+                dependency_check = false,
+                updated_at = NOW()
+            WHERE id = (
+                SELECT oi.id
+                FROM order_items oi
+                LEFT JOIN labs l
+                    ON l.name = :to_lab
+                    OR l.code = :to_lab
+                WHERE oi.sample_id = :sample_id
+                  AND oi.dependency_check = true
+                  AND (
+                    oi.lab_id = :to_lab
+                    OR (l.id IS NOT NULL AND oi.lab_id = CAST(l.id AS TEXT))
+                    OR (l.code IS NOT NULL AND oi.lab_id = l.code)
+                  )
+                ORDER BY oi.updated_at DESC, oi.id DESC
+                LIMIT 1
+            )
+            RETURNING
+                id,
+                order_id,
+                sample_id AS sample_no,
+                lab_id,
+                experiment_id,
+                target_group,
+                target,
+                dependency_check
+            """
+        ),
+        {
+            "sample_id": sample_id,
+            "to_lab": to_lab_id_or_name,
+        },
+    )
+
+    return row_to_dict(result.fetchone())
 
 
 async def list_wips(
@@ -94,6 +281,66 @@ async def get_sample_by_id(
     )
 
     return row_to_dict(result.fetchone())
+
+
+async def get_sample_by_no(
+    db: AsyncSession,
+    *,
+    sample_no: str,
+    order_no: str | None = None,
+) -> dict | None:
+    where_order_no = "AND order_no = :order_no" if order_no else ""
+    params = {"sample_no": sample_no}
+
+    if order_no:
+        params["order_no"] = order_no
+
+    result = await db.execute(
+        text(
+            f"""
+            SELECT *
+            FROM samples
+            WHERE sample_no = :sample_no
+              {where_order_no}
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ),
+        params,
+    )
+
+    return row_to_dict(result.fetchone())
+
+
+async def list_wips_for_sample_no(
+    db: AsyncSession,
+    *,
+    sample_no: str,
+    order_no: str | None = None,
+) -> list[dict]:
+    where_order_no = "AND s.order_no = :order_no" if order_no else ""
+    params = {"sample_no": sample_no}
+
+    if order_no:
+        params["order_no"] = order_no
+
+    result = await db.execute(
+        text(
+            f"""
+            SELECT
+                w.*
+            FROM wips w
+            JOIN samples s
+                ON s.id = w.sample_id
+            WHERE s.sample_no = :sample_no
+              {where_order_no}
+            ORDER BY w.created_at ASC, w.id ASC
+            """
+        ),
+        params,
+    )
+
+    return rows_to_dicts(result.fetchall())
 
 
 async def has_transfer_to_lab_for_sample(

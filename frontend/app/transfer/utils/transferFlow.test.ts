@@ -82,6 +82,25 @@ describe("transferFlow 功能測試", () => {
     expect(getRequestedExperiments(sample)).toHaveLength(3);
   });
 
+  it("解析帶有群組/站點前綴的實驗需求，Lab 比對用乾淨名稱，交接排序保留 targetGroup/target", () => {
+    const prefixedSummary =
+      "G2#1|電性測試實驗室:Probe、G1#1|材料分析實驗室:EDX、G1#2|材料分析實驗室:SEM、G1#3|電性測試實驗室:IV";
+
+    expect(parseExperimentsFromSummary(prefixedSummary)).toEqual([
+      { lab_name: "電性測試實驗室", experiment_item: "Probe" },
+      { lab_name: "材料分析實驗室", experiment_item: "EDX" },
+      { lab_name: "材料分析實驗室", experiment_item: "SEM" },
+      { lab_name: "電性測試實驗室", experiment_item: "IV" },
+    ]);
+
+    expect(getRequestedExperiments({ ...sample, experiment_item: prefixedSummary })).toEqual([
+      { lab_name: "電性測試實驗室", experiment_item: "Probe", targetGroup: "G2", target: 1 },
+      { lab_name: "材料分析實驗室", experiment_item: "EDX", targetGroup: "G1", target: 1 },
+      { lab_name: "材料分析實驗室", experiment_item: "SEM", targetGroup: "G1", target: 2 },
+      { lab_name: "電性測試實驗室", experiment_item: "IV", targetGroup: "G1", target: 3 },
+    ]);
+  });
+
   it("解析實驗需求時會忽略空白片段與缺少 Lab 或實驗項目的片段", () => {
     expect(parseExperimentsFromSummary(null)).toEqual([]);
     expect(parseExperimentsFromSummary("")).toEqual([]);

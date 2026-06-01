@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { RoleLabel, type RoleName } from "@/constants/status-labels";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiGet, apiPost } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
@@ -14,6 +15,7 @@ import type {
   SampleHistory,
   Transfer,
   Wip,
+  WipExecutionDetail,
 } from "./types";
 import { SampleDetailModal } from "./components/SampleDetailModal";
 import { SampleTable } from "./components/SampleTable";
@@ -54,6 +56,7 @@ import {
 } from "../transfer/utils/transferFlow";
 
 type ApiListResponse<T> = T[] | { data?: T[] };
+type ApiDataResponse<T> = { data?: T };
 
 function normalizeApiArray<T>(payload: ApiListResponse<T>): T[] {
   if (Array.isArray(payload)) return payload;
@@ -70,6 +73,10 @@ export default function SamplePage() {
   const [wips, setWips] = useState<Wip[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [sampleHistories, setSampleHistories] = useState<SampleHistory[]>([]);
+  const [wipExecutionDetails, setWipExecutionDetails] = useState<
+    Record<string, WipExecutionDetail>
+  >({});
+  const [wipExecutionLoading, setWipExecutionLoading] = useState(false);
   const [selectedSampleId, setSelectedSampleId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -98,14 +105,9 @@ export default function SamplePage() {
     };
   }, [authUser, currentDepartment, currentLab]);
 
-  const roleLabelMap: Record<string, string> = {
-    system_admin: "系統管理者",
-    lab_supervisor: "實驗室主管",
-    lab_engineer: "實驗室人員",
-    plant_user: "廠區使用者",
-  };
-
-  const roleLabel = currentUser ? (roleLabelMap[currentUser.role] ?? currentUser.role) : "—";
+  const roleLabel = currentUser
+    ? (RoleLabel[currentUser.role as RoleName] ?? currentUser.role)
+    : "—";
   const identityLabName = currentUser && checkIsLabUser(currentUser) ? currentLab?.name : undefined;
   const currentUserIdentityParts = currentUser
     ? [identityLabName, roleLabel, currentUser.name].filter((part): part is string => Boolean(part))
@@ -459,18 +461,61 @@ export default function SamplePage() {
     }
   }
 
+  async function loadWipExecutionDetails(sampleId: string) {
+    const targetWips = wips.filter((wip) => wip.sample_id === sampleId);
+
+    if (targetWips.length === 0) {
+      setWipExecutionDetails({});
+      return;
+    }
+
+    try {
+      setWipExecutionLoading(true);
+
+      const results = await Promise.allSettled(
+        targetWips.map(async (wip) => {
+          const payload = await apiGet<ApiDataResponse<WipExecutionDetail>>(
+            `/api/experiment-runs/${wip.wip_no}`
+          );
+
+          return [wip.wip_no, payload.data] as const;
+        })
+      );
+
+      const nextDetails: Record<string, WipExecutionDetail> = {};
+
+      results.forEach((result) => {
+        if (result.status !== "fulfilled") return;
+
+        const [wipNo, detail] = result.value;
+        if (detail) {
+          nextDetails[wipNo] = detail;
+        }
+      });
+
+      setWipExecutionDetails(nextDetails);
+    } catch (err) {
+      setError(getErrorMessage(err, "載入 WIP 機台履歷失敗"));
+    } finally {
+      setWipExecutionLoading(false);
+    }
+  }
+
   async function openDetail(sampleId: string) {
     setSelectedSampleId(sampleId);
     setDetailOpen(true);
     setSampleHistories([]);
+    setWipExecutionDetails({});
     setHistoryVisibleCount(5);
     setError("");
     setSuccessMessage("");
-    await loadSampleHistory(sampleId);
+
+    await Promise.all([loadSampleHistory(sampleId), loadWipExecutionDetails(sampleId)]);
   }
 
   function closeDetail() {
     setDetailOpen(false);
+    setWipExecutionDetails({});
   }
 
   async function runSampleAction(sampleId: string, action: SampleAction) {
@@ -740,6 +785,8 @@ export default function SamplePage() {
           selectedSampleOutgoingTransfer={selectedSampleOutgoingTransfer}
           visibleSelectedWips={visibleSelectedWips}
           wipsByLab={wipsByLab}
+          wipExecutionDetails={wipExecutionDetails}
+          wipExecutionLoading={wipExecutionLoading}
           sampleHistories={sampleHistories}
           visibleHistories={visibleHistories}
           historyLoading={historyLoading}

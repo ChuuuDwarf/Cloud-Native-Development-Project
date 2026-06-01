@@ -10,7 +10,7 @@ Docker uses the same entry point — see docker-compose.yml.
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -19,6 +19,7 @@ from app.common.middleware import RequestIdMiddleware, RequestLoggerMiddleware
 from app.common.schemas import ErrorResponse
 from app.common.schemas.responses import ErrorDetail
 from app.core.config import get_settings
+from app.core.error_handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.routes import ALL_ROUTERS
 
@@ -55,6 +56,8 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(AppError)
     async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:
+        # AppError subclasses HTTPException, so this more-specific handler wins
+        # over the global HTTPException handler registered below.
         code = getattr(exc, "code", "INTERNAL_ERROR")
         return JSONResponse(
             status_code=exc.status_code,
@@ -62,6 +65,12 @@ def create_app() -> FastAPI:
                 error=ErrorDetail(code=code, message=str(exc.detail))
             ).model_dump(),
         )
+
+    # Global handlers (HTTPException / StarletteHTTPException / validation /
+    # SQLAlchemyError / catch-all) all emit the same nested ErrorResponse
+    # envelope. The HTTPException handler covers route-not-found too, so there
+    # is no separate status-404 handler.
+    register_exception_handlers(app)
 
     @app.get("/health", tags=["Health"])
     async def health() -> dict:
@@ -87,15 +96,3 @@ app = create_app()
 
 # Re-export for clarity
 __all__ = ["app", "create_app"]
-
-
-# A useful default 404 envelope when no route matches; FastAPI handles its own,
-# but we wrap the body to match ErrorResponse for consistency.
-@app.exception_handler(status.HTTP_404_NOT_FOUND)
-async def handle_404(_: Request, __) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content=ErrorResponse(
-            error=ErrorDetail(code="NOT_FOUND", message="Route not found"),
-        ).model_dump(),
-    )

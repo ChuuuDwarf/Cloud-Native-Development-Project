@@ -180,6 +180,71 @@ class NotificationService:
         await self._session.commit()
         return marked_count, skipped
 
+    async def mark_notification_answered(self, issue_id: UUID) -> int:
+        """TAS call-pickup → acknowledge issue.
+
+        Same effect as a recipient clicking "read" on their in-app
+        notification: flip all unread PHONE rows for this issue to READ,
+        then clear ``next_escalation_time`` / stamp ``handled_at`` on the
+        Issue so the escalation loop stops paging people. Returns the
+        number of notification rows flipped.
+
+        Called by the MQTT listener when TAS reports ``status=answered``.
+        We don't have a user identity in that context (it's a phone pickup,
+        not a session), so we ack based on the issue id correlated via the
+        callout's ``tag`` field.
+        """
+        now = datetime.now(UTC)
+
+        flip_stmt = (
+            update(Notification)
+            .where(
+                Notification.source_type == "issue",
+                Notification.source_id == str(issue_id),
+                Notification.channel == NotificationChannel.PHONE,
+                Notification.status == NotificationStatus.UNREAD,
+            )
+            .values(status=NotificationStatus.READ, read_at=now)
+            .returning(Notification.id)
+            .execution_options(synchronize_session=False)
+        )
+        result = await self._session.execute(flip_stmt)
+        flipped = list(result.scalars().all())
+
+        ack_stmt = (
+            update(Issue)
+            # Same CLOSED guard as the in-app path: a stray pickup on a
+            # fully-resolved issue must not downgrade its status.
+            .where(Issue.id == issue_id, Issue.status != IssueStatus.CLOSED)
+            .values(
+                status=IssueStatus.ACKNOWLEDGED,
+                next_escalation_time=None,
+                handled_at=func.coalesce(Issue.handled_at, now),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        await self._session.execute(ack_stmt)
+        await self._session.commit()
+
+        # Best-effort dashboard SSE fanout (same as the in-app path) so the
+        # supervisor dashboard's 異常 KPI updates without waiting on the
+        # 30s poll. A Redis hiccup must not roll back the ack.
+        try:
+            lab_code = await self._session.scalar(
+                select(Lab.code).join(Issue, Issue.lab_id == Lab.id).where(Issue.id == issue_id)
+            )
+            if lab_code:
+                await publish_dashboard_event(lab_code, "issue_acknowledged")
+        except Exception:
+            logger.exception("publish issue_acknowledged failed for issue=%s", issue_id)
+
+        logger.info(
+            "tas pickup acked issue=%s; flipped %d notification(s)",
+            issue_id,
+            len(flipped),
+        )
+        return len(flipped)
+
     async def _ack_source_issues(
         self,
         notification_ids: list[UUID],

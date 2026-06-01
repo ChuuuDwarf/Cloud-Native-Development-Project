@@ -1,3 +1,5 @@
+import json
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -17,6 +19,9 @@ fallback_user = {
 
 
 WIP_ORDER_GUARD_MESSAGE = "目前尚未輪到此 WIP，請先完成前一站實驗或交接流程"
+NO_PENDING_DEPENDENCY_MESSAGE = "No pending dependency item"
+DEPENDENCY_REASON_LOWEST_MACHINE_UTILIZATION = "lowest_machine_utilization"
+MISSING_MACHINE_UTILIZATION_SCORE = 1_000_000
 
 
 async def get_active_user(
@@ -104,13 +109,43 @@ def build_wip_visibility_filter(current_user: dict):
                     SELECT 1
                     FROM transfers t
                     WHERE t.target_type = 'sample'
-                      AND t.target_id = w.sample_id
-                      AND t.to_lab = :current_lab
+                    AND t.target_id = w.sample_id
+                    AND t.to_lab = :current_lab
                 )
             )
             """
         )
 
+        return where_clauses, params
+
+    where_clauses.append("1 = 0")
+    return where_clauses, params
+
+
+def build_wip_owner_lab_visibility_filter(current_user: dict):
+    """Strict WIP owner-lab scope for dispatch scheduling pick lists.
+
+    Unlike the general WIP list (which may include transfer-related WIPs so
+    handoff flows can reason about incoming samples), the dispatch scheduler
+    must only expose WIPs owned by the current user's own lab.
+    """
+
+    role = current_user.get("role")
+    where_clauses: list[str] = []
+    params: dict[str, object] = {}
+
+    if role == "system_admin":
+        return where_clauses, params
+
+    if is_lab_role(role):
+        current_lab = get_user_lab(current_user)
+
+        if not current_lab:
+            where_clauses.append("1 = 0")
+            return where_clauses, params
+
+        where_clauses.append("w.lab_name = :current_lab")
+        params["current_lab"] = current_lab
         return where_clauses, params
 
     where_clauses.append("1 = 0")
@@ -154,27 +189,27 @@ def build_wip_flow_visibility_filter(current_user: dict):
                     SELECT 1
                     FROM wips related_wips
                     WHERE related_wips.sample_id = w.sample_id
-                      AND related_wips.lab_name = :current_lab
+                    AND related_wips.lab_name = :current_lab
                 )
                 OR EXISTS (
                     SELECT 1
                     FROM transfers sample_transfers
                     WHERE sample_transfers.target_type = 'sample'
-                      AND sample_transfers.target_id = s.id
-                      AND (
-                          sample_transfers.from_lab = :current_lab
-                          OR sample_transfers.to_lab = :current_lab
-                      )
+                    AND sample_transfers.target_id = s.id
+                    AND (
+                        sample_transfers.from_lab = :current_lab
+                        OR sample_transfers.to_lab = :current_lab
+                    )
                 )
                 OR EXISTS (
                     SELECT 1
                     FROM transfers wip_transfers
                     WHERE wip_transfers.target_type = 'wip'
-                      AND wip_transfers.target_id = w.id
-                      AND (
-                          wip_transfers.from_lab = :current_lab
-                          OR wip_transfers.to_lab = :current_lab
-                      )
+                    AND wip_transfers.target_id = w.id
+                    AND (
+                        wip_transfers.from_lab = :current_lab
+                        OR wip_transfers.to_lab = :current_lab
+                    )
                 )
             )
             """
@@ -257,34 +292,293 @@ async def get_sample_by_id(sample_id: str, db: AsyncSession):
     return await wip_repo.get_sample_by_id(db, sample_id=sample_id)
 
 
-def parse_requested_experiments(experiment_item: str | None) -> list[dict[str, str]]:
+def strip_experiment_route_prefix(value: str) -> str:
+    value = value.strip()
+
+    if "|" not in value:
+        return value
+
+    _, clean_value = value.split("|", 1)
+    return clean_value.strip()
+
+
+def parse_experiment_route_meta(part: str, fallback_index: int) -> tuple[str, int, str]:
+    """Parse optional route prefix like G1#2|Lab A:A2.
+
+    target_group represents one dependency chain. Items in different groups are
+    independent and can be split by their owning Lab separately.
+    """
+
+    raw_part = part.strip()
+    if "|" not in raw_part:
+        return f"G{fallback_index}", 1, raw_part
+
+    meta, clean_value = raw_part.split("|", 1)
+    meta = meta.strip()
+    clean_value = clean_value.strip()
+
+    if "#" not in meta:
+        return meta or f"G{fallback_index}", 1, clean_value
+
+    raw_group, raw_target = meta.split("#", 1)
+    raw_group = raw_group.strip() or f"G{fallback_index}"
+
+    try:
+        target = int(str(raw_target).strip() or "1")
+    except (TypeError, ValueError):
+        target = 1
+
+    return raw_group, target, clean_value
+
+
+def parse_requested_experiments(experiment_item: str | None) -> list[dict[str, object]]:
     if not experiment_item:
         return []
 
-    experiments: list[dict[str, str]] = []
+    experiments: list[dict[str, object]] = []
 
-    for part in experiment_item.split("、"):
-        part = part.strip()
+    for index, part in enumerate(experiment_item.split("、"), start=1):
+        target_group, target, clean_part = parse_experiment_route_meta(part, index)
 
-        if ":" not in part:
+        if ":" not in clean_part:
             continue
 
-        lab_name, item_name = part.split(":", 1)
+        lab_name, item_name = clean_part.split(":", 1)
         lab_name = lab_name.strip()
         item_name = item_name.strip()
 
         if lab_name and item_name:
-            experiments.append({"lab_name": lab_name, "experiment_item": item_name})
+            experiments.append(
+                {
+                    "lab_name": lab_name,
+                    "experiment_item": item_name,
+                    "target_group": target_group,
+                    "target": target,
+                }
+            )
 
     return experiments
 
 
-def normalize_flow_value(value: str | None) -> str:
-    return (value or "").strip().lower()
+def normalize_flow_value(value: object | None) -> str:
+    return str(value or "").strip().lower()
+
+
+def parse_supported_items(value: Any) -> list[str]:
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return [str(item) for item in value]
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return []
+
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            return [part.strip() for part in stripped.split(",") if part.strip()]
+
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+
+    return []
+
+
+def normalize_dependency_item(item: dict) -> dict:
+    return {
+        **item,
+        "target_group": item.get("target_group") or "G1",
+        "target": int(item.get("target") or 1),
+        "dependency_check": bool(item.get("dependency_check")),
+    }
+
+
+def is_same_dependency_experiment(order_item: dict, wip: dict) -> bool:
+    return normalize_flow_value(order_item.get("lab_name")) == normalize_flow_value(
+        wip.get("lab_name")
+    ) and normalize_flow_value(order_item.get("experiment_name")) == normalize_flow_value(
+        wip.get("experiment_item")
+    )
+
+
+def is_dependency_item_completed(order_item: dict, sample_wips: list[dict]) -> bool:
+    return any(
+        is_same_dependency_experiment(order_item, wip) and wip.get("status") == "completed"
+        for wip in sample_wips
+    )
+
+
+def select_next_dependency_candidates(
+    order_items: list[dict],
+    sample_wips: list[dict],
+) -> list[dict]:
+    next_by_group: dict[str, dict] = {}
+
+    for raw_item in order_items:
+        item = normalize_dependency_item(raw_item)
+
+        if is_dependency_item_completed(item, sample_wips):
+            continue
+
+        group = item["target_group"]
+        current = next_by_group.get(group)
+
+        if current is None or (
+            item["target"],
+            str(item.get("created_at") or ""),
+            int(item["id"]),
+        ) < (
+            current["target"],
+            str(current.get("created_at") or ""),
+            int(current["id"]),
+        ):
+            next_by_group[group] = item
+
+    return list(next_by_group.values())
+
+
+def machine_utilization_score(candidate: dict, machines: list[dict]) -> int:
+    lab_values = {
+        normalize_flow_value(candidate.get("lab_name")),
+        normalize_flow_value(candidate.get("lab_code")),
+        normalize_flow_value(candidate.get("lab_id")),
+    }
+    experiment_name = normalize_flow_value(candidate.get("experiment_name"))
+
+    scores: list[int] = []
+    for machine in machines:
+        if normalize_flow_value(machine.get("lab")) not in lab_values:
+            continue
+
+        supported_items = {
+            normalize_flow_value(item)
+            for item in parse_supported_items(machine.get("supported_items"))
+        }
+        if experiment_name not in supported_items:
+            continue
+
+        try:
+            scores.append(int(machine.get("utilization") or 0))
+        except (TypeError, ValueError):
+            scores.append(MISSING_MACHINE_UTILIZATION_SCORE)
+
+    return min(scores) if scores else MISSING_MACHINE_UTILIZATION_SCORE
+
+
+def select_dependency_candidate(candidates: list[dict], machines: list[dict]) -> dict:
+    return sorted(
+        candidates,
+        key=lambda item: (
+            machine_utilization_score(item, machines),
+            item["target"],
+            str(item.get("created_at") or ""),
+            int(item["id"]),
+        ),
+    )[0]
+
+
+async def claim_next_dependency_experiment(
+    db: AsyncSession,
+    sample_id: str,
+    order_no: str | None = None,
+) -> dict:
+    # sample_id intentionally maps to order_items.sample_id (sample number) so the
+    # next destination can be resolved before samples.id exists.
+    sample_no = sample_id.strip()
+    if not sample_no:
+        raise HTTPException(status_code=400, detail="sampleId is required")
+
+    normalized_order_no = order_no.strip() if order_no else None
+
+    order_items = await wip_repo.list_dependency_order_items_for_sample(
+        db,
+        sample_no=sample_no,
+        order_no=normalized_order_no,
+    )
+    if not order_items:
+        raise HTTPException(status_code=404, detail="Dependency order items not found")
+
+    sample_wips = await wip_repo.list_wips_for_sample_no(
+        db,
+        sample_no=sample_no,
+        order_no=normalized_order_no,
+    )
+
+    candidates = select_next_dependency_candidates(order_items, sample_wips)
+    if not candidates:
+        return {
+            "success": True,
+            "data": None,
+            "message": NO_PENDING_DEPENDENCY_MESSAGE,
+        }
+
+    lab_names = sorted(
+        {str(candidate.get("lab_name")) for candidate in candidates if candidate.get("lab_name")}
+    )
+    lab_codes = sorted(
+        {
+            str(candidate.get("lab_code") or candidate.get("lab_id"))
+            for candidate in candidates
+            if candidate.get("lab_code") or candidate.get("lab_id")
+        }
+    )
+    machines = await wip_repo.list_machines_for_dependency_candidates(
+        db,
+        lab_names=lab_names,
+        lab_codes=lab_codes,
+    )
+
+    for candidate in sorted(
+        candidates,
+        key=lambda item: (
+            machine_utilization_score(item, machines),
+            item["target"],
+            str(item.get("created_at") or ""),
+            int(item["id"]),
+        ),
+    ):
+        if not candidate.get("dependency_check"):
+            claimed = await wip_repo.claim_order_item_dependency_check(
+                db,
+                order_item_id=int(candidate["id"]),
+            )
+
+            if claimed is None:
+                continue
+
+            await db.commit()
+
+        return {
+            "success": True,
+            "data": {
+                "orderItemId": candidate["id"],
+                "orderNo": candidate.get("order_no") or normalized_order_no,
+                "sampleId": sample_no,
+                "sampleNo": sample_no,
+                "labId": candidate.get("lab_id"),
+                "labName": candidate.get("lab_name"),
+                "experimentId": candidate.get("experiment_id"),
+                "experimentName": candidate.get("experiment_name"),
+                "targetGroup": candidate.get("target_group") or "G1",
+                "target": candidate.get("target") or 1,
+                "check": True,
+                "reason": DEPENDENCY_REASON_LOWEST_MACHINE_UTILIZATION,
+            },
+        }
+
+    await db.rollback()
+    return {
+        "success": True,
+        "data": None,
+        "message": NO_PENDING_DEPENDENCY_MESSAGE,
+    }
 
 
 def find_current_experiment_index(
-    experiments: list[dict[str, str]],
+    experiments: list[dict[str, object]],
     wip: dict,
 ) -> int | None:
     wip_lab = normalize_flow_value(wip.get("lab_name"))
@@ -309,7 +603,7 @@ def is_same_experiment_wip(experiment: dict, wip: dict) -> bool:
 
 
 def build_ordered_wip_slots(
-    experiments: list[dict[str, str]],
+    experiments: list[dict[str, object]],
     wips: list[dict],
 ) -> list[dict]:
     unused_wips = list(wips)
@@ -422,6 +716,67 @@ def get_creatable_wip_slots_for_current_segment(slots: list[dict]) -> list[dict]
     return creatable_slots
 
 
+def experiment_group_key(experiment: dict) -> str:
+    return str(experiment.get("target_group") or "G1")
+
+
+def experiment_target_order(experiment: dict) -> tuple[int, str, str]:
+    try:
+        target = int(experiment.get("target") or 1)
+    except (TypeError, ValueError):
+        target = 1
+
+    return (
+        target,
+        normalize_flow_value(experiment.get("lab_name")),
+        normalize_flow_value(experiment.get("experiment_item")),
+    )
+
+
+def build_grouped_wip_slots(
+    experiments: list[dict],
+    existing_wips: list[dict],
+) -> dict[str, list[dict]]:
+    grouped_experiments: dict[str, list[dict]] = {}
+
+    for experiment in experiments:
+        grouped_experiments.setdefault(experiment_group_key(experiment), []).append(experiment)
+
+    grouped_slots: dict[str, list[dict]] = {}
+    unused_wips = list(existing_wips)
+
+    for group, group_experiments in grouped_experiments.items():
+        ordered_experiments = sorted(group_experiments, key=experiment_target_order)
+        slots: list[dict] = []
+
+        for experiment in ordered_experiments:
+            matched_wip = None
+
+            for index, candidate in enumerate(unused_wips):
+                if is_same_experiment_wip(experiment, candidate):
+                    matched_wip = candidate
+                    unused_wips.pop(index)
+                    break
+
+            slots.append({"experiment": experiment, "wip": matched_wip})
+
+        grouped_slots[group] = slots
+
+    return grouped_slots
+
+
+def get_creatable_wip_slots_by_group(
+    experiments: list[dict],
+    existing_wips: list[dict],
+) -> dict[str, list[dict]]:
+    grouped_slots = build_grouped_wip_slots(experiments, existing_wips)
+
+    return {
+        group: get_creatable_wip_slots_for_current_segment(slots)
+        for group, slots in grouped_slots.items()
+    }
+
+
 def validate_wip_create_items_in_order(
     sample: dict,
     existing_wips: list[dict],
@@ -432,18 +787,44 @@ def validate_wip_create_items_in_order(
     if not experiments:
         return
 
-    slots = build_ordered_wip_slots(experiments, existing_wips)
-    creatable_slots = get_creatable_wip_slots_for_current_segment(slots)
-    creatable_experiments = [slot["experiment"] for slot in creatable_slots]
+    creatable_by_group = get_creatable_wip_slots_by_group(experiments, existing_wips)
+    used_slots: set[tuple[str, int]] = set()
+    selected_indices_by_group: dict[str, list[int]] = {}
 
-    if len(requested_items) > len(creatable_experiments):
-        raise HTTPException(
-            status_code=400,
-            detail=WIP_ORDER_GUARD_MESSAGE,
-        )
+    for item in requested_items:
+        matched: tuple[str, int] | None = None
 
-    for index, item in enumerate(requested_items):
-        if not is_same_experiment_wip(creatable_experiments[index], item):
+        for group, creatable_slots in creatable_by_group.items():
+            for index, slot in enumerate(creatable_slots):
+                slot_key = (group, index)
+
+                if slot_key in used_slots:
+                    continue
+
+                if is_same_experiment_wip(slot["experiment"], item):
+                    matched = slot_key
+                    break
+
+            if matched is not None:
+                break
+
+        if matched is None:
+            raise HTTPException(
+                status_code=400,
+                detail=WIP_ORDER_GUARD_MESSAGE,
+            )
+
+        used_slots.add(matched)
+        selected_indices_by_group.setdefault(matched[0], []).append(matched[1])
+
+    # Within one dependency group, users may create a prefix of the currently
+    # unlocked same-Lab segment, but cannot skip an earlier item in that group.
+    # Different groups are independent, so choosing G1 and G3 without G2 is OK.
+    for indices in selected_indices_by_group.values():
+        ordered_indices = sorted(indices)
+        expected_prefix = list(range(0, len(ordered_indices)))
+
+        if ordered_indices != expected_prefix:
             raise HTTPException(
                 status_code=400,
                 detail=WIP_ORDER_GUARD_MESSAGE,
@@ -623,8 +1004,11 @@ async def list_wips(
     current_user: dict,
     status: str | None = None,
     include_all_for_flow: bool = False,
+    own_lab_only: bool = False,
 ):
-    if include_all_for_flow:
+    if own_lab_only:
+        where_clauses, params = build_wip_owner_lab_visibility_filter(current_user)
+    elif include_all_for_flow:
         where_clauses, params = build_wip_flow_visibility_filter(current_user)
     else:
         where_clauses, params = build_wip_visibility_filter(current_user)

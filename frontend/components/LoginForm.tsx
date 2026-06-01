@@ -7,6 +7,24 @@ interface Props {
   onSuccess?: () => void;
 }
 
+interface DemoAccount {
+  label: string;
+  email: string;
+  password: string;
+}
+
+const DEMO_ACCOUNTS: DemoAccount[] = [
+  { label: "系統管理員", email: "admin@example.com", password: "Admin1234" },
+  { label: "大主管", email: "director@example.com", password: "Direc1234" },
+  { label: "LAB-A主管", email: "supervisor@example.com", password: "Super1234" },
+  { label: "LAB-B主管", email: "supervisor2@example.com", password: "Super1234" },
+  { label: "LAB-C主管", email: "supervisor3@example.com", password: "Super1234" },
+  { label: "LAB-A人員", email: "engineer@example.com", password: "Engin1234" },
+  { label: "LAB-B人員", email: "engineer2@example.com", password: "Engin1234" },
+  { label: "LAB-C人員", email: "engineer3@example.com", password: "Engin1234" },
+  { label: "廠區使用者", email: "requester@example.com", password: "Reque1234" },
+];
+
 export function LoginForm({ onSuccess }: Props) {
   const { login, error } = useAuth();
   const [email, setEmail] = useState("");
@@ -65,6 +83,28 @@ export function LoginForm({ onSuccess }: Props) {
           LABORATORY INFORMATION MANAGEMENT SYSTEM
         </div>
       </div>
+
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span style={{ fontSize: 11, color: "var(--text2)" }}>快速登入 (測試帳號)</span>
+        <select
+          value={email}
+          onChange={(e) => {
+            const account = DEMO_ACCOUNTS.find((a) => a.email === e.target.value);
+            if (account) {
+              setEmail(account.email);
+              setPassword(account.password);
+            }
+          }}
+          style={inputStyle}
+        >
+          <option value="">— 選擇測試帳號 —</option>
+          {DEMO_ACCOUNTS.map((a) => (
+            <option key={a.email} value={a.email}>
+              {a.label} ({a.email})
+            </option>
+          ))}
+        </select>
+      </label>
 
       <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <span style={{ fontSize: 11, color: "var(--text2)" }}>Email</span>
@@ -137,16 +177,12 @@ export function LoginForm({ onSuccess }: Props) {
           }}
         >
           DEV SEED ACCOUNTS:
-          <br />
-          admin@example.com / Admin1234
-          <br />
-          director@example.com / Direc1234
-          <br />
-          supervisor@example.com / Super1234
-          <br />
-          engineer@example.com / Engin1234
-          <br />
-          requester@example.com / Reque1234
+          {DEMO_ACCOUNTS.map((a) => (
+            <span key={a.email}>
+              <br />
+              {a.email} / {a.password}
+            </span>
+          ))}
         </div>
       )}
     </form>

@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tas-mqtt-listener
+  annotations:
+    configmap.reloader.stakater.com/reload: "lims-config"
+    secret.reloader.stakater.com/reload: "lims-secrets"
+spec:
+  # Singleton subscriber. The MQTT topic `phone-conn/calloutResult/${TAS_SN_KEY}`
+  # fans out to every subscriber, so 2+ replicas would each ack the same call
+  # event, double-marking notifications and emitting duplicate SSE pushes.
+  # If we ever need HA here we'd need a leader election or shared dedupe key
+  # (e.g. Redis SETNX on the call_id) — not worth it for a fail-fast restart-
+  # backed singleton.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tas-mqtt-listener
+  template:
+    metadata:
+      labels:
+        app: tas-mqtt-listener
+    spec:
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: artifact-registry
+      containers:
+        - name: tas-mqtt-listener
+          image: lims-backend
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.workers.tas_mqtt_listener"]
+          # Same env surface as backend / celery-worker: configmap supplies
+          # the non-secret defaults (ENV, REDIS_URL, TAS_ENABLED, TAS_SN_KEY,
+          # TAS_MQTT_BROKER_URL); the Secret supplies DATABASE_URL,
+          # JWT_SECRET and CHT_API_KEY / CHT_SERVICE_NUMBER.
+          envFrom:
+            - configMapRef:
+                name: lims-config
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: lims-secrets
+                  key: JWT_SECRET
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: lims-secrets
+                  key: DATABASE_URL
+            - name: CHT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lims-secrets
+                  key: CHT_API_KEY
+            - name: CHT_SERVICE_NUMBER
+              valueFrom:
+                secretKeyRef:
+                  name: lims-secrets
+                  key: CHT_SERVICE_NUMBER
+          # No probes: listener has no HTTP surface, and when TAS_ENABLED=false
+          # it exits 0 immediately (a `pgrep python` probe would flap). The
+          # Deployment's `restartPolicy: Always` is the only liveness we want —
+          # fail-fast and let the kubelet restart on real connection loss.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi

@@ -10,7 +10,7 @@ import { login } from "./helpers";
  *   variant of the bottom-right slot.
  * - lab_supervisor (per-lab) sees the 24h throughput chart variant in the
  *   same slot.
- * - The "完工" KPI tile drills to /execution?status=completed.
+ * - The "完工" KPI tile drills to /execution.
  *
  * Seed accounts come from `backend/scripts/seed_dev.py`:
  *   director@example.com   / Direc1234 (general_supervisor, cross-lab)
@@ -95,7 +95,7 @@ test.describe("Supervisor dashboard", () => {
     await expect(page.getByTestId("lab-leaderboard")).toHaveCount(0);
   });
 
-  test('clicking the "完工" KPI tile drills to /execution?status=completed', async ({
+  test('clicking the "完工" KPI tile drills to /execution', async ({
     page,
   }) => {
     await login(page, "supervisor@example.com", "Super1234");
@@ -107,7 +107,7 @@ test.describe("Supervisor dashboard", () => {
     // Click the label and let the parent button receive the event.
     await kpi.getByText("完工", { exact: true }).click();
 
-    await expect(page).toHaveURL(/\/execution\?status=completed/, {
+    await expect(page).toHaveURL(/\/execution$/, {
       timeout: 10_000,
     });
   });

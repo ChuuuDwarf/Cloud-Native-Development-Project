@@ -37,6 +37,7 @@ export const OrderStatusLabel: Record<OrderStatus, string> = {
   waiting_pickup: "待送件",
   closed: "已結案",
   cancelled: "已取消",
+  terminated: "已終止",
 };
 
 export const OrderActionLabel: Record<OrderAction, string> = {
@@ -144,3 +145,26 @@ export const SeverityLabel: Record<Severity, string> = {
   high: "高",
   critical: "嚴重",
 };
+
+// Role names are not modelled in the auto-generated enums (roles live in the DB),
+// so `RoleName` is declared inline here next to its label map.
+export type RoleName =
+  | "system_admin"
+  | "general_supervisor"
+  | "lab_supervisor"
+  | "lab_engineer"
+  | "plant_user";
+
+export const RoleLabel: Record<RoleName, string> = {
+  system_admin: "系統管理員",
+  general_supervisor: "大主管",
+  lab_supervisor: "實驗室主管",
+  lab_engineer: "實驗室人員",
+  plant_user: "廠區使用者",
+};
+
+export const ROLES_WITHOUT_LAB: ReadonlySet<RoleName> = new Set([
+  "system_admin",
+  "general_supervisor",
+  "plant_user",
+]);

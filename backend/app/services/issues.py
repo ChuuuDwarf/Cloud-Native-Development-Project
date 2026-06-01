@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # How long to wait before the first escalation kicks in. Hard-coded short for
 # demo / development ergonomics; the production default + per-severity tuning
 # will move to ``system_settings.alertRules`` once that module exists.
-INITIAL_ESCALATION_DELAY = timedelta(seconds=10)
+INITIAL_ESCALATION_DELAY = timedelta(seconds=30)
 
 
 class IssueService:

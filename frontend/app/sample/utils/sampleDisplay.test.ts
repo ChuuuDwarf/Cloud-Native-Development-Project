@@ -4,6 +4,7 @@ import type { CurrentUser, Sample, Transfer } from "../types";
 import {
   filterSamplesByView,
   formatDateTime,
+  formatSampleExperimentRequirement,
   formatStatusChange,
   getDisplaySampleLocation,
   getDisplaySampleStatus,
@@ -132,6 +133,14 @@ describe("sampleDisplay 功能測試", () => {
     expect(
       isSampleInCurrentLab(makeSample({ current_location: "Lab B 實驗暫存區" }), labAUser)
     ).toBe(false);
+  });
+
+  it("顯示實驗需求時會隱藏群組/站點前綴", () => {
+    expect(
+      formatSampleExperimentRequirement(
+        "G2#1|電性測試實驗室:Probe、G1#1|材料分析實驗室:EDX、G1#2|材料分析實驗室:SEM、G1#3|電性測試實驗室:IV"
+      )
+    ).toBe("電性測試實驗室:Probe、材料分析實驗室:EDX、材料分析實驗室:SEM、電性測試實驗室:IV");
   });
 
   it("判斷 active 樣品狀態，排除已完成、異常與取消狀態", () => {

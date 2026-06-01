@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.common.dependencies import CurrentUser
 from app.common.dependencies.scope import apply_lab_scope
@@ -38,12 +39,15 @@ class IssueRepository:
             issue.next_escalation_time = next_escalation_time
         self.session.add(issue)
         await self.session.flush()
-        await self.session.refresh(issue)
+        # Pull lab too so IssueRead.lab_code (alias path "lab.code") can be
+        # serialized without triggering a lazy SQL emit — the relationship is
+        # marked lazy="raise" to make eager-loading explicit.
+        await self.session.refresh(issue, attribute_names=["lab"])
 
         return issue
 
     async def get_issue(self, issue_id: UUID, user: CurrentUser) -> Issue:
-        stmt = select(Issue).where(Issue.id == issue_id)
+        stmt = select(Issue).options(selectinload(Issue.lab)).where(Issue.id == issue_id)
         stmt = apply_lab_scope(stmt, user, Issue.lab_id)
         result = await self.session.execute(stmt)
         issue = result.scalar_one_or_none()
@@ -56,7 +60,7 @@ class IssueRepository:
     async def list_issues(
         self, params: IssueListParams, user: CurrentUser
     ) -> tuple[list[Issue], int]:
-        stmt = select(Issue)
+        stmt = select(Issue).options(selectinload(Issue.lab))
 
         stmt = apply_lab_scope(stmt, user, Issue.lab_id)
 

@@ -1,3 +1,4 @@
+import { formatExperimentSummary, stripExperimentRoutePrefix } from "@/lib/experimentSummary";
 import type { CurrentUser, RequestedExperiment, Sample, Wip, WipForm } from "../types";
 
 export function createEmptyWipForm(labName = ""): WipForm {
@@ -14,6 +15,42 @@ export function getCurrentLab(user: CurrentUser | null) {
   return user?.lab_name || user?.department || "";
 }
 
+function normalize(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function isSameLab(left: string | null | undefined, right: string | null | undefined) {
+  return normalize(left) === normalize(right);
+}
+
+function isSameExperiment(left: string | null | undefined, right: string | null | undefined) {
+  return normalize(left) === normalize(right);
+}
+
+function isNonNullable<T>(value: T): value is NonNullable<T> {
+  return value != null;
+}
+
+function parseRoutePrefix(routePrefix: string | undefined, fallbackIndex: number) {
+  const fallback = {
+    targetGroup: "G1",
+    target: fallbackIndex + 1,
+  };
+
+  if (!routePrefix) return fallback;
+
+  const [rawGroup, rawTarget] = routePrefix.includes("#")
+    ? routePrefix.split("#", 2)
+    : [routePrefix, "1"];
+
+  const target = Number(rawTarget);
+
+  return {
+    targetGroup: rawGroup.trim() || fallback.targetGroup,
+    target: Number.isFinite(target) ? target : fallback.target,
+  };
+}
+
 export function parseExperimentsFromSummary(summary: string | null): RequestedExperiment[] {
   if (!summary) return [];
 
@@ -21,18 +58,27 @@ export function parseExperimentsFromSummary(summary: string | null): RequestedEx
     .split("、")
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => {
-      const [labName, ...rest] = part.split(":");
-      const experimentItem = rest.join(":").trim();
+    .map((part, index): RequestedExperiment | null => {
+      const { value: experimentPart, route_prefix: routePrefix } = stripExperimentRoutePrefix(part);
+      const separatorIndex = experimentPart.indexOf(":");
+
+      if (separatorIndex === -1) return null;
+
+      const labName = experimentPart.slice(0, separatorIndex).trim();
+      const experimentItem = experimentPart.slice(separatorIndex + 1).trim();
 
       if (!labName || !experimentItem) return null;
 
+      const route = parseRoutePrefix(routePrefix, index);
+
       return {
-        lab_name: labName.trim(),
+        lab_name: labName,
         experiment_item: experimentItem,
+        targetGroup: route.targetGroup,
+        target: route.target,
       };
     })
-    .filter((item): item is RequestedExperiment => Boolean(item));
+    .filter(isNonNullable);
 }
 
 export function getRequestedExperiments(sample: Sample | null): RequestedExperiment[] {
@@ -49,6 +95,34 @@ export function getSampleDefaultPriority() {
   return "normal";
 }
 
+function getExperimentGroup(experiment: RequestedExperiment) {
+  return experiment.targetGroup || "G1";
+}
+
+function getExperimentTarget(experiment: RequestedExperiment) {
+  const target = Number(experiment.target ?? 1);
+  return Number.isFinite(target) ? target : 1;
+}
+
+function findMatchingWipForExperiment(sampleWips: Wip[], experiment: RequestedExperiment) {
+  return (
+    sampleWips.find(
+      (wip) =>
+        isSameLab(wip.lab_name, experiment.lab_name) &&
+        isSameExperiment(wip.experiment_item, experiment.experiment_item)
+    ) ?? null
+  );
+}
+
+function isExperimentCompleted(sampleWips: Wip[], experiment: RequestedExperiment) {
+  return sampleWips.some(
+    (wip) =>
+      isSameLab(wip.lab_name, experiment.lab_name) &&
+      isSameExperiment(wip.experiment_item, experiment.experiment_item) &&
+      wip.status === "completed"
+  );
+}
+
 export function makeAutoFormsForSample(
   sample: Sample | null,
   currentLab: string,
@@ -59,45 +133,61 @@ export function makeAutoFormsForSample(
   const requestedExperiments = getRequestedExperiments(sample);
   const defaultPriority = getSampleDefaultPriority();
 
-  const sampleWips = existingWips
-    .filter((wip) => wip.sample_id === sample.id)
-    .sort((first, second) => {
-      const firstTime = new Date(first.created_at ?? "").getTime();
-      const secondTime = new Date(second.created_at ?? "").getTime();
+  const sampleWips = existingWips.filter((wip) => wip.sample_id === sample.id);
+  const groups = new Map<
+    string,
+    Array<{
+      experiment: RequestedExperiment;
+      index: number;
+    }>
+  >();
 
-      if (Number.isFinite(firstTime) && Number.isFinite(secondTime) && firstTime !== secondTime) {
-        return firstTime - secondTime;
-      }
+  requestedExperiments.forEach((experiment, index) => {
+    const group = getExperimentGroup(experiment);
 
-      return String(first.wip_no ?? first.id).localeCompare(String(second.wip_no ?? second.id));
-    });
+    if (!groups.has(group)) {
+      groups.set(group, []);
+    }
 
-  const unusedWips = [...sampleWips];
-  let segmentLab = "";
-  let segmentStarted = false;
+    groups.get(group)!.push({ experiment, index });
+  });
+
   const notYetCreated: RequestedExperiment[] = [];
 
-  for (const item of requestedExperiments) {
-    const existingIndex = unusedWips.findIndex(
-      (wip) => wip.lab_name === item.lab_name && wip.experiment_item === item.experiment_item
+  Array.from(groups.values()).forEach((groupExperiments) => {
+    const orderedExperiments = [...groupExperiments].sort((left, right) => {
+      const targetDiff =
+        getExperimentTarget(left.experiment) - getExperimentTarget(right.experiment);
+
+      if (targetDiff !== 0) return targetDiff;
+
+      return left.index - right.index;
+    });
+
+    const firstUnfinishedIndex = orderedExperiments.findIndex(
+      ({ experiment }) => !isExperimentCompleted(sampleWips, experiment)
     );
-    const existingWip = existingIndex === -1 ? null : unusedWips.splice(existingIndex, 1)[0];
 
-    if (!segmentStarted) {
-      if (existingWip?.status === "completed") continue;
+    if (firstUnfinishedIndex === -1) return;
 
-      segmentStarted = true;
-      segmentLab = item.lab_name;
+    const firstUnfinished = orderedExperiments[firstUnfinishedIndex]?.experiment;
+
+    if (!firstUnfinished || !isSameLab(firstUnfinished.lab_name, currentLab)) return;
+
+    for (let index = firstUnfinishedIndex; index < orderedExperiments.length; index += 1) {
+      const experiment = orderedExperiments[index].experiment;
+
+      if (!isSameLab(experiment.lab_name, currentLab)) break;
+
+      const existingWip = findMatchingWipForExperiment(sampleWips, experiment);
+
+      if (!existingWip) {
+        notYetCreated.push(experiment);
+      }
     }
+  });
 
-    if (item.lab_name !== segmentLab) break;
-
-    if (!existingWip) {
-      notYetCreated.push(item);
-    }
-  }
-
-  if (segmentLab !== currentLab || notYetCreated.length === 0) {
+  if (notYetCreated.length === 0) {
     return [createEmptyWipForm(currentLab)];
   }
 
@@ -117,7 +207,7 @@ export function formatRequestedExperiments(sample: Sample | null) {
     return sample?.experiment_item ?? "-";
   }
 
-  return requestedExperiments.map((item) => `${item.lab_name}:${item.experiment_item}`).join("、");
+  return formatExperimentSummary(sample?.experiment_item);
 }
 
 export function shouldOpenCreateWipByDefault(sample: Sample | null) {

@@ -57,6 +57,7 @@ class UserService:
             password_hash=hash_password(payload.password),
             department_id=payload.department_id,
             lab_id=payload.lab_id,
+            phone=payload.phone,
             status=UserStatus.ACTIVE,
             is_active=True,
         )
@@ -85,6 +86,10 @@ class UserService:
             user.roles = await self._resolve_roles(payload.role_ids)
         if payload.password is not None:
             user.password_hash = hash_password(payload.password)
+        # Phone update — empty string clears it (NULL in DB) so admins can
+        # remove a stale number; a non-empty string overwrites.
+        if payload.phone is not None:
+            user.phone = payload.phone or None
 
         await self._session.flush()
         await self._session.commit()

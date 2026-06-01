@@ -24,6 +24,9 @@ class UserBase(_UserConfig):
     name: str = Field(min_length=1, max_length=120)
     department_id: uuid.UUID | None = Field(default=None, alias="departmentId")
     lab_id: uuid.UUID | None = Field(default=None, alias="labId")
+    # Local phone number for the CHT TAS callout pipeline. Optional; an empty
+    # / None value disables phone alerts for the account.
+    phone: str | None = Field(default=None, alias="phoneNumber", max_length=20)
 
 
 class UserCreate(UserBase):
@@ -47,6 +50,9 @@ class UserUpdate(BaseModel):
     status: UserStatus | None = None
     role_ids: list[uuid.UUID] | None = Field(default=None, alias="roleIds")
     password: str | None = Field(default=None, min_length=8, max_length=72)
+    # Phone update path. Use empty string or None to clear; otherwise
+    # overwrites with the provided value.
+    phone: str | None = Field(default=None, alias="phoneNumber", max_length=20)
 
 
 class UserResponse(UserBase):

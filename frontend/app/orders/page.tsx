@@ -41,6 +41,9 @@ export default function OrdersPage() {
             masterData={page.masterData}
             currentUser={{ id: page.currentUserId, name: page.currentUserName }}
             usersById={page.usersById}
+            deliveryDestinationsByOrderId={page.deliveryDestinationsByOrderId}
+            deliveryDestinationLoadingByOrderId={page.deliveryDestinationLoadingByOrderId}
+            deliveryDestinationErrorByOrderId={page.deliveryDestinationErrorByOrderId}
             loading={page.loading}
             activeStatusFilter={page.activeStatusFilter}
             statusCounts={page.statusCounts}
@@ -86,9 +89,7 @@ export default function OrdersPage() {
             onAddSample={page.addSample}
             onSampleChange={page.updateSampleGroup}
             onSampleNameChange={page.updateSampleNameGroup}
-            onToggleExperiment={page.toggleExperimentForSample}
-            onMoveExperiment={page.moveExperiment}
-            onRemoveItem={page.removeItem}
+            onDependencyItemsChange={page.updateDependencyItems}
             onClose={page.closeFormModal}
             onCreate={(submitAfterCreate) => void page.createOrder(submitAfterCreate)}
             onUpdate={() => void page.updateOrder()}

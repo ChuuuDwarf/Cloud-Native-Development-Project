@@ -271,17 +271,25 @@ class ReportService:
         return report_dict(rpt)
 
     async def publish_report(self, report_id: str, by: str) -> dict:
-        """發布並回傳使用者；報告回傳後委託單進入「待取件」（flow.md）。"""
+        """發布並回傳使用者；報告回傳後委託單停在「待報告回傳」。
+
+        報告回傳不再自動把委託單推到 WAITING_PICKUP — 多實驗室場景下,
+        某一個 lab 的 report 已回傳不代表全部 lab 都做完。最終的
+        WAITING_PICKUP 轉換改由 ``ClosureService.to_pickup`` 在
+        ``all_wips_lab_closed`` 全 True 時統一處理。
+        """
         rpt = await self._require_report(report_id)
         if rpt.status != REPORT_ZH[ReportStatus.CONFIRMED]:
             raise ConflictError(f"報告為「{rpt.status}」，僅已確認可發布")
         rpt.status = REPORT_ZH[ReportStatus.RETURNED]
         self._add_version(rpt, "發布並回傳使用者", by)
-        # 報告回傳 → 委託單 (已完成 / 待報告回傳) → 待取件。flow.md 待報告回傳 → 待取件。
+        # COMPLETED → WAITING_REPORT_RETURN 是 lab 自己的 portion 已交付給
+        # 主管 review 的 marker;不再越過去 WAITING_PICKUP(那一步是
+        # closure 模組的事,等所有 lab 都按下 to-pickup)。
         await self._advance_order(
             rpt.order_id,
-            (OrderStatus.COMPLETED.value, OrderStatus.WAITING_REPORT_RETURN.value),
-            OrderStatus.WAITING_PICKUP.value,
+            (OrderStatus.COMPLETED.value,),
+            OrderStatus.WAITING_REPORT_RETURN.value,
         )
         await self._repo.commit()
 

@@ -16,7 +16,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import OrderModel, Report, Storage, User, Wip, WipExecution
+from app.db.models import OrderItemModel, OrderModel, Report, Storage, User, Wip, WipExecution
 
 
 class ClosureRepository:
@@ -49,6 +49,91 @@ class ClosureRepository:
     async def list_wips_for_order(self, order_no: str) -> Sequence[Wip]:
         result = await self._session.execute(select(Wip).where(Wip.order_no == order_no))
         return result.scalars().all()
+
+    async def list_wips_for_order_and_lab(self, order_no: str, lab_name: str) -> Sequence[Wip]:
+        """Cross-lab closure: each lab only sees its own WIPs when checking
+        closure conditions / marking them as closed. ``lab_name`` is the
+        Chinese display name (matches ``Wip.lab_name``)."""
+        result = await self._session.execute(
+            select(Wip).where(Wip.order_no == order_no, Wip.lab_name == lab_name)
+        )
+        return result.scalars().all()
+
+    async def all_wips_lab_closed(self, order_no: str) -> bool:
+        """True iff (a) every order_item on the order has been claimed
+        (``dependency_check=true``) AND (b) every WIP on the order has
+        ``lab_closed=True``.
+
+        Why the order_items gate matters
+        --------------------------------
+        WIPs are NOT seeded up-front for every order_item — they're created
+        on-demand inside ``sample_service._split_sample`` as each downstream
+        lab actually receives the sample. So for a multi-lab dependency
+        chain (e.g. LAB-A -> LAB-B), LAB-A closes its WIP before LAB-B's
+        WIP even exists, and the old ``COUNT(wips) == COUNT(closed)``
+        check fires prematurely -> the order jumps to WAITING_PICKUP while
+        LAB-B's work hasn't happened yet.
+
+        The contract for "all the work is done" lives in ``order_items``:
+        every row's ``dependency_check`` must be True (= a destination
+        lab has been assigned for it). We short-circuit on the
+        order_items count first to keep the cheaper query in front.
+
+        Schema note
+        -----------
+        ``order_items.order_id`` is the FK to ``orders.id``; ``order_no``
+        lives on ``orders``, not ``order_items``. We join via the FK
+        rather than denormalising.
+        """
+        # Condition 1 — every order_item must be claimed.
+        unclaimed = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(OrderItemModel)
+                .join(OrderModel, OrderModel.id == OrderItemModel.order_id)
+                .where(OrderModel.order_no == order_no)
+                .where(OrderItemModel.dependency_check.is_(False))
+            )
+        ).scalar_one()
+        if unclaimed > 0:
+            return False
+
+        # Condition 2 — every existing WIP must be lab_closed, and at least
+        # one WIP must exist (an order with zero WIPs hasn't started yet).
+        total = (
+            await self._session.execute(
+                select(func.count()).select_from(Wip).where(Wip.order_no == order_no)
+            )
+        ).scalar_one()
+        if total == 0:
+            return False
+        closed = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(Wip)
+                .where(Wip.order_no == order_no, Wip.lab_closed.is_(True))
+            )
+        ).scalar_one()
+        return closed == total
+
+    async def count_returned_reports_per_wip(self, order_no: str) -> dict[str, int]:
+        """For the closure ``has_report`` gate: per-WIP count of RETURNED
+        reports. Used to verify EVERY WIP has a published report — not just
+        that the order has at least one (Phase L review #2 fix)."""
+        from app.common.enums import ReportStatus
+        from app.common.enums.role_d_zh import REPORT_ZH
+
+        rows = (
+            await self._session.execute(
+                select(Report.wip_id, func.count())
+                .where(
+                    Report.order_id == order_no,
+                    Report.status == REPORT_ZH[ReportStatus.RETURNED],
+                )
+                .group_by(Report.wip_id)
+            )
+        ).all()
+        return {row[0]: int(row[1]) for row in rows}
 
     async def get_execs_map(self, wip_nos: Sequence[str]) -> dict[str, WipExecution]:
         if not wip_nos:

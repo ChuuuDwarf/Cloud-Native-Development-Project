@@ -28,3 +28,10 @@ data:
   POSTGRES_PORT: "5432"
   POSTGRES_DB: "lims"
   POSTGRES_USER: "lims"
+  # TAS (中華電信 phone alert) — defaults keep the listener in fail-safe no-op
+  # mode. Overlays flip TAS_ENABLED=true and supply TAS_SN_KEY (customer key
+  # for the MQTT topic `phone-conn/calloutResult/${TAS_SN_KEY}`).
+  # CHT_API_KEY / CHT_SERVICE_NUMBER live in `lims-secrets`, not here.
+  TAS_ENABLED: "false"
+  TAS_SN_KEY: ""
+  TAS_MQTT_BROKER_URL: "tls://tasapi.cht.com.tw:2883"

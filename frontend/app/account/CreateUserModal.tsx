@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { ROLES_WITHOUT_LAB, RoleLabel, type RoleName } from "@/constants/status-labels";
 import { inputStyle, primaryBtn, secondaryBtn } from "@/constants/styles";
 import { userApi } from "@/services/user-api";
 import type { CreateUserPayload } from "@/types/user";
@@ -25,11 +26,27 @@ export default function CreateUserModal({
     email: "",
     name: "",
     password: "",
+    phoneNumber: "",
     roleIds: [],
     labId: null,
     departmentId: null,
   });
   const [error, setError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  const roleNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of roles) map.set(r.id, r.name);
+    return map;
+  }, [roles]);
+
+  const selectedRoleNames = (form.roleIds ?? [])
+    .map((id) => roleNameById.get(id))
+    .filter(Boolean) as string[];
+  // Show the lab field unless every selected role is one that doesn't take a lab.
+  const showLabField =
+    selectedRoleNames.length === 0 ||
+    selectedRoleNames.some((n) => !ROLES_WITHOUT_LAB.has(n as RoleName));
 
   const create = useMutation({
     mutationFn: (payload: CreateUserPayload) => userApi.create(payload),
@@ -62,7 +79,17 @@ export default function CreateUserModal({
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
-          create.mutate(form);
+          setPhoneError(null);
+          const trimmedPhone = (form.phoneNumber ?? "").trim();
+          if (trimmedPhone.length > 0 && trimmedPhone.length !== 10) {
+            setPhoneError("電話需為 10 位數字");
+            return;
+          }
+          create.mutate({
+            ...form,
+            phoneNumber: trimmedPhone || undefined,
+            labId: showLabField ? (form.labId ?? null) : undefined,
+          });
         }}
         style={{
           background: "var(--s1)",
@@ -95,6 +122,23 @@ export default function CreateUserModal({
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
         </Field>
+        <Field label="電話">
+          <input
+            type="tel"
+            inputMode="numeric"
+            maxLength={10}
+            pattern="\d{10}"
+            placeholder="例:0912345678"
+            style={inputStyle}
+            value={form.phoneNumber ?? ""}
+            onChange={(e) => {
+              const cleaned = e.target.value.replace(/\D/g, "").slice(0, 10);
+              setForm({ ...form, phoneNumber: cleaned });
+              if (phoneError) setPhoneError(null);
+            }}
+          />
+          {phoneError && <span style={{ fontSize: 11, color: "var(--red)" }}>{phoneError}</span>}
+        </Field>
         <Field label="密碼 (≥8 字元)">
           <input
             required
@@ -111,16 +155,24 @@ export default function CreateUserModal({
             size={Math.max(2, Math.min(roles.length, 4))}
             style={{ ...inputStyle, height: "auto" }}
             value={form.roleIds ?? []}
-            onChange={(e) =>
+            onChange={(e) => {
+              const nextRoleIds = Array.from(e.target.selectedOptions, (o) => o.value);
+              const nextNames = nextRoleIds
+                .map((id) => roleNameById.get(id))
+                .filter(Boolean) as string[];
+              const nextShowLab =
+                nextNames.length === 0 ||
+                nextNames.some((n) => !ROLES_WITHOUT_LAB.has(n as RoleName));
               setForm({
                 ...form,
-                roleIds: Array.from(e.target.selectedOptions, (o) => o.value),
-              })
-            }
+                roleIds: nextRoleIds,
+                labId: nextShowLab ? form.labId : null,
+              });
+            }}
           >
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.name}
+                {RoleLabel[r.name as RoleName] ?? r.name}
               </option>
             ))}
           </select>
@@ -139,20 +191,22 @@ export default function CreateUserModal({
             ))}
           </select>
         </Field>
-        <Field label="實驗室">
-          <select
-            style={inputStyle}
-            value={form.labId ?? ""}
-            onChange={(e) => setForm({ ...form, labId: e.target.value || null })}
-          >
-            <option value="">— 未指定 —</option>
-            {labs.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.code} · {l.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {showLabField && (
+          <Field label="實驗室">
+            <select
+              style={inputStyle}
+              value={form.labId ?? ""}
+              onChange={(e) => setForm({ ...form, labId: e.target.value || null })}
+            >
+              <option value="">— 未指定 —</option>
+              {labs.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.code} · {l.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
 
         {error && (
           <div

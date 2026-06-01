@@ -13,6 +13,9 @@ export const emptyFormItem = {
   sampleName: "",
   labId: "",
   experimentId: "",
+  targetGroup: "G1",
+  target: 1,
+  check: false,
 };
 
 export const emptyMasterData: MasterData = {

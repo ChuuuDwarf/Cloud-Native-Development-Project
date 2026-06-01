@@ -8,7 +8,6 @@ import {
   templateBoxStyle,
 } from "../styles";
 import type {
-  Experiment,
   FormItem,
   MasterData,
   OrderTemplate,
@@ -46,9 +45,7 @@ export function OrderForm({
   onAddSample,
   onSampleChange,
   onSampleNameChange,
-  onToggleExperiment,
-  onMoveExperiment,
-  onRemoveItem,
+  onDependencyItemsChange,
   onClose,
   onCreate,
   onUpdate,
@@ -77,9 +74,7 @@ export function OrderForm({
   onAddSample: () => void;
   onSampleChange: (group: SampleFormGroup, sampleId: string) => void;
   onSampleNameChange: (group: SampleFormGroup, sampleName: string) => void;
-  onToggleExperiment: (group: SampleFormGroup, experiment: Experiment, checked: boolean) => void;
-  onMoveExperiment: (index: number, direction: -1 | 1) => void;
-  onRemoveItem: (index: number) => void;
+  onDependencyItemsChange: (group: SampleFormGroup, nextItems: FormItem[]) => void;
   onClose: () => void;
   onCreate: (submitAfterCreate: boolean) => void;
   onUpdate: () => void;
@@ -220,9 +215,7 @@ export function OrderForm({
         masterData={masterData}
         onSampleChange={onSampleChange}
         onSampleNameChange={onSampleNameChange}
-        onToggleExperiment={onToggleExperiment}
-        onMoveExperiment={onMoveExperiment}
-        onRemoveItem={onRemoveItem}
+        onDependencyItemsChange={onDependencyItemsChange}
       />
 
       {editingOrderId ? (

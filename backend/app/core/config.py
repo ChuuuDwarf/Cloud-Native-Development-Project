@@ -46,6 +46,16 @@ class Settings(BaseSettings):
     cht_service_number: str = Field(default="")
     cht_base_url: str = Field(default="https://tasapi.cht.com.tw/apis/CHTIoT")
 
+    # TAS MQTT listener (call-pickup-as-acknowledgement). When ``tas_enabled``
+    # is False the listener entrypoint exits immediately and the REST callout
+    # short-circuits to a no-op — keeps CI / local dev from dialling real
+    # numbers when credentials aren't provisioned. ``tas_sn_key`` keys the
+    # MQTT topic ``phone-conn/calloutResult/${SN_KEY}``; broker URL defaults
+    # to the production TLS endpoint.
+    tas_enabled: bool = Field(default=False)
+    tas_sn_key: str = Field(default="")
+    tas_mqtt_broker_url: str = Field(default="tls://tasapi.cht.com.tw:2883")
+
     # Demo / dev: when set, seed_dev.py writes this number into every
     # User.phone so the CHT callout pipeline can be exercised end-to-end
     # without per-account phone management. Empty = phone column left NULL

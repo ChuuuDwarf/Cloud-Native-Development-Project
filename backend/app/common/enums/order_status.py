@@ -20,3 +20,7 @@ class OrderStatus(StrEnum):
     WAITING_PICKUP = "waiting_pickup"
     CLOSED = "closed"
     CANCELLED = "cancelled"
+    # All of the order's WIPs were terminated via supervisor-approved abort
+    # (review_abort with approve=True). Distinct from CANCELLED, which is the
+    # plant_user's own withdrawal pre-execution.
+    TERMINATED = "terminated"

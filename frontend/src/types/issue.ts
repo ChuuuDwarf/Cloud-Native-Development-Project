@@ -7,6 +7,7 @@ export interface IssueResponse {
   targetType: string;
   targetId: string;
   labId: string;
+  labCode: string | null;
   title: string;
   description: string;
   severity: Severity;

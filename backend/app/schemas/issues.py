@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, AliasPath, BaseModel, Field, model_validator
 
 from app.common.enums import IssueStatus, IssueType, Severity
 
@@ -74,6 +74,13 @@ class IssueRead(BaseModel):
     target_type: str = Field(alias="targetType")
     target_id: str = Field(alias="targetId")
     lab_id: UUID = Field(alias="labId")
+    # 從 ORM 的 ``Issue.lab.code`` 拉出實驗室代碼（LAB-A / LAB-B / ...),
+    # 前端拿到後可直接顯示,不必再用 lab_id 去查 master-data。
+    lab_code: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("labCode", AliasPath("lab", "code")),
+        serialization_alias="labCode",
+    )
     title: str
     description: str
     severity: Severity

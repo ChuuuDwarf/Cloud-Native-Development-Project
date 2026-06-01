@@ -13,8 +13,8 @@ import logging
 from datetime import datetime
 
 from app.common.dependencies.lab_scope import LabScope
-from app.common.enums import OrderStatus, ReportStatus, StorageStatus, WipStatus
-from app.common.enums.role_d_zh import ORDER_ZH, REPORT_ZH, STORAGE_ZH
+from app.common.enums import OrderStatus, StorageStatus, WipStatus
+from app.common.enums.role_d_zh import ORDER_ZH, STORAGE_ZH
 from app.common.errors import ConflictError, ForbiddenError, NotFoundError
 from app.db.models import OrderModel, StorageHistory
 from app.modules.closures.repository import ClosureRepository
@@ -80,13 +80,22 @@ class ClosureService:
 
     async def _compute_closure(self, order: OrderModel) -> dict:
         order_no = order.order_no
-        wips = await self._repo.list_wips_for_order(order_no)
+        # Lab-scoped users see only their own lab's WIPs; cross-lab roles
+        # (system_admin / general_supervisor — both have ``lab_name=None``)
+        # see all. This prevents LAB-A from seeing LAB-B's unfinished work as
+        # a blocker for their own to_pickup action.
+        if not self._scope.sees_all_labs and self._scope.lab_name:
+            wips = await self._repo.list_wips_for_order_and_lab(order_no, self._scope.lab_name)
+        else:
+            wips = await self._repo.list_wips_for_order(order_no)
         execs = await self._repo.get_execs_map([w.wip_no for w in wips])
 
-        report_count = await self._repo.count_reports_in_status(
-            order_no, [REPORT_ZH[ReportStatus.PUBLISHED], REPORT_ZH[ReportStatus.RETURNED]]
-        )
-        has_report = report_count > 0
+        # has_report: every WIP in this lab's portion must have at least one
+        # RETURNED report (Phase L review #2 — previously this gated on
+        # "order has at least one returned report anywhere", which let a
+        # 3-lab order pass with only LAB-A's report published).
+        returned_per_wip = await self._repo.count_returned_reports_per_wip(order_no)
+        has_report = bool(wips) and all(returned_per_wip.get(w.wip_no, 0) > 0 for w in wips)
 
         # 「樣品已入庫或待返還」改讀 B 的 samples 狀態（D 的 storage 表沒有任何流程
         # 會寫入）。實驗完成後樣品進入交付，點交付後即已離開實驗階段 → 可結案。
@@ -104,6 +113,14 @@ class ClosureService:
             for w in wips
             if (e := execs.get(w.wip_no)) is not None and e.exec_status == WipStatus.COMPLETED.value
         )
+        # Whether THIS lab has already pressed to_pickup. FE gates the
+        # 轉待送件 button on this via an early-return ("本實驗室已結單,等待
+        # 其他實驗室"). ``canClose`` itself must stay a pure "6 conditions
+        # met" signal — otherwise the 送件結案 button (which also reads
+        # ``canClose``) gets wrongly disabled once any lab has closed,
+        # because lab_closed stays True at that point.
+        lab_closed = bool(wips) and all(w.lab_closed for w in wips)
+
         conditions = [
             {"name": "所有實驗明細完成或終止", "ok": all_ended},
             {"name": "所有 WIP 已結束", "ok": all_ended},
@@ -116,6 +133,7 @@ class ClosureService:
             "orderId": order_no,
             "status": _order_zh(order.status),
             "canClose": all(c["ok"] for c in conditions),
+            "labClosed": lab_closed,
             "conditions": conditions,
         }
 
@@ -143,11 +161,35 @@ class ClosureService:
             OrderStatus.WAITING_REPORT_RETURN.value,
         ):
             raise ConflictError(f"委託單為「{_order_zh(order.status)}」，無法轉待取件")
-        order.status = OrderStatus.WAITING_PICKUP.value
-        await self._repo.commit()
-        # pickup-reminder email (async via Celery, broker-fallback safe).
-        await self._send_pickup_reminder(order)
-        return {"orderId": order_no, "status": _order_zh(order.status)}
+
+        # Mark THIS lab's WIPs as closed; cross-lab roles close all.
+        if not self._scope.sees_all_labs and self._scope.lab_name:
+            wips = await self._repo.list_wips_for_order_and_lab(order_no, self._scope.lab_name)
+        else:
+            wips = await self._repo.list_wips_for_order(order_no)
+        for wip in wips:
+            wip.lab_closed = True
+        # Flush pending ORM writes BEFORE running the SQL aggregate below —
+        # otherwise the COUNT(...) inside all_wips_lab_closed runs against
+        # the un-flushed DB state and reports lab_closed=False for the WIPs
+        # we just mutated, so the order never advances.
+        await self._repo._session.flush()
+
+        # Only flip the order-level status once every lab has signed off.
+        # The check is on the WHOLE order's WIPs, not just this caller's lab.
+        all_done = await self._repo.all_wips_lab_closed(order_no)
+        if all_done:
+            order.status = OrderStatus.WAITING_PICKUP.value
+            await self._repo.commit()
+            # pickup-reminder email (async via Celery, broker-fallback safe).
+            await self._send_pickup_reminder(order)
+        else:
+            await self._repo.commit()
+        return {
+            "orderId": order_no,
+            "status": _order_zh(order.status),
+            "labClosed": True,
+        }
 
     async def storage_inbound(self, order_no: str, operator: str | None, note: str | None) -> dict:
         await self._enforce_order_access(order_no)
@@ -188,13 +230,14 @@ class ClosureService:
         order = await self._require_order(order_no)
         if order.status != OrderStatus.WAITING_PICKUP.value:
             raise ConflictError(f"委託單為「{_order_zh(order.status)}」，僅「待取件」可結案")
-        items = await self._repo.storage_items(order_no)
-        # An order at waiting_pickup with no storage rows means the inbound
-        # step never ran (or all rows were purged) — treat as "not yet
-        # picked up", not as a free pass. Previously ``if items and not
-        # all(...)`` was falsy on empty items, letting an unpicked order
-        # flip to CLOSED before the requester had actually picked up.
-        if not items or not all(s.status == STORAGE_ZH[StorageStatus.PICKED_UP] for s in items):
+        # 取件閘讀 B 的 samples 表 — 「確認取件」走 sample_service
+        # ._confirm_pickup_sample,把 samples.status 設成 'picked_up';
+        # D 的 storage 表在目前流程裡沒有任何 endpoint 會寫入
+        # (storage_inbound / storage_outbound 沒人呼叫),所以原本去查
+        # storage 永遠是空 → 永遠擋住結案。跟 _compute_closure 條件 5
+        # 的處理方式一致(都改讀 samples)。
+        sample_states = await self._repo.sample_statuses(order_no)
+        if not sample_states or not all(s == "picked_up" for s in sample_states):
             raise ConflictError("尚有樣品未取件，無法結案")
         order.status = OrderStatus.CLOSED.value
         await self._repo.commit()

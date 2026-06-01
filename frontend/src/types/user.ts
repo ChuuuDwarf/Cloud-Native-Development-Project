@@ -9,6 +9,7 @@ export interface UserResponse {
   id: string;
   email: string;
   name: string;
+  phoneNumber?: string | null;
   departmentId: string | null;
   labId: string | null;
   status: UserStatus;
@@ -33,6 +34,7 @@ export interface CreateUserPayload {
   email: string;
   name: string;
   password: string;
+  phoneNumber?: string | null;
   departmentId?: string | null;
   labId?: string | null;
   roleIds?: string[];
@@ -40,6 +42,7 @@ export interface CreateUserPayload {
 
 export interface UpdateUserPayload {
   name?: string;
+  phoneNumber?: string | null;
   departmentId?: string | null;
   labId?: string | null;
   status?: UserStatus;

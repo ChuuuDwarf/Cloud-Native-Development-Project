@@ -377,6 +377,21 @@ jobs:
               working-directory: tests/e2e
               run: npx playwright install-deps chromium
 
+            - name: Verify frontend before Playwright
+              run: |
+                  for i in $(seq 1 60); do
+                    if curl -fsS http://localhost:3000/ >/dev/null; then
+                      echo "frontend reachable before Playwright after ${i}s"
+                      exit 0
+                    fi
+                    echo "Waiting for frontend before Playwright..."
+                    sleep 2
+                  done
+                  echo "frontend was not reachable before Playwright"
+                  docker compose -f docker-compose.yml -f docker-compose.ci.yml ps
+                  docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color frontend | tail -200
+                  exit 1
+
             - name: Run Playwright
               working-directory: tests/e2e
               env:

@@ -4,6 +4,11 @@ import { userApi } from "@/services/user-api";
 import { actionLabel, emptyFormItem, emptyMasterData, orderStatusFilters } from "../constants";
 import { requestJson } from "../lib/api";
 import {
+  getEmptyDependencyFlowNames,
+  isExperimentItem,
+  normalizeDependencyItemsForSubmit,
+} from "../lib/dependencyFlows";
+import {
   createDefaultItem,
   getNextSampleId,
   getNextSampleIdFromOrders,
@@ -17,12 +22,14 @@ import type {
   MasterData,
   ModalState,
   Order,
+  DeliveryDestination,
   OrderAction,
   OrderHistory,
   OrderStatus,
   OrderStatusFilter,
   OrderTemplate,
   PriorityLevel,
+  WipDependencyNextData,
   QuotaCheck,
   QuotaSetting,
   SampleFormGroup,
@@ -37,12 +44,60 @@ type OrderWithEditableFields = Order & {
   items?: OrderItemWithApproval[];
 };
 
+const deliveryDestinationStoragePrefix = "order-delivery-destination";
+
 function getOrderItems(order: Order): OrderItemWithApproval[] {
   return (order as OrderWithEditableFields).items ?? [];
 }
 
 function getOrderPriority(order: Order): PriorityLevel {
   return (order as OrderWithEditableFields).priority ?? "normal";
+}
+
+function getUniqueSampleItems(order: Order) {
+  const seen = new Set<string>();
+
+  return getOrderItems(order).filter((item) => {
+    const sampleId = item.sampleId?.trim();
+
+    if (!sampleId || seen.has(sampleId)) {
+      return false;
+    }
+
+    seen.add(sampleId);
+    return true;
+  });
+}
+
+function getDeliveryDestinationStorageKey(orderNo: string, sampleId: string) {
+  return `${deliveryDestinationStoragePrefix}:${orderNo}:${sampleId}`;
+}
+
+function readCachedDeliveryDestination(
+  orderNo: string,
+  sampleId: string
+): DeliveryDestination | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const value = window.localStorage.getItem(getDeliveryDestinationStorageKey(orderNo, sampleId));
+    return value ? (JSON.parse(value) as DeliveryDestination) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedDeliveryDestination(orderNo: string, destination: DeliveryDestination) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      getDeliveryDestinationStorageKey(orderNo, destination.sampleId),
+      JSON.stringify(destination)
+    );
+  } catch {
+    // Ignore storage failures; the in-memory state still keeps the UI stable.
+  }
 }
 
 export function useOrdersPage() {
@@ -73,6 +128,15 @@ export function useOrdersPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateName, setTemplateName] = useState("");
   const [usersById, setUsersById] = useState<Record<string, string | undefined>>({});
+  const [deliveryDestinationsByOrderId, setDeliveryDestinationsByOrderId] = useState<
+    Record<number, DeliveryDestination[]>
+  >({});
+  const [deliveryDestinationLoadingByOrderId, setDeliveryDestinationLoadingByOrderId] = useState<
+    Record<number, boolean>
+  >({});
+  const [deliveryDestinationErrorByOrderId, setDeliveryDestinationErrorByOrderId] = useState<
+    Record<number, string | undefined>
+  >({});
 
   const resolveDepartmentId = useCallback(
     (source: MasterData) => {
@@ -168,6 +232,78 @@ export function useOrdersPage() {
     [currentUserId, usersById]
   );
 
+  const loadDeliveryDestinations = useCallback(
+    async (order: Order) => {
+      if (order.status !== "approved") return;
+      if (deliveryDestinationLoadingByOrderId[order.id]) return;
+      if (order.id in deliveryDestinationsByOrderId) return;
+
+      const sampleItems = getUniqueSampleItems(order);
+
+      if (sampleItems.length === 0) {
+        setDeliveryDestinationsByOrderId((current) => ({ ...current, [order.id]: [] }));
+        return;
+      }
+
+      setDeliveryDestinationLoadingByOrderId((current) => ({ ...current, [order.id]: true }));
+      setDeliveryDestinationErrorByOrderId((current) => ({ ...current, [order.id]: undefined }));
+
+      try {
+        const destinations = await Promise.all(
+          sampleItems.map(async (item) => {
+            const cachedDestination = readCachedDeliveryDestination(order.orderNo, item.sampleId);
+
+            if (cachedDestination) {
+              return cachedDestination;
+            }
+
+            const response = await requestJson<WipDependencyNextData | null>(
+              "/api/wips/dependency/next",
+              {
+                method: "POST",
+                body: JSON.stringify({
+                  sampleId: item.sampleId,
+                  orderNo: order.orderNo,
+                }),
+              }
+            );
+
+            const destination = response.data
+              ? ({
+                  sampleId: item.sampleId,
+                  sampleName: item.sampleName,
+                  labName: response.data.labName || "尚未取得送樣地點",
+                  experimentName: response.data.experimentName,
+                  targetGroup: response.data.targetGroup,
+                  target: response.data.target,
+                } satisfies DeliveryDestination)
+              : ({
+                  sampleId: item.sampleId,
+                  sampleName: item.sampleName,
+                  labName: "尚未取得送樣地點",
+                  experimentName: null,
+                  targetGroup: item.targetGroup,
+                  target: item.target,
+                } satisfies DeliveryDestination);
+
+            writeCachedDeliveryDestination(order.orderNo, destination);
+            return destination;
+          })
+        );
+
+        setDeliveryDestinationsByOrderId((current) => ({ ...current, [order.id]: destinations }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "取得送樣地點失敗";
+
+        setDeliveryDestinationErrorByOrderId((current) => ({ ...current, [order.id]: message }));
+        setDeliveryDestinationsByOrderId((current) => ({ ...current, [order.id]: [] }));
+      } finally {
+        setDeliveryDestinationLoadingByOrderId((current) => ({ ...current, [order.id]: false }));
+      }
+    },
+    [deliveryDestinationLoadingByOrderId, deliveryDestinationsByOrderId]
+  );
+
   function loadTemplatesForUser(userId: string) {
     setTemplates(readTemplates(userId));
     setSelectedTemplateId("");
@@ -193,7 +329,7 @@ export function useOrdersPage() {
     const nextTemplate: OrderTemplate = {
       id: `${Date.now()}`,
       name,
-      items: items.map((item) => ({ ...item })),
+      items: normalizeDependencyItemsForSubmit(items).map((item) => ({ ...item })),
       createdAt: new Date().toISOString(),
     };
 
@@ -217,7 +353,7 @@ export function useOrdersPage() {
     const response = await requestJson<QuotaCheck>(
       `/api/quotas/check?departmentId=${encodeURIComponent(
         departmentId
-      )}&itemCount=${items.length}&priority=${priority}`
+      )}&itemCount=${normalizeDependencyItemsForSubmit(items).length}&priority=${priority}`
     );
 
     setQuotaCheck(response.data);
@@ -229,12 +365,28 @@ export function useOrdersPage() {
     if (!departmentId.trim()) return "部門不可為空";
     if (items.length === 0) return "至少需要一筆實驗明細";
 
+    const emptyFlowNames = getEmptyDependencyFlowNames(items);
+
+    if (emptyFlowNames.length > 0) {
+      return `${emptyFlowNames[0]} 尚未加入任何實驗，請先加入實驗或移除此流程`;
+    }
+
     const invalidIndex = items.findIndex(
-      (item) => !item.sampleId.trim() || !item.labId.trim() || !item.experimentId.trim()
+      (item) =>
+        isExperimentItem(item) &&
+        (!item.sampleId.trim() || !item.labId.trim() || !item.experimentId.trim())
     );
 
     if (invalidIndex >= 0) {
       return `明細 ${invalidIndex + 1} 的樣品、實驗室、實驗項目都需要填寫`;
+    }
+
+    const invalidDependencyIndex = items.findIndex(
+      (item) => isExperimentItem(item) && (!item.targetGroup.trim() || item.target < 1)
+    );
+
+    if (invalidDependencyIndex >= 0) {
+      return `第 ${invalidDependencyIndex + 1} 筆相依流程設定不完整`;
     }
 
     return null;
@@ -289,12 +441,17 @@ export function useOrdersPage() {
     setPriority(getOrderPriority(order));
     setItems(
       orderItems.length
-        ? orderItems.map(({ sampleId, sampleName, labId, experimentId }) => ({
-            sampleId,
-            sampleName: sampleName ?? "",
-            labId,
-            experimentId,
-          }))
+        ? orderItems.map(
+            ({ sampleId, sampleName, labId, experimentId, targetGroup, target, check }) => ({
+              sampleId,
+              sampleName: sampleName ?? "",
+              labId,
+              experimentId,
+              targetGroup: targetGroup || "G1",
+              target: target || 1,
+              check: check ?? false,
+            })
+          )
         : [createDefaultItem(masterData)]
     );
     setFormModalOpen(true);
@@ -316,10 +473,11 @@ export function useOrdersPage() {
 
     try {
       setSubmitting(true);
+      const submitItems = normalizeDependencyItemsForSubmit(items);
 
       const response = await requestJson<Order>("/api/orders", {
         method: "POST",
-        body: JSON.stringify({ departmentId, priority, items }),
+        body: JSON.stringify({ departmentId, priority, items: submitItems }),
       });
 
       let check: QuotaCheck | null = null;
@@ -386,9 +544,10 @@ export function useOrdersPage() {
     }
 
     try {
+      const submitItems = normalizeDependencyItemsForSubmit(items);
       const response = await requestJson<Order>(`/api/orders/${editingOrderId}`, {
         method: "PATCH",
-        body: JSON.stringify({ departmentId, priority, items }),
+        body: JSON.stringify({ departmentId, priority, items: submitItems }),
       });
 
       setLog(JSON.stringify(response, null, 2));
@@ -528,6 +687,31 @@ export function useOrdersPage() {
     );
   }
 
+  function updateDependencyItems(group: SampleFormGroup, nextItems: FormItem[]) {
+    const replacementItems =
+      nextItems.length > 0
+        ? nextItems
+        : [
+            {
+              sampleId: group.sampleId,
+              sampleName: group.sampleName,
+              labId: "",
+              experimentId: "",
+              targetGroup: "G1",
+              target: 1,
+              check: false,
+            },
+          ];
+
+    setItems((current) =>
+      current.flatMap((item, index) => {
+        if (index === group.startIndex) return replacementItems;
+        if (index > group.startIndex && index <= group.endIndex) return [];
+        return [item];
+      })
+    );
+  }
+
   function moveExperiment(index: number, direction: -1 | 1) {
     setItems((current) => {
       const targetIndex = index + direction;
@@ -607,6 +791,14 @@ export function useOrdersPage() {
     queueMicrotask(() => void loadUserNames(userIds));
   }, [visibleOrders, quotaSettings, modal, loadUserNames]);
 
+  useEffect(() => {
+    const approvedOrders = visibleOrders.filter((order) => order.status === "approved");
+
+    approvedOrders.forEach((order) => {
+      void loadDeliveryDestinations(order);
+    });
+  }, [visibleOrders, loadDeliveryDestinations]);
+
   const statusCounts = useMemo(
     () =>
       orderStatusFilters.reduce<Record<OrderStatusFilter, number>>(
@@ -643,6 +835,9 @@ export function useOrdersPage() {
     items,
     masterData,
     usersById,
+    deliveryDestinationsByOrderId,
+    deliveryDestinationLoadingByOrderId,
+    deliveryDestinationErrorByOrderId,
     editingOrderId,
     editingOrderNo,
     loading,
@@ -681,6 +876,7 @@ export function useOrdersPage() {
     removeItem,
     updateSampleGroup,
     updateSampleNameGroup,
+    updateDependencyItems,
     moveExperiment,
     toggleExperimentForSample,
   };

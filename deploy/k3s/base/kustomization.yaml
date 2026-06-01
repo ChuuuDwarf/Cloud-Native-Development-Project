@@ -11,6 +11,7 @@ resources:
   - backend.yaml
   - celery-worker.yaml
   - celery-beat.yaml
+  - tas-mqtt-listener.yaml
   - frontend.yaml
   - migrate-job.yaml
   - seed-job.yaml

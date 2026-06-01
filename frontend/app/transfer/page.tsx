@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiGet, apiPost } from "@/lib/api";
@@ -12,6 +12,7 @@ import type {
   Wip,
   Transfer,
   TransferCandidate,
+  SameLabNextCandidate,
   ReturnCandidate,
   Candidate,
 } from "./types";
@@ -21,7 +22,6 @@ import {
   getRequestedExperiments,
   findMatchingWipForExperiment,
   isExperimentCompleted,
-  findCompletedTransferBoundaryIndex,
   getCandidateKey,
 } from "./utils/transferFlow";
 import {
@@ -71,15 +71,51 @@ import {
   statusBadgeStyle,
 } from "./styles";
 
+type WipDependencyNextData = {
+  orderItemId: number;
+  orderNo?: string | null;
+  sampleId: string;
+  sampleNo: string;
+  labId?: string | null;
+  labName?: string | null;
+  experimentId?: string | null;
+  experimentName?: string | null;
+  targetGroup?: string | null;
+  target?: number | null;
+  check?: boolean;
+  reason?: string | null;
+};
+
+type WipDependencyNextResponse = {
+  success: boolean;
+  data: WipDependencyNextData | null;
+  message?: string | null;
+};
+
+type DependencyNextBySampleKey = Record<string, WipDependencyNextData | null>;
+type RequestedExperiment = ReturnType<typeof getRequestedExperiments>[number];
+
 export default function SampleTransferPage() {
   const { user: authUser, isLoading: authLoading } = useAuth();
+
   const masterQuery = useQuery({
     queryKey: ["master-data"],
     queryFn: masterDataApi.fetch,
   });
+
   const [samples, setSamples] = useState<Sample[]>([]);
   const [wips, setWips] = useState<Wip[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
+
+  const [dependencyNextBySampleKey, setDependencyNextBySampleKey] =
+    useState<DependencyNextBySampleKey>({});
+  const [dependencyNextLoadingBySampleKey, setDependencyNextLoadingBySampleKey] = useState<
+    Record<string, boolean>
+  >({});
+  const [dependencyNextErrorBySampleKey, setDependencyNextErrorBySampleKey] = useState<
+    Record<string, string>
+  >({});
+
   const [selectedCandidateKey, setSelectedCandidateKey] = useState("");
   const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,6 +124,7 @@ export default function SampleTransferPage() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const currentLabData = masterQuery.data?.labs.find((lab) => lab.id === authUser?.labId);
+
   const currentDepartment = masterQuery.data?.departments.find(
     (department) => department.id === authUser?.departmentId
   );
@@ -121,6 +158,88 @@ export default function SampleTransferPage() {
 
   const isIncomingTransfer = (transfer: Transfer) =>
     normalizeLab(transfer.to_lab) === normalizeLab(currentLab);
+
+  function getSampleDependencyKey(sample: Sample) {
+    return `${sample.order_no}:${sample.sample_no}`;
+  }
+
+  const getExperimentGroup = useCallback((experiment: RequestedExperiment) => {
+    const record = experiment as RequestedExperiment & {
+      targetGroup?: string | null;
+      target_group?: string | null;
+      group?: string | null;
+    };
+
+    return record.targetGroup || record.target_group || record.group || "G1";
+  }, []);
+
+  const getExperimentTarget = useCallback((experiment: RequestedExperiment) => {
+    const record = experiment as RequestedExperiment & {
+      target?: number | string | null;
+      target_order?: number | string | null;
+    };
+
+    const rawTarget = record.target ?? record.target_order ?? 1;
+    const target = Number(rawTarget);
+
+    return Number.isFinite(target) ? target : 1;
+  }, []);
+
+  const getNextUnlockedExperiments = useCallback(
+    (experiments: RequestedExperiment[], sampleWips: Wip[]) => {
+      const groups = new Map<
+        string,
+        Array<{
+          experiment: RequestedExperiment;
+          index: number;
+        }>
+      >();
+
+      experiments.forEach((experiment, index) => {
+        const group = getExperimentGroup(experiment);
+
+        if (!groups.has(group)) {
+          groups.set(group, []);
+        }
+
+        groups.get(group)!.push({ experiment, index });
+      });
+
+      return Array.from(groups.values())
+        .map((groupExperiments) => {
+          const unfinishedExperiments = groupExperiments
+            .filter(({ experiment }) => !isExperimentCompleted(sampleWips, experiment))
+            .sort((left, right) => {
+              const targetDiff =
+                getExperimentTarget(left.experiment) - getExperimentTarget(right.experiment);
+
+              if (targetDiff !== 0) return targetDiff;
+
+              return left.index - right.index;
+            });
+
+          return unfinishedExperiments[0]?.experiment ?? null;
+        })
+        .filter((experiment): experiment is RequestedExperiment => experiment !== null);
+    },
+    [getExperimentGroup, getExperimentTarget]
+  );
+
+  function findExistingBlockingTransfer(
+    sample: Sample,
+    nextWip: Wip | null,
+    transfersByTargetIdValue: Record<string, Transfer[]>
+  ) {
+    const relatedTransfers = [
+      ...(transfersByTargetIdValue[sample.id] ?? []),
+      ...(nextWip ? (transfersByTargetIdValue[nextWip.id] ?? []) : []),
+    ];
+
+    return (
+      relatedTransfers.find((transfer) => blockingTransferStatuses.includes(transfer.status)) ??
+      null
+    );
+  }
 
   function getTransferStatusText(transfer: Transfer) {
     if (transfer.status === "pending") {
@@ -190,8 +309,21 @@ export default function SampleTransferPage() {
     }, {});
   }, [transfers]);
 
-  const transferCandidates = useMemo<TransferCandidate[]>(() => {
-    const result: TransferCandidate[] = [];
+  function isDependencyNextCompleted(sample: Sample, next: WipDependencyNextData | null) {
+    if (!next?.labName || !next.experimentName) return false;
+
+    const sampleWips = wipsBySampleId[sample.id] ?? [];
+
+    return sampleWips.some(
+      (wip) =>
+        wip.status === "completed" &&
+        normalizeLab(wip.lab_name) === normalizeLab(next.labName) &&
+        normalizeLab(wip.experiment_item ?? "") === normalizeLab(next.experimentName)
+    );
+  }
+
+  const displayableTransferSamples = useMemo(() => {
+    const result: Sample[] = [];
 
     samples.forEach((sample) => {
       const sampleWips = wipsBySampleId[sample.id] ?? [];
@@ -199,8 +331,6 @@ export default function SampleTransferPage() {
       if (sample.status === "picked_up") return;
       if (sample.status === "outbound") return;
       if (sample.status === "pending_receive") return;
-
-      const requestedExperiments = getRequestedExperiments(sample);
 
       const currentLabWips = sampleWips.filter(
         (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab)
@@ -210,57 +340,116 @@ export default function SampleTransferPage() {
 
       const currentLabCompletedWips = currentLabWips.filter((wip) => wip.status === "completed");
 
-      const remainingWips = sampleWips.filter(
-        (wip) =>
-          normalizeLab(wip.lab_name) !== normalizeLab(currentLab) && wip.status !== "completed"
-      );
+      if (currentLabCompletedWips.length === 0) return;
+
+      const currentLabUnfinishedWips = currentLabWips.filter((wip) => wip.status !== "completed");
+
+      if (currentLabUnfinishedWips.length > 0) return;
+
+      const requestedExperiments = getRequestedExperiments(sample);
 
       if (requestedExperiments.length > 0) {
-        const currentLabCompletedBoundary = findCompletedTransferBoundaryIndex(
-          requestedExperiments,
-          sampleWips,
-          currentLab
-        );
+        result.push(sample);
+        return;
+      }
 
-        if (currentLabCompletedBoundary < 0) return;
+      const hasOtherLabUnfinishedWip = sampleWips.some(
+        (wip) =>
+          wip.status !== "completed" && normalizeLab(wip.lab_name) !== normalizeLab(currentLab)
+      );
 
-        const nextExperimentInSequence =
-          requestedExperiments[currentLabCompletedBoundary + 1] ?? null;
+      if (!hasOtherLabUnfinishedWip) return;
 
-        if (!nextExperimentInSequence) return;
-        if (isExperimentCompleted(sampleWips, nextExperimentInSequence)) return;
+      result.push(sample);
+    });
 
-        if (normalizeLab(nextExperimentInSequence.lab_name) === normalizeLab(currentLab)) {
-          return;
-        }
+    return result;
+  }, [samples, wipsBySampleId, currentLab]);
 
-        const downstreamExperiments = requestedExperiments.slice(currentLabCompletedBoundary + 1);
+  const transferCandidates = useMemo<TransferCandidate[]>(() => {
+    const result: TransferCandidate[] = [];
+    const displayableSampleKeys = new Set(
+      displayableTransferSamples.map((sample) => getSampleDependencyKey(sample))
+    );
 
-        const remainingExperiments = downstreamExperiments.filter(
+    samples.forEach((sample) => {
+      const dependencyKey = getSampleDependencyKey(sample);
+
+      if (!displayableSampleKeys.has(dependencyKey)) return;
+
+      const sampleWips = wipsBySampleId[sample.id] ?? [];
+      const requestedExperiments = getRequestedExperiments(sample);
+
+      const currentLabWips = sampleWips.filter(
+        (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab)
+      );
+
+      const currentLabCompletedWips = currentLabWips.filter((wip) => wip.status === "completed");
+
+      const remainingWips = sampleWips.filter((wip) => wip.status !== "completed");
+
+      const dependencyNextLoaded = dependencyNextBySampleKey[dependencyKey] !== undefined;
+      const dependencyNext = dependencyNextBySampleKey[dependencyKey] ?? null;
+
+      if (!dependencyNextLoaded) return;
+      if (!dependencyNext) return;
+
+      const apiNextLab = dependencyNext.labName?.trim();
+      const apiNextExperiment = dependencyNext.experimentName?.trim();
+
+      if (!apiNextLab) return;
+      if (normalizeLab(apiNextLab) === normalizeLab(currentLab)) return;
+
+      if (requestedExperiments.length > 0) {
+        const unfinishedExperiments = requestedExperiments.filter(
           (experiment) => !isExperimentCompleted(sampleWips, experiment)
         );
 
-        if (remainingExperiments.length === 0) return;
+        const nextUnlockedExperiments = getNextUnlockedExperiments(
+          requestedExperiments,
+          sampleWips
+        );
 
-        const nextExperiment = nextExperimentInSequence;
-        const nextWip = findMatchingWipForExperiment(sampleWips, nextExperiment);
+        const apiMatchedExperiment = nextUnlockedExperiments.find(
+          (experiment) =>
+            normalizeLab(experiment.lab_name) === normalizeLab(apiNextLab) &&
+            (!apiNextExperiment ||
+              normalizeLab(experiment.experiment_item) === normalizeLab(apiNextExperiment))
+        );
 
-        const relatedTransfers = [
-          ...(transfersByTargetId[sample.id] ?? []),
-          ...(nextWip ? (transfersByTargetId[nextWip.id] ?? []) : []),
-        ];
+        const nextExperiment = apiMatchedExperiment ??
+          unfinishedExperiments.find(
+            (experiment) =>
+              normalizeLab(experiment.lab_name) === normalizeLab(apiNextLab) &&
+              (!apiNextExperiment ||
+                normalizeLab(experiment.experiment_item) === normalizeLab(apiNextExperiment))
+          ) ?? {
+            lab_name: apiNextLab,
+            experiment_item: apiNextExperiment || "未命名實驗",
+            targetGroup: dependencyNext.targetGroup || "G1",
+            target: dependencyNext.target || 1,
+          };
 
-        const existingTransfer =
-          relatedTransfers.find((transfer) => blockingTransferStatuses.includes(transfer.status)) ??
+        const nextWip =
+          findMatchingWipForExperiment(sampleWips, nextExperiment) ??
+          sampleWips.find(
+            (wip) =>
+              wip.status !== "completed" &&
+              normalizeLab(wip.lab_name) === normalizeLab(nextExperiment.lab_name) &&
+              normalizeLab(wip.experiment_item ?? "") ===
+                normalizeLab(nextExperiment.experiment_item ?? "")
+          ) ??
           null;
+
+        const existingTransfer = findExistingBlockingTransfer(sample, nextWip, transfersByTargetId);
 
         result.push({
           kind: "transfer",
           sample,
           currentLabCompletedWips,
           remainingWips,
-          remainingExperiments,
-          nextLab: nextExperiment.lab_name,
+          remainingExperiments: unfinishedExperiments,
+          nextLab: apiNextLab,
           nextExperiment,
           nextWip,
           existingTransfer,
@@ -269,26 +458,25 @@ export default function SampleTransferPage() {
         return;
       }
 
-      if (sampleWips.length === 0) return;
-      if (remainingWips.length === 0) return;
+      const otherLabRemainingWips = remainingWips.filter(
+        (wip) => normalizeLab(wip.lab_name) !== normalizeLab(currentLab)
+      );
 
-      const nextWip = remainingWips[0];
+      const apiMatchedWip = otherLabRemainingWips.find(
+        (wip) =>
+          normalizeLab(wip.lab_name) === normalizeLab(apiNextLab) &&
+          (!apiNextExperiment ||
+            normalizeLab(wip.experiment_item ?? "") === normalizeLab(apiNextExperiment))
+      );
 
-      if (!nextWip.lab_name) return;
+      const nextWip = apiMatchedWip ?? otherLabRemainingWips[0] ?? null;
 
       const nextExperiment = {
-        lab_name: nextWip.lab_name,
-        experiment_item: nextWip.experiment_item ?? "未命名實驗",
+        lab_name: apiNextLab,
+        experiment_item: apiNextExperiment || nextWip?.experiment_item || "未命名實驗",
       };
 
-      const relatedTransfers = [
-        ...(transfersByTargetId[sample.id] ?? []),
-        ...(transfersByTargetId[nextWip.id] ?? []),
-      ];
-
-      const existingTransfer =
-        relatedTransfers.find((transfer) => blockingTransferStatuses.includes(transfer.status)) ??
-        null;
+      const existingTransfer = findExistingBlockingTransfer(sample, nextWip, transfersByTargetId);
 
       result.push({
         kind: "transfer",
@@ -296,7 +484,7 @@ export default function SampleTransferPage() {
         currentLabCompletedWips,
         remainingWips,
         remainingExperiments: [nextExperiment],
-        nextLab: nextWip.lab_name,
+        nextLab: apiNextLab,
         nextExperiment,
         nextWip,
         existingTransfer,
@@ -304,7 +492,242 @@ export default function SampleTransferPage() {
     });
 
     return result;
-  }, [samples, wipsBySampleId, transfersByTargetId, currentLab]);
+  }, [
+    samples,
+    wipsBySampleId,
+    transfersByTargetId,
+    currentLab,
+    displayableTransferSamples,
+    dependencyNextBySampleKey,
+    getNextUnlockedExperiments,
+  ]);
+
+  const sameLabNextCandidates = useMemo<SameLabNextCandidate[]>(() => {
+    const result: SameLabNextCandidate[] = [];
+    const displayableSampleKeys = new Set(
+      displayableTransferSamples.map((sample) => getSampleDependencyKey(sample))
+    );
+
+    samples.forEach((sample) => {
+      const dependencyKey = getSampleDependencyKey(sample);
+
+      if (!displayableSampleKeys.has(dependencyKey)) return;
+
+      const sampleWips = wipsBySampleId[sample.id] ?? [];
+      const requestedExperiments = getRequestedExperiments(sample);
+
+      const currentLabWips = sampleWips.filter(
+        (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab)
+      );
+
+      const currentLabCompletedWips = currentLabWips.filter((wip) => wip.status === "completed");
+
+      const remainingWips = sampleWips.filter((wip) => wip.status !== "completed");
+
+      const dependencyNextLoaded = dependencyNextBySampleKey[dependencyKey] !== undefined;
+      const dependencyNext = dependencyNextBySampleKey[dependencyKey] ?? null;
+
+      if (!dependencyNextLoaded) return;
+      if (!dependencyNext) return;
+
+      const apiNextLab = dependencyNext.labName?.trim();
+      const apiNextExperiment = dependencyNext.experimentName?.trim();
+
+      if (!apiNextLab) return;
+      if (normalizeLab(apiNextLab) !== normalizeLab(currentLab)) return;
+
+      if (requestedExperiments.length > 0) {
+        const unfinishedExperiments = requestedExperiments.filter(
+          (experiment) => !isExperimentCompleted(sampleWips, experiment)
+        );
+
+        const nextUnlockedExperiments = getNextUnlockedExperiments(
+          requestedExperiments,
+          sampleWips
+        );
+
+        const apiMatchedExperiment = nextUnlockedExperiments.find(
+          (experiment) =>
+            normalizeLab(experiment.lab_name) === normalizeLab(apiNextLab) &&
+            (!apiNextExperiment ||
+              normalizeLab(experiment.experiment_item) === normalizeLab(apiNextExperiment))
+        );
+
+        const nextExperiment = apiMatchedExperiment ??
+          unfinishedExperiments.find(
+            (experiment) =>
+              normalizeLab(experiment.lab_name) === normalizeLab(apiNextLab) &&
+              (!apiNextExperiment ||
+                normalizeLab(experiment.experiment_item) === normalizeLab(apiNextExperiment))
+          ) ?? {
+            lab_name: apiNextLab,
+            experiment_item: apiNextExperiment || "未命名實驗",
+            targetGroup: dependencyNext.targetGroup || "G1",
+            target: dependencyNext.target || 1,
+          };
+
+        const nextWip =
+          findMatchingWipForExperiment(sampleWips, nextExperiment) ??
+          sampleWips.find(
+            (wip) =>
+              wip.status !== "completed" &&
+              normalizeLab(wip.lab_name) === normalizeLab(nextExperiment.lab_name) &&
+              normalizeLab(wip.experiment_item ?? "") ===
+                normalizeLab(nextExperiment.experiment_item ?? "")
+          ) ??
+          null;
+
+        result.push({
+          sample,
+          currentLabCompletedWips,
+          remainingWips,
+          nextLab: apiNextLab,
+          nextExperiment,
+          nextWip,
+        });
+
+        return;
+      }
+
+      const sameLabRemainingWips = remainingWips.filter(
+        (wip) => normalizeLab(wip.lab_name) === normalizeLab(currentLab)
+      );
+
+      const apiMatchedWip = sameLabRemainingWips.find(
+        (wip) =>
+          normalizeLab(wip.lab_name) === normalizeLab(apiNextLab) &&
+          (!apiNextExperiment ||
+            normalizeLab(wip.experiment_item ?? "") === normalizeLab(apiNextExperiment))
+      );
+
+      const nextWip = apiMatchedWip ?? sameLabRemainingWips[0] ?? null;
+
+      const nextExperiment = {
+        lab_name: apiNextLab,
+        experiment_item: apiNextExperiment || nextWip?.experiment_item || "未命名實驗",
+      };
+
+      result.push({
+        sample,
+        currentLabCompletedWips,
+        remainingWips,
+        nextLab: apiNextLab,
+        nextExperiment,
+        nextWip,
+      });
+    });
+
+    return result;
+  }, [
+    samples,
+    wipsBySampleId,
+    currentLab,
+    displayableTransferSamples,
+    dependencyNextBySampleKey,
+    getNextUnlockedExperiments,
+  ]);
+
+  async function fetchDependencyNextForSamples(targetSamples: Sample[]) {
+    const uniqueSamples = targetSamples.filter((sample, index, array) => {
+      const key = getSampleDependencyKey(sample);
+      return array.findIndex((item) => getSampleDependencyKey(item) === key) === index;
+    });
+
+    const samplesToFetch = uniqueSamples.filter((sample) => {
+      const key = getSampleDependencyKey(sample);
+      const cachedNext = dependencyNextBySampleKey[key];
+      const selectedCompleted =
+        cachedNext !== undefined && isDependencyNextCompleted(sample, cachedNext);
+
+      return (
+        (cachedNext === undefined || selectedCompleted) && !dependencyNextLoadingBySampleKey[key]
+      );
+    });
+
+    if (samplesToFetch.length === 0) return;
+
+    setDependencyNextLoadingBySampleKey((previous) => {
+      const next = { ...previous };
+
+      samplesToFetch.forEach((sample) => {
+        next[getSampleDependencyKey(sample)] = true;
+      });
+
+      return next;
+    });
+
+    await Promise.all(
+      samplesToFetch.map(async (sample) => {
+        const key = getSampleDependencyKey(sample);
+
+        try {
+          const response = await apiPost<WipDependencyNextResponse>("/api/wips/dependency/next", {
+            sampleId: sample.sample_no,
+            orderNo: sample.order_no,
+          });
+
+          setDependencyNextBySampleKey((previous) => ({
+            ...previous,
+            [key]: response.data ?? null,
+          }));
+
+          setDependencyNextErrorBySampleKey((previous) => ({
+            ...previous,
+            [key]: "",
+          }));
+        } catch (err) {
+          logClientError("fetchDependencyNextForSamples failed", err);
+
+          setDependencyNextBySampleKey((previous) => ({
+            ...previous,
+            [key]: null,
+          }));
+
+          setDependencyNextErrorBySampleKey((previous) => ({
+            ...previous,
+            [key]: getErrorMessage(err, "取得下一個交接地點失敗"),
+          }));
+        } finally {
+          setDependencyNextLoadingBySampleKey((previous) => ({
+            ...previous,
+            [key]: false,
+          }));
+        }
+      })
+    );
+  }
+
+  useEffect(() => {
+    if (displayableTransferSamples.length === 0) return;
+
+    void fetchDependencyNextForSamples(displayableTransferSamples);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayableTransferSamples]);
+
+  const isResolvingTransferNextDestination = useMemo(() => {
+    return displayableTransferSamples.some((sample) => {
+      const key = getSampleDependencyKey(sample);
+
+      return (
+        dependencyNextLoadingBySampleKey[key] ||
+        (dependencyNextBySampleKey[key] === undefined && !dependencyNextErrorBySampleKey[key])
+      );
+    });
+  }, [
+    displayableTransferSamples,
+    dependencyNextBySampleKey,
+    dependencyNextErrorBySampleKey,
+    dependencyNextLoadingBySampleKey,
+  ]);
+
+  const transferNextDestinationErrors = useMemo(() => {
+    return displayableTransferSamples
+      .map((sample) => {
+        const key = getSampleDependencyKey(sample);
+        return dependencyNextErrorBySampleKey[key];
+      })
+      .filter(Boolean);
+  }, [displayableTransferSamples, dependencyNextErrorBySampleKey]);
 
   const returnCandidates = useMemo<ReturnCandidate[]>(() => {
     const result: ReturnCandidate[] = [];
@@ -556,7 +979,6 @@ export default function SampleTransferPage() {
   // only shows status while the lab waits.
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role, currentUser?.lab_name]);
@@ -609,7 +1031,8 @@ export default function SampleTransferPage() {
       {successMessage && <div style={successStyle}>{successMessage}</div>}
 
       <section style={summaryGridStyle}>
-        <SummaryCard label="待建立交接" value={transferCandidates.length} />
+        <SummaryCard label="待續行實驗" value={sameLabNextCandidates.length} />
+        <SummaryCard label="可交接" value={transferCandidates.length} />
         <SummaryCard
           label="我方已建申請"
           value={
@@ -638,10 +1061,59 @@ export default function SampleTransferPage() {
         <div style={panelStyle}>
           <div style={panelHeaderStyle}>
             <div>
-              <div style={panelTitleStyle}>可交接至下一個 Lab</div>
-              <div style={hintStyle}>
-                條件：目前 Lab 有 completed WIP，且同一樣品仍有其他 Lab 測驗未完成。
-              </div>
+              <div style={panelTitleStyle}>待續行實驗</div>
+              <div style={hintStyle}>已完成目前作業階段，後續仍有實驗需於本 Lab 接續處理。</div>
+            </div>
+
+            <span style={countBadgeStyle}>{sameLabNextCandidates.length} 筆</span>
+          </div>
+
+          {loading ? (
+            <div style={emptyStyle}>載入中...</div>
+          ) : isResolvingTransferNextDestination ? (
+            <div style={emptyStyle}>更新作業狀態中...</div>
+          ) : sameLabNextCandidates.length === 0 ? (
+            <div style={emptyStyle}>目前沒有待續行實驗的樣品。</div>
+          ) : (
+            <div style={candidateListStyle}>
+              {sameLabNextCandidates.map((candidate) => {
+                const key = `same-lab-${candidate.sample.id}-${candidate.nextWip?.id ?? candidate.nextExperiment.experiment_item}`;
+
+                return (
+                  <div key={key} style={candidateCardStyle}>
+                    <div style={candidateTopRowStyle}>
+                      <div>
+                        <div style={candidateTitleStyle}>{candidate.sample.sample_no}</div>
+                        <div style={candidateSubtitleStyle}>
+                          {candidate.sample.sample_name ?? "未命名樣品"} ·{" "}
+                          {candidate.sample.order_no}
+                        </div>
+                      </div>
+
+                      <span style={warningBadgeStyle}>待續行</span>
+                    </div>
+
+                    <div style={candidateMetaGridStyle}>
+                      <InfoLine label="目前位置" value={candidate.sample.current_location ?? "-"} />
+                      <InfoLine
+                        label="下一實驗"
+                        value={`${candidate.nextLab} · ${candidate.nextExperiment.experiment_item}`}
+                      />
+                      <InfoLine label="WIP 狀態" value={candidate.nextWip?.wip_no ?? "尚未建立"} />
+                      <InfoLine label="作業狀態" value="待本 Lab 接續處理" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={panelStyle}>
+          <div style={panelHeaderStyle}>
+            <div>
+              <div style={panelTitleStyle}>可交接</div>
+              <div style={hintStyle}>目前階段已完成，可建立交接並送往下一個 Lab。</div>
             </div>
 
             <span style={countBadgeStyle}>{transferCandidates.length} 筆</span>
@@ -649,13 +1121,22 @@ export default function SampleTransferPage() {
 
           {loading ? (
             <div style={emptyStyle}>載入中...</div>
+          ) : isResolvingTransferNextDestination ? (
+            <div style={emptyStyle}>取得下一個交付地點中...</div>
           ) : transferCandidates.length === 0 ? (
-            <div style={emptyStyle}>目前沒有需要送出到其他實驗室的樣品。</div>
+            <div style={emptyStyle}>
+              {transferNextDestinationErrors.length > 0
+                ? transferNextDestinationErrors[0]
+                : "目前沒有可交接的樣品。"}
+            </div>
           ) : (
             <div style={candidateListStyle}>
               {transferCandidates.map((candidate) => {
                 const candidateKey = getCandidateKey(candidate);
                 const selected = selectedCandidateKey === candidateKey;
+                const dependencyKey = getSampleDependencyKey(candidate.sample);
+                const isLoadingNext = dependencyNextLoadingBySampleKey[dependencyKey];
+                const nextError = dependencyNextErrorBySampleKey[dependencyKey];
 
                 return (
                   <button
@@ -686,11 +1167,16 @@ export default function SampleTransferPage() {
                         label="目前完成"
                         value={`${currentLab} · ${candidate.currentLabCompletedWips.length} 個 WIP`}
                       />
-                      <InfoLine label="送往" value={`${candidate.nextLab} 收樣區`} />
                       <InfoLine
-                        label="下一 WIP"
-                        value={candidate.nextWip?.wip_no ?? "尚未建立 WIP"}
+                        label="送往"
+                        value={isLoadingNext ? "取得下一站中..." : `${candidate.nextLab} 收樣區`}
                       />
+                      <InfoLine
+                        label="下一實驗"
+                        value={`${candidate.nextLab} · ${candidate.nextExperiment.experiment_item}`}
+                      />
+                      <InfoLine label="WIP 狀態" value={candidate.nextWip?.wip_no ?? "尚未建立"} />
+                      {nextError && <InfoLine label="下一站錯誤" value={nextError} />}
                     </div>
                   </button>
                 );
@@ -702,8 +1188,8 @@ export default function SampleTransferPage() {
         <div style={panelStyle}>
           <div style={panelHeaderStyle}>
             <div>
-              <div style={panelTitleStyle}>待通知使用者取件</div>
-              <div style={hintStyle}>條件：全部測驗都 completed，且尚未通知原使用者取件。</div>
+              <div style={panelTitleStyle}>待通知取件</div>
+              <div style={hintStyle}>實驗流程已完成，可通知申請人取件。</div>
             </div>
 
             <span style={countBadgeStyle}>{returnCandidates.length} 筆</span>
@@ -761,7 +1247,7 @@ export default function SampleTransferPage() {
           <div style={panelHeaderStyle}>
             <div>
               <div style={panelTitleStyle}>待取件</div>
-              <div style={hintStyle}>已通知使用者取件後，樣品才會出現在這裡。</div>
+              <div style={hintStyle}>已通知申請人取件，樣品等待取回中。</div>
             </div>
 
             <span style={countBadgeStyle}>{pickupCandidates.length} 筆</span>

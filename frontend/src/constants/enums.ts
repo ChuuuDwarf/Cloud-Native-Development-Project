@@ -194,7 +194,8 @@ export type OrderStatus =
   | "waiting_report_return"
   | "waiting_pickup"
   | "closed"
-  | "cancelled";
+  | "cancelled"
+  | "terminated";
 export const OrderStatus = {
   Draft: "draft",
   PendingApproval: "pending_approval",
@@ -212,6 +213,7 @@ export const OrderStatus = {
   WaitingPickup: "waiting_pickup",
   Closed: "closed",
   Cancelled: "cancelled",
+  Terminated: "terminated",
 } as const;
 export const OrderStatusValues: readonly OrderStatus[] = [
   "draft",
@@ -230,6 +232,7 @@ export const OrderStatusValues: readonly OrderStatus[] = [
   "waiting_pickup",
   "closed",
   "cancelled",
+  "terminated",
 ] as const;
 
 export type ReportAction =
@@ -288,6 +291,20 @@ export const Severity = {
   Critical: "critical",
 } as const;
 export const SeverityValues: readonly Severity[] = ["low", "medium", "high", "critical"] as const;
+
+export type StorageStatus = "in_lab" | "stored" | "pending_return" | "picked_up";
+export const StorageStatus = {
+  InLab: "in_lab",
+  Stored: "stored",
+  PendingReturn: "pending_return",
+  PickedUp: "picked_up",
+} as const;
+export const StorageStatusValues: readonly StorageStatus[] = [
+  "in_lab",
+  "stored",
+  "pending_return",
+  "picked_up",
+] as const;
 
 export type UserStatus = "active" | "disabled";
 export const UserStatus = {

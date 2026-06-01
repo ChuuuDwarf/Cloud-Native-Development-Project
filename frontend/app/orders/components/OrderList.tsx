@@ -17,6 +17,7 @@ import {
   reasonBoxStyle,
 } from "../styles";
 import type {
+  DeliveryDestination,
   MasterData,
   Order,
   OrderAction,
@@ -39,6 +40,9 @@ export function OrderList({
   masterData,
   currentUser,
   usersById,
+  deliveryDestinationsByOrderId,
+  deliveryDestinationLoadingByOrderId,
+  deliveryDestinationErrorByOrderId,
   loading,
   activeStatusFilter,
   statusCounts,
@@ -56,6 +60,9 @@ export function OrderList({
   masterData: MasterData;
   currentUser: { id: string; name: string };
   usersById: UserNameLookup;
+  deliveryDestinationsByOrderId: Record<number, DeliveryDestination[]>;
+  deliveryDestinationLoadingByOrderId: Record<number, boolean>;
+  deliveryDestinationErrorByOrderId: Record<number, string | undefined>;
   loading: boolean;
   activeStatusFilter: OrderStatusFilter;
   statusCounts: Record<OrderStatusFilter, number>;
@@ -168,6 +175,15 @@ export function OrderList({
                 </div>
               )}
 
+              {order.status === "approved" && (
+                <DeliveryDestinationPanel
+                  destinations={deliveryDestinationsByOrderId[order.id] || []}
+                  loading={deliveryDestinationLoadingByOrderId[order.id] || false}
+                  error={deliveryDestinationErrorByOrderId[order.id]}
+                  onConfirm={() => onAction(order, "confirm_delivery")}
+                />
+              )}
+
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
                 <button
                   type="button"
@@ -188,16 +204,20 @@ export function OrderList({
                     {order.status === "returned" ? "修改補件" : "修改草稿"}
                   </button>
                 )}
-                {allowedActions[order.status].map((action) => (
-                  <button
-                    key={action}
-                    type="button"
-                    onClick={() => onAction(order, action)}
-                    style={buttonStyle(action === "cancel" ? "red" : "blue")}
-                  >
-                    {actionLabel[action]}
-                  </button>
-                ))}
+                {allowedActions[order.status]
+                  .filter(
+                    (action) => !(order.status === "approved" && action === "confirm_delivery")
+                  )
+                  .map((action) => (
+                    <button
+                      key={action}
+                      type="button"
+                      onClick={() => onAction(order, action)}
+                      style={buttonStyle(action === "cancel" ? "red" : "blue")}
+                    >
+                      {actionLabel[action]}
+                    </button>
+                  ))}
                 {order.status === "draft" && (
                   <button type="button" onClick={() => onDelete(order)} style={buttonStyle("red")}>
                     刪除
@@ -209,5 +229,61 @@ export function OrderList({
         </div>
       )}
     </Panel>
+  );
+}
+
+function DeliveryDestinationPanel({
+  destinations,
+  loading,
+  error,
+  onConfirm,
+}: {
+  destinations: DeliveryDestination[];
+  loading: boolean;
+  error?: string;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: 12,
+        borderRadius: 14,
+        border: "1px solid rgba(80, 210, 160, 0.28)",
+        background: "rgba(80, 210, 160, 0.08)",
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 12,
+        alignItems: "center",
+        flexWrap: "wrap",
+      }}
+    >
+      <div style={{ display: "grid", gap: 6, minWidth: 240 }}>
+        <strong style={{ color: "var(--green)" }}>主管已核准，請依下列地點送樣</strong>
+
+        {loading && <span style={{ color: "var(--text2)", fontSize: 12 }}>取得送樣地點中...</span>}
+
+        {error && <span style={{ color: "#ffb4b4", fontSize: 12 }}>送樣地點讀取失敗：{error}</span>}
+
+        {!loading && !error && destinations.length === 0 && (
+          <span style={{ color: "var(--text2)", fontSize: 12 }}>尚未取得送樣地點</span>
+        )}
+
+        {destinations.map((destination) => (
+          <div key={destination.sampleId} style={{ color: "var(--text2)", fontSize: 12 }}>
+            樣品 {destination.sampleId}
+            {destination.sampleName ? ` / ${destination.sampleName}` : ""}：送至
+            <strong style={{ color: "var(--text1)", marginLeft: 4 }}>
+              {destination.labName} 收樣區
+            </strong>
+            {destination.experimentName ? `（第一站：${destination.experimentName}）` : ""}
+          </div>
+        ))}
+      </div>
+
+      <button type="button" onClick={onConfirm} style={buttonStyle("blue")}>
+        {actionLabel.confirm_delivery}
+      </button>
+    </div>
   );
 }

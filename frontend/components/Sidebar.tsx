@@ -59,6 +59,14 @@ const nav: NavSection[] = [
         roles: ["system_admin", "general_supervisor", "lab_supervisor"],
       },
       {
+        id: "transfer",
+        href: "/transfer",
+        icon: "🔄",
+        label: "樣品交付",
+        // Engineer-only workflow; see comment on `/sample` above.
+        roles: ["system_admin", "general_supervisor", "lab_engineer", "lab_supervisor"],
+      },
+      {
         id: "sample",
         href: "/sample",
         icon: "🧪",
@@ -108,14 +116,6 @@ const nav: NavSection[] = [
         roles: ["system_admin", "general_supervisor", "lab_engineer", "lab_supervisor"],
       },
       {
-        id: "transfer",
-        href: "/transfer",
-        icon: "🔄",
-        label: "樣品交付",
-        // Engineer-only workflow; see comment on `/sample` above.
-        roles: ["system_admin", "general_supervisor", "lab_engineer", "lab_supervisor"],
-      },
-      {
         id: "execution",
         href: "/execution",
         icon: "🧫",
@@ -125,7 +125,7 @@ const nav: NavSection[] = [
     ],
   },
   {
-    section: "結案與倉儲",
+    section: "結案與通知",
     items: [
       {
         id: "report",

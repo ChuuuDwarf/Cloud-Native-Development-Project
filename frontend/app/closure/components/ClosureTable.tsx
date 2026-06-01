@@ -25,6 +25,14 @@ function ClosureAction({
   if (c.status === "已結案") {
     return <span style={{ fontSize: 10, color: "var(--text3)" }}>已結案</span>;
   }
+  // Cross-lab closure: THIS lab pressed to_pickup but the order is still
+  // waiting for other labs to do the same. The button is hidden — the
+  // active state for this caller has moved to "waiting".
+  if (c.labClosed && c.status !== "待送件") {
+    return (
+      <span style={{ fontSize: 10, color: "var(--orange)" }}>本實驗室已結單，等待其他實驗室</span>
+    );
+  }
   if (c.status === "待送件") {
     if (!canOperate) return noPerm;
     // 條件閘門：6 條件全滿足(含樣品已交付)才可送件結案；否則停用。
