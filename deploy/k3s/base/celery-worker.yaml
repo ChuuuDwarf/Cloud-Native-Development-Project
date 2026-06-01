@@ -7,6 +7,14 @@ metadata:
     secret.reloader.stakater.com/reload: "lims-secrets"
 spec:
   replicas: 1
+  # CPU-aware rolling update (see backend.yaml). For a 1-replica worker this
+  # means ~30s of queue pause during deploy (queued tasks wait), preferred
+  # over Pending pods stuck because the VM can't fit a surged 2nd pod.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: celery-worker

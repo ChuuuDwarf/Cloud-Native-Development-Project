@@ -15,6 +15,13 @@ metadata:
   name: frontend
 spec:
   replicas: 2
+  # See backend.yaml for rationale: CPU-tight VM needs maxSurge=0 to avoid
+  # rollout hanging on Insufficient cpu when trying to add a 3rd pod.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: frontend
