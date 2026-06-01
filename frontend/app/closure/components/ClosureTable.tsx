@@ -30,9 +30,7 @@ function ClosureAction({
   // active state for this caller has moved to "waiting".
   if (c.labClosed && c.status !== "待送件") {
     return (
-      <span style={{ fontSize: 10, color: "var(--orange)" }}>
-        本實驗室已結單，等待其他實驗室
-      </span>
+      <span style={{ fontSize: 10, color: "var(--orange)" }}>本實驗室已結單，等待其他實驗室</span>
     );
   }
   if (c.status === "待送件") {

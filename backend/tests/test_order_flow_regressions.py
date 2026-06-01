@@ -284,14 +284,23 @@ async def test_pipeline_done_includes_completed_wips_without_report_when_order_w
 # ---------------------------------------------------------------------------
 
 
-async def test_close_order_rejects_when_no_storage_items(db_session) -> None:
-    """An order at WAITING_PICKUP with NO ``storage`` rows must NOT be
-    closeable — that means the operator never recorded an outbound (出庫取件)
-    so the user hasn't actually picked anything up.
+async def test_close_order_rejects_when_no_storage_items(db_session, monkeypatch) -> None:
+    """An order at WAITING_PICKUP with NO samples rows must NOT be
+    closeable — that means the user hasn't actually picked anything up.
 
-    Previously ``if items and not all(...)`` short-circuited on empty
-    ``items`` and let close_order succeed.
+    ``close_order`` now reads B's migration-only ``samples`` table via
+    ``ClosureRepository.sample_statuses`` (the old ``storage``-table guard
+    never triggered because nothing in production writes to storage). The
+    test DB rebuilt from ``Base.metadata.create_all`` doesn't materialise
+    ``samples``, so we monkeypatch the lookup to return ``[]`` — the exact
+    state this regression pins ("no samples picked up yet").
     """
+
+    async def _no_samples(_self, _order_no):
+        return []
+
+    monkeypatch.setattr(ClosureRepository, "sample_statuses", _no_samples)
+
     suite = _suite()
     order_no = f"REG-OF2-O-{suite}"
     await _seed_order(db_session, order_no=order_no, status=OrderStatus.WAITING_PICKUP.value)

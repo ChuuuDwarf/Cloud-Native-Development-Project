@@ -40,7 +40,9 @@ export default function CreateUserModal({
     return map;
   }, [roles]);
 
-  const selectedRoleNames = (form.roleIds ?? []).map((id) => roleNameById.get(id)).filter(Boolean) as string[];
+  const selectedRoleNames = (form.roleIds ?? [])
+    .map((id) => roleNameById.get(id))
+    .filter(Boolean) as string[];
   // Show the lab field unless every selected role is one that doesn't take a lab.
   const showLabField =
     selectedRoleNames.length === 0 ||
@@ -135,9 +137,7 @@ export default function CreateUserModal({
               if (phoneError) setPhoneError(null);
             }}
           />
-          {phoneError && (
-            <span style={{ fontSize: 11, color: "var(--red)" }}>{phoneError}</span>
-          )}
+          {phoneError && <span style={{ fontSize: 11, color: "var(--red)" }}>{phoneError}</span>}
         </Field>
         <Field label="密碼 (≥8 字元)">
           <input

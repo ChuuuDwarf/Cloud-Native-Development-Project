@@ -191,9 +191,7 @@ export default function EditUserModal({
               if (phoneError) setPhoneError(null);
             }}
           />
-          {phoneError && (
-            <span style={{ fontSize: 11, color: "var(--red)" }}>{phoneError}</span>
-          )}
+          {phoneError && <span style={{ fontSize: 11, color: "var(--red)" }}>{phoneError}</span>}
         </Field>
         <Field label="(可選) 修改密碼">
           <input

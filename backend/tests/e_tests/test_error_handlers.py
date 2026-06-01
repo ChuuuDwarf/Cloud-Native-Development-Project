@@ -43,30 +43,48 @@ async def test_body_validation_returns_nested_envelope(
     assert body["error"]["message"], "message should be non-empty"
 
 
-async def test_raw_http_exception_404_carries_error_code(
-    admin_client: AsyncClient,
-) -> None:
-    """A raw ``raise HTTPException(404, ...)`` in an order route now nests.
+async def test_raw_http_exception_404_carries_error_code() -> None:
+    """A raw ``raise HTTPException(404, ...)`` from a route now nests.
 
-    ``GET /api/orders/{order_no}`` for an unknown order raises a bare
-    ``HTTPException(status_code=404, detail="Order not found")`` (app/routes/
-    others.py) — NOT an ``AppError`` — so it exercises the global
-    ``HTTPException`` handler. It previously fell through to FastAPI's flat
-    ``{"detail": "..."}`` with no ``error.code``; it now carries one.
+    Verifies that an endpoint which raises a bare
+    ``HTTPException(status_code=404, detail="...")`` — NOT an ``AppError`` —
+    is routed through the global ``HTTPException`` handler and emitted with
+    the nested ``{"error": {"code": "NOT_FOUND", "message": "..."}}``
+    envelope (it previously fell through to FastAPI's flat ``{"detail":
+    "..."}`` with no ``error.code``).
 
-    NOTE: a *non-numeric* order_no is required. There is a second binding
-    ``GET /api/orders/{order_id}`` with ``order_id: int`` (app/routes/orders.py);
-    a numeric path would match it instead, and a UUID would be rejected by that
-    route's int validation with a 422 before reaching this 404 handler.
+    NOTE: this used to hit ``GET /api/orders/{order_no}`` in
+    ``app/routes/others.py``, but a teammate added an int-typed
+    ``GET /api/orders/{order_id: int}`` in ``app/routes/orders.py`` whose
+    path parameter now matches first and 422s on a non-numeric order_no.
+    To avoid coupling this test to teammate's route-ordering decisions, we
+    mount a throwaway route on the live ``app`` (mirroring the catch-all
+    test below) and drive it directly.
     """
-    res = await admin_client.get("/api/orders/NO-SUCH-ORDER-XYZ")
+    from app.main import app
 
-    assert res.status_code == 404, res.text
-    body = res.json()
-    assert "detail" not in body, res.text
-    assert body["error"]["code"] == "NOT_FOUND", res.text
-    # The original raw detail string is preserved as the message.
-    assert body["error"]["message"] == "Order not found", res.text
+    route_path = "/api/_test_error_handlers_raw_404"
+
+    @app.get(route_path, include_in_schema=False)
+    async def _raise_404() -> None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            res = await ac.get(route_path)
+
+        assert res.status_code == 404, res.text
+        body = res.json()
+        assert "detail" not in body, res.text
+        assert body["error"]["code"] == "NOT_FOUND", res.text
+        # The original raw detail string is preserved as the message.
+        assert body["error"]["message"] == "Order not found", res.text
+    finally:
+        # Remove the throwaway route so it cannot leak into other tests.
+        app.router.routes = [r for r in app.router.routes if getattr(r, "path", None) != route_path]
 
 
 async def test_unknown_route_returns_nested_not_found(
