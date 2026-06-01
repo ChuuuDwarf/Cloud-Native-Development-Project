@@ -11,27 +11,27 @@ resources:
 # Override CORS_ORIGINS for staging's nip.io subdomain. Same-origin browser
 # requests don't trip CORS; this is for non-browser API clients calling
 # the staging URL directly.
-configMapGenerator:
-- name: lims-config
-  behavior: merge
-  literals:
-  - CORS_ORIGINS=https://staging.34.80.119.4.nip.io
   # Enable the TAS MQTT listener in staging. TAS_SN_KEY must also be set
   # here (customer key for `phone-conn/calloutResult/<key>`) — left blank
   # for now; populate before the listener can subscribe.
   # TODO(devops): set TAS_SN_KEY=<customer-key> once issued.
+configMapGenerator:
+- behavior: merge
+  literals:
+  - CORS_ORIGINS=https://staging.34.80.119.4.nip.io
   - TAS_ENABLED=true
   - TAS_SN_KEY=
+  name: lims-config
 
 # Staging deploys on the same VM/IP as prod, distinguished by the nip.io
 # subdomain `staging.<IP>.nip.io`. CD points these at the -rc image tags.
 images:
 - name: lims-backend
   newName: asia-east1-docker.pkg.dev/lims-497613/lims/backend
-  newTag: v0.2.2-rc1
+  newTag: v0.3.1-rc1
 - name: lims-frontend
   newName: asia-east1-docker.pkg.dev/lims-497613/lims/frontend
-  newTag: v0.2.2-rc1
+  newTag: v0.3.1-rc1
 
 # Fewer replicas in staging to leave room on the single VM.
   # Host-based TLS for staging. REPLACE_IP filled with the VM static IP in
