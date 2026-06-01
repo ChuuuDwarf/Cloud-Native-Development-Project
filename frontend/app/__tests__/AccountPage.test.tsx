@@ -206,9 +206,9 @@ describe("AccountPage", () => {
     // Wait for masterData query to resolve, then assert select options exist.
     // Use role=option since <option> text isn't always discoverable via getByText in jsdom.
     await waitFor(() => {
-      expect(screen.getByRole("option", { name: "system_admin" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "系統管理員" })).toBeInTheDocument();
     });
-    expect(screen.getByRole("option", { name: "lab_supervisor" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "實驗室主管" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "D01 · Dept 1" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "L01 · Lab 1" })).toBeInTheDocument();
   });

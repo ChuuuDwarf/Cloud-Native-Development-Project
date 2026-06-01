@@ -1,4 +1,4 @@
-import { UserStatusLabel } from "@/constants/status-labels";
+import { RoleLabel, UserStatusLabel, type RoleName } from "@/constants/status-labels";
 import { roleBadge, secondaryBtn } from "@/constants/styles";
 import type { UserStatus } from "@/constants/enums";
 import type { UserResponse } from "@/types/user";
@@ -7,20 +7,31 @@ interface UserRowProps {
   user: UserResponse;
   canUpdate: boolean;
   onToggle: (next: UserStatus) => void;
+  onEdit: () => void;
 }
 
-export default function UserRow({ user, canUpdate, onToggle }: UserRowProps) {
+export default function UserRow({ user, canUpdate, onToggle, onEdit }: UserRowProps) {
   return (
     <tr style={{ borderTop: "1px solid var(--border2)" }}>
       <td style={cellStyle}>{user.name}</td>
       <td style={cellStyle}>{user.email}</td>
+      <td
+        style={{
+          ...cellStyle,
+          fontFamily: "monospace",
+          fontSize: 12,
+          color: user.phoneNumber ? "var(--text)" : "var(--text3)",
+        }}
+      >
+        {user.phoneNumber ?? "—"}
+      </td>
       <td style={cellStyle}>
         {user.roles.length === 0 ? (
           <span style={{ color: "var(--text3)" }}>—</span>
         ) : (
           user.roles.map((r) => (
             <span key={r.id} style={roleBadge}>
-              {r.name}
+              {RoleLabel[r.name as RoleName] ?? r.name}
             </span>
           ))
         )}
@@ -40,15 +51,20 @@ export default function UserRow({ user, canUpdate, onToggle }: UserRowProps) {
       </td>
       <td style={{ ...cellStyle, textAlign: "right" }}>
         {canUpdate && (
-          <button
-            style={{
-              ...secondaryBtn,
-              color: user.isActive ? "var(--red)" : "var(--green)",
-            }}
-            onClick={() => onToggle(user.isActive ? "disabled" : "active")}
-          >
-            {user.isActive ? "停用" : "啟用"}
-          </button>
+          <span style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
+            <button style={secondaryBtn} onClick={onEdit}>
+              編輯
+            </button>
+            <button
+              style={{
+                ...secondaryBtn,
+                color: user.isActive ? "var(--red)" : "var(--green)",
+              }}
+              onClick={() => onToggle(user.isActive ? "disabled" : "active")}
+            >
+              {user.isActive ? "停用" : "啟用"}
+            </button>
+          </span>
         )}
       </td>
     </tr>

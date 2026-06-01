@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { RoleLabel, type RoleName } from "@/constants/status-labels";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiGet, apiPost } from "@/lib/api";
 import { getErrorMessage } from "@/lib/error";
@@ -104,14 +105,9 @@ export default function SamplePage() {
     };
   }, [authUser, currentDepartment, currentLab]);
 
-  const roleLabelMap: Record<string, string> = {
-    system_admin: "系統管理者",
-    lab_supervisor: "實驗室主管",
-    lab_engineer: "實驗室人員",
-    plant_user: "廠區使用者",
-  };
-
-  const roleLabel = currentUser ? (roleLabelMap[currentUser.role] ?? currentUser.role) : "—";
+  const roleLabel = currentUser
+    ? (RoleLabel[currentUser.role as RoleName] ?? currentUser.role)
+    : "—";
   const identityLabName = currentUser && checkIsLabUser(currentUser) ? currentLab?.name : undefined;
   const currentUserIdentityParts = currentUser
     ? [identityLabName, roleLabel, currentUser.name].filter((part): part is string => Boolean(part))

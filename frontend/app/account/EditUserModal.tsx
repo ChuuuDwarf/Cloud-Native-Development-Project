@@ -2,35 +2,53 @@
 
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import type { UserStatus } from "@/constants/enums";
 import { ROLES_WITHOUT_LAB, RoleLabel, type RoleName } from "@/constants/status-labels";
 import { inputStyle, primaryBtn, secondaryBtn } from "@/constants/styles";
 import { userApi } from "@/services/user-api";
-import type { CreateUserPayload } from "@/types/user";
+import type { UpdateUserPayload, UserResponse } from "@/types/user";
 
-interface CreateUserModalProps {
+interface EditUserModalProps {
+  user: UserResponse;
   roles: { id: string; name: string }[];
   labs: { id: string; code: string; name: string }[];
   departments: { id: string; code: string; name: string }[];
   onClose: () => void;
-  onCreated: () => void;
+  onSaved?: () => void;
 }
 
-export default function CreateUserModal({
+interface EditFormState {
+  name: string;
+  phoneNumber: string;
+  password: string;
+  status: UserStatus;
+  roleIds: string[];
+  departmentId: string | null;
+  labId: string | null;
+}
+
+function buildInitialState(user: UserResponse): EditFormState {
+  return {
+    name: user.name,
+    phoneNumber: user.phoneNumber ?? "",
+    password: "",
+    status: user.status,
+    roleIds: user.roles.map((r) => r.id),
+    departmentId: user.departmentId,
+    labId: user.labId,
+  };
+}
+
+export default function EditUserModal({
+  user,
   roles,
   labs,
   departments,
   onClose,
-  onCreated,
-}: CreateUserModalProps) {
-  const [form, setForm] = useState<CreateUserPayload>({
-    email: "",
-    name: "",
-    password: "",
-    phoneNumber: "",
-    roleIds: [],
-    labId: null,
-    departmentId: null,
-  });
+  onSaved,
+}: EditUserModalProps) {
+  const initial = buildInitialState(user);
+  const [form, setForm] = useState<EditFormState>(initial);
   const [error, setError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
@@ -40,22 +58,73 @@ export default function CreateUserModal({
     return map;
   }, [roles]);
 
-  const selectedRoleNames = (form.roleIds ?? []).map((id) => roleNameById.get(id)).filter(Boolean) as string[];
-  // Show the lab field unless every selected role is one that doesn't take a lab.
+  const selectedRoleNames = form.roleIds
+    .map((id) => roleNameById.get(id))
+    .filter(Boolean) as string[];
   const showLabField =
     selectedRoleNames.length === 0 ||
     selectedRoleNames.some((n) => !ROLES_WITHOUT_LAB.has(n as RoleName));
 
-  const create = useMutation({
-    mutationFn: (payload: CreateUserPayload) => userApi.create(payload),
-    onSuccess: () => onCreated(),
+  const update = useMutation({
+    mutationFn: (payload: UpdateUserPayload) => userApi.update(user.id, payload),
+    onSuccess: () => {
+      onSaved?.();
+      onClose();
+    },
     onError: (err: unknown) => {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-          ?.message ?? "建立失敗";
+          ?.message ?? "更新失敗";
       setError(msg);
     },
   });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setPhoneError(null);
+
+    const trimmedPhone = form.phoneNumber.trim();
+    if (trimmedPhone.length > 0 && trimmedPhone.length !== 10) {
+      setPhoneError("電話需為 10 位數字");
+      return;
+    }
+
+    // Diff against initial values so unchanged fields aren't sent (avoids
+    // accidentally clobbering server-side state with stale local values).
+    const payload: UpdateUserPayload = {};
+
+    if (form.name !== initial.name) payload.name = form.name;
+    if (form.status !== initial.status) payload.status = form.status;
+    if (form.departmentId !== initial.departmentId) payload.departmentId = form.departmentId;
+
+    // labId handling: when the role doesn't take a lab, force-clear (null) if the
+    // user previously had one; otherwise omit. Else diff normally.
+    if (!showLabField) {
+      if (initial.labId !== null) payload.labId = null;
+    } else if (form.labId !== initial.labId) {
+      payload.labId = form.labId;
+    }
+
+    if (trimmedPhone !== (initial.phoneNumber ?? "").trim()) {
+      payload.phoneNumber = trimmedPhone;
+    }
+
+    const sortedNext = [...form.roleIds].sort();
+    const sortedInitial = [...initial.roleIds].sort();
+    const rolesChanged =
+      sortedNext.length !== sortedInitial.length ||
+      sortedNext.some((id, i) => id !== sortedInitial[i]);
+    if (rolesChanged) payload.roleIds = form.roleIds;
+
+    if (form.password.length > 0) payload.password = form.password;
+
+    if (Object.keys(payload).length === 0) {
+      onClose();
+      return;
+    }
+    update.mutate(payload);
+  };
 
   return (
     <div
@@ -74,21 +143,7 @@ export default function CreateUserModal({
     >
       <form
         onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => {
-          e.preventDefault();
-          setError(null);
-          setPhoneError(null);
-          const trimmedPhone = (form.phoneNumber ?? "").trim();
-          if (trimmedPhone.length > 0 && trimmedPhone.length !== 10) {
-            setPhoneError("電話需為 10 位數字");
-            return;
-          }
-          create.mutate({
-            ...form,
-            phoneNumber: trimmedPhone || undefined,
-            labId: showLabField ? (form.labId ?? null) : undefined,
-          });
-        }}
+        onSubmit={handleSubmit}
         style={{
           background: "var(--s1)",
           border: "1px solid var(--border)",
@@ -101,7 +156,17 @@ export default function CreateUserModal({
           gap: 12,
         }}
       >
-        <h2 style={{ margin: 0, fontSize: 18 }}>建立使用者</h2>
+        <h2 style={{ margin: 0, fontSize: 18 }}>編輯使用者</h2>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--text3)",
+            fontFamily: "monospace",
+            marginTop: -6,
+          }}
+        >
+          {user.email}
+        </div>
 
         <Field label="姓名">
           <input
@@ -109,15 +174,6 @@ export default function CreateUserModal({
             style={inputStyle}
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-        </Field>
-        <Field label="Email">
-          <input
-            required
-            type="email"
-            style={inputStyle}
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
         </Field>
         <Field label="電話">
@@ -128,7 +184,7 @@ export default function CreateUserModal({
             pattern="\d{10}"
             placeholder="例:0912345678"
             style={inputStyle}
-            value={form.phoneNumber ?? ""}
+            value={form.phoneNumber}
             onChange={(e) => {
               const cleaned = e.target.value.replace(/\D/g, "").slice(0, 10);
               setForm({ ...form, phoneNumber: cleaned });
@@ -139,22 +195,32 @@ export default function CreateUserModal({
             <span style={{ fontSize: 11, color: "var(--red)" }}>{phoneError}</span>
           )}
         </Field>
-        <Field label="密碼 (≥8 字元)">
+        <Field label="(可選) 修改密碼">
           <input
-            required
             type="password"
             minLength={8}
+            placeholder="留白則維持原密碼"
             style={inputStyle}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
+        </Field>
+        <Field label="狀態">
+          <select
+            style={inputStyle}
+            value={form.status}
+            onChange={(e) => setForm({ ...form, status: e.target.value as UserStatus })}
+          >
+            <option value="active">啟用</option>
+            <option value="disabled">停用</option>
+          </select>
         </Field>
         <Field label="角色">
           <select
             multiple
             size={Math.max(2, Math.min(roles.length, 4))}
             style={{ ...inputStyle, height: "auto" }}
-            value={form.roleIds ?? []}
+            value={form.roleIds}
             onChange={(e) => {
               const nextRoleIds = Array.from(e.target.selectedOptions, (o) => o.value);
               const nextNames = nextRoleIds
@@ -227,8 +293,8 @@ export default function CreateUserModal({
           <button type="button" onClick={onClose} style={secondaryBtn}>
             取消
           </button>
-          <button type="submit" disabled={create.isPending} style={primaryBtn}>
-            {create.isPending ? "建立中…" : "建立"}
+          <button type="submit" disabled={update.isPending} style={primaryBtn}>
+            {update.isPending ? "儲存中…" : "儲存"}
           </button>
         </div>
       </form>

@@ -8,7 +8,9 @@ import { inputStyle, primaryBtn } from "@/constants/styles";
 import { useAuth } from "@/contexts/AuthContext";
 import { masterDataApi } from "@/services/master-data-api";
 import { userApi } from "@/services/user-api";
+import type { UserResponse } from "@/types/user";
 import CreateUserModal from "./CreateUserModal";
+import EditUserModal from "./EditUserModal";
 import UserRow from "./UserRow";
 
 export default function AccountPage() {
@@ -25,6 +27,7 @@ function AccountPageContent() {
 
   const [keyword, setKeyword] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
 
   const canCreate = hasPermission("users:create");
   const canUpdate = hasPermission("users:update");
@@ -103,6 +106,7 @@ function AccountPageContent() {
             <tr style={{ background: "var(--s2)" }}>
               <Th>姓名</Th>
               <Th>Email</Th>
+              <Th>電話</Th>
               <Th>角色</Th>
               <Th>狀態</Th>
               <Th>建立時間</Th>
@@ -112,14 +116,14 @@ function AccountPageContent() {
           <tbody>
             {usersQuery.isLoading && (
               <tr>
-                <Td colSpan={6} style={{ textAlign: "center", color: "var(--text3)" }}>
+                <Td colSpan={7} style={{ textAlign: "center", color: "var(--text3)" }}>
                   Loading…
                 </Td>
               </tr>
             )}
             {usersQuery.isError && (
               <tr>
-                <Td colSpan={6} style={{ textAlign: "center", color: "var(--red)" }}>
+                <Td colSpan={7} style={{ textAlign: "center", color: "var(--red)" }}>
                   讀取失敗
                 </Td>
               </tr>
@@ -130,11 +134,12 @@ function AccountPageContent() {
                 user={u}
                 canUpdate={canUpdate}
                 onToggle={(next) => toggleStatus.mutate({ id: u.id, status: next })}
+                onEdit={() => setEditingUser(u)}
               />
             ))}
             {usersQuery.data?.items.length === 0 && (
               <tr>
-                <Td colSpan={6} style={{ textAlign: "center", color: "var(--text3)" }}>
+                <Td colSpan={7} style={{ textAlign: "center", color: "var(--text3)" }}>
                   沒有符合條件的使用者
                 </Td>
               </tr>
@@ -153,6 +158,17 @@ function AccountPageContent() {
             queryClient.invalidateQueries({ queryKey: ["users"] });
             setCreateOpen(false);
           }}
+        />
+      )}
+
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          roles={masterQuery.data?.roles ?? []}
+          labs={masterQuery.data?.labs ?? []}
+          departments={masterQuery.data?.departments ?? []}
+          onClose={() => setEditingUser(null)}
+          onSaved={() => queryClient.invalidateQueries({ queryKey: ["users"] })}
         />
       )}
     </div>

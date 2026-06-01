@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { type Severity } from "@/constants/enums";
-import { IssueStatusLabel, IssueTypeLabel, SeverityLabel } from "@/constants/status-labels";
+import {
+  IssueStatusLabel,
+  IssueTypeLabel,
+  RoleLabel,
+  SeverityLabel,
+  type RoleName,
+} from "@/constants/status-labels";
 import { issueApi } from "@/services/issue-api";
 import type { IssueAcknowledgement, IssueResponse } from "@/types/issue";
 
@@ -215,13 +221,6 @@ function IssueDetailModal({ issue, onClose }: { issue: IssueResponse; onClose: (
 }
 
 function AcknowledgementList({ items }: { items: IssueAcknowledgement[] }) {
-  const roleLabel: Record<string, string> = {
-    system_admin: "系統管理者",
-    lab_supervisor: "實驗室主管",
-    lab_engineer: "實驗室人員",
-    plant_user: "廠區使用者",
-  };
-
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
       <thead>
@@ -244,7 +243,7 @@ function AcknowledgementList({ items }: { items: IssueAcknowledgement[] }) {
                 {a.userEmail}
               </span>
             </Td>
-            <Td>{a.role ? (roleLabel[a.role] ?? a.role) : "—"}</Td>
+            <Td>{a.role ? (RoleLabel[a.role as RoleName] ?? a.role) : "—"}</Td>
             <Td>{a.channel}</Td>
             <Td>{new Date(a.readAt).toLocaleString("zh-TW")}</Td>
           </tr>
