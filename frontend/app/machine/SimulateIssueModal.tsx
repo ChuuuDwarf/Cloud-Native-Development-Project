@@ -84,7 +84,11 @@ export default function SimulateIssueModal({ machines, onClose }: Props) {
 
   return (
     <div
+      role="presentation"
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
       style={{
         position: "fixed",
         inset: 0,
@@ -96,7 +100,9 @@ export default function SimulateIssueModal({ machines, onClose }: Props) {
       }}
     >
       <div
+        role="presentation"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
         style={{
           background: "var(--s1)",
           border: "1px solid var(--border)",

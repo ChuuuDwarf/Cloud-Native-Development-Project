@@ -5,13 +5,13 @@ services:
     ports:
       - "5433:5432"
     environment:
-      POSTGRES_DB: lims
-      POSTGRES_USER: lims_user
-      POSTGRES_PASSWORD: lims_password
+      POSTGRES_DB: ${POSTGRES_DB:-lims}
+      POSTGRES_USER: ${POSTGRES_USER:-lims_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in your .env}
     volumes:
       - postgres_backend_test_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lims_user -d lims"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lims_user} -d ${POSTGRES_DB:-lims}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,7 +26,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://lims_user:lims_password@postgres:5432/lims
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lims_user}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in your .env}@postgres:5432/${POSTGRES_DB:-lims}
     volumes:
       - ./backend:/app
     command: uvicorn main:app --reload --host 0.0.0.0 --port 8000

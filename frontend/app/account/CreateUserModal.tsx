@@ -63,6 +63,9 @@ export default function CreateUserModal({
     <div
       role="dialog"
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
       style={{
         position: "fixed",
         inset: 0,
@@ -76,6 +79,7 @@ export default function CreateUserModal({
     >
       <form
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);

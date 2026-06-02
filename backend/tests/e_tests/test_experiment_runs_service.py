@@ -142,7 +142,9 @@ async def test_check_in_out_progress_and_upload_result_lifecycle() -> None:
     checked_in = await svc.check_in("WIP-1", "Alice", "SEM-A-001", "SEM-R1")
     assert checked_in["status"] == "執行中"
     assert repo.orders["ORD-1"].status == OrderStatus.IN_PROGRESS.value
-    assert repo.wips["WIP-1"].history[-1].action == "上機"
+    check_in_history = repo.wips["WIP-1"].history
+    assert check_in_history, "check_in should append a history row"
+    assert check_in_history[-1].action == "上機"
 
     updated = await svc.update_progress("WIP-1", 40)
     assert updated["progress"] == 40

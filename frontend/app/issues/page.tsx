@@ -112,7 +112,11 @@ function IssueDetailModal({ issue, onClose }: { issue: IssueResponse; onClose: (
 
   return (
     <div
+      role="presentation"
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
       style={{
         position: "fixed",
         inset: 0,
@@ -124,7 +128,9 @@ function IssueDetailModal({ issue, onClose }: { issue: IssueResponse; onClose: (
       }}
     >
       <div
+        role="presentation"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
         style={{
           background: "var(--s1)",
           border: "1px solid var(--border)",

@@ -12,9 +12,6 @@ on:
     tags:
       - "v*-rc*"
 
-permissions:
-  contents: write   # commit the kustomization.yaml bump back to main
-
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_REGION: ${{ secrets.GCP_REGION }}
@@ -38,6 +35,8 @@ jobs:
   promote:
     needs: wait-for-build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # commit the kustomization.yaml bump back to main
     steps:
       - name: Checkout main
         uses: actions/checkout@v4

@@ -103,8 +103,10 @@ spec:
             requests:
               cpu: 50m
               memory: 64Mi
+              ephemeral-storage: 64Mi
             limits:
               memory: 128Mi
+              ephemeral-storage: 256Mi
           volumeMounts:
             - name: varlog
               mountPath: /var/log

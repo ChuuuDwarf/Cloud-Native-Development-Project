@@ -34,6 +34,15 @@ from app.services.notifications import NotificationService
 
 logger = logging.getLogger(__name__)
 
+
+def _log_safe(value: object) -> str:
+    """Neutralize CR/LF in user-controlled values before logging (Sonar S5145).
+
+    Without this, a newline in e.g. ``wip_no`` / ``applicant_id`` could forge a
+    fake log line. Replace the line breaks with their escaped form.
+    """
+    return str(value).replace("\r", "\\r").replace("\n", "\\n")
+
 # WIP 已結束（fine-grained exec_status，英文）
 ENDED_EXEC = {WipStatus.COMPLETED.value, WipStatus.TERMINATED.value}
 # 進入「待結果確認」的判定集合
@@ -125,8 +134,8 @@ class ExperimentRunService:
             except (TypeError, ValueError):
                 logger.warning(
                     "skip termination notify: applicant_id is not a UUID (wip=%s, applicant_id=%r)",
-                    wip_no,
-                    order.applicant_id,
+                    _log_safe(wip_no),
+                    _log_safe(order.applicant_id),
                 )
                 return
 
@@ -134,7 +143,7 @@ class ExperimentRunService:
             if applicant is None:
                 logger.warning(
                     "skip termination notify: applicant user not found (wip=%s, applicant_id=%s)",
-                    wip_no,
+                    _log_safe(wip_no),
                     applicant_uuid,
                 )
                 return
@@ -145,7 +154,7 @@ class ExperimentRunService:
             if lab_id is None:
                 logger.warning(
                     "skip termination notify: could not resolve a lab_id (wip=%s)",
-                    wip_no,
+                    _log_safe(wip_no),
                 )
                 return
 
@@ -161,7 +170,7 @@ class ExperimentRunService:
                 channels=[NotificationChannel.IN_APP],
             )
         except Exception:
-            logger.exception("notify applicant of termination failed for wip=%s", wip_no)
+            logger.exception("notify applicant of termination failed for wip=%s", _log_safe(wip_no))
 
     async def _publish_wip_pipeline_change(self, wip: Wip, event_name: str) -> None:
         """Best-effort dashboard SSE fanout for a WIP pipeline transition.

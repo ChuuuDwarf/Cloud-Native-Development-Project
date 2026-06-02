@@ -110,8 +110,8 @@ export default function EditUserModal({
       payload.phoneNumber = trimmedPhone;
     }
 
-    const sortedNext = [...form.roleIds].sort();
-    const sortedInitial = [...initial.roleIds].sort();
+    const sortedNext = [...form.roleIds].sort((a, b) => a.localeCompare(b));
+    const sortedInitial = [...initial.roleIds].sort((a, b) => a.localeCompare(b));
     const rolesChanged =
       sortedNext.length !== sortedInitial.length ||
       sortedNext.some((id, i) => id !== sortedInitial[i]);
@@ -130,6 +130,9 @@ export default function EditUserModal({
     <div
       role="dialog"
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
       style={{
         position: "fixed",
         inset: 0,
@@ -143,6 +146,7 @@ export default function EditUserModal({
     >
       <form
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
         style={{
           background: "var(--s1)",

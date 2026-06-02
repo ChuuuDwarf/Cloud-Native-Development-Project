@@ -157,7 +157,7 @@ export default function MachineUtilization({
   // Flatten by_lab into one ordered list. Within each lab we keep the
   // backend's order; labs are sorted alphabetically so cross-lab views are
   // stable.
-  const labKeys = Object.keys(data.by_lab).sort();
+  const labKeys = Object.keys(data.by_lab).sort((a, b) => a.localeCompare(b));
   const machines: MachineGrid[] = labKeys.flatMap((lab) => data.by_lab[lab]);
 
   return (

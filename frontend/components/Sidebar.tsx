@@ -365,7 +365,16 @@ export default function Sidebar() {
 
       {/* Toggle */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-label={open ? "收合側邊欄" : "展開側邊欄"}
         onClick={() => setOpen(!open)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen(!open);
+          }
+        }}
         style={{
           width: "100%",
           display: "flex",

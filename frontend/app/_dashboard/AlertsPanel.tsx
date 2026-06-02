@@ -176,8 +176,16 @@ export default function AlertsPanel({
               data-issue-id={r.issue_id}
               data-acknowledged={r.acknowledged ? "true" : "false"}
               data-group={r.group}
+              role="button"
+              tabIndex={0}
               onClick={() => {
-                window.location.href = `/issues/${r.issue_id}`;
+                globalThis.location.href = `/issues/${r.issue_id}`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  globalThis.location.href = `/issues/${r.issue_id}`;
+                }
               }}
               style={{
                 cursor: "pointer",
