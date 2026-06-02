@@ -38,6 +38,12 @@ class FakeRecipeRepo:
     async def commit(self) -> None:
         self.commits += 1
 
+    async def refresh(self, recipe: Recipe) -> None:
+        # No-op: the in-memory fake holds the live object, nothing to reload.
+        # Mirrors RecipeRepository.refresh (added to fix the post-commit
+        # MissingGreenlet on the server-side ``updated_at`` column).
+        return None
+
 
 def recipe(recipe_id: str, machine_ids: list[str]) -> Recipe:
     return Recipe(

@@ -570,7 +570,6 @@ def test_samples_route_filters_visibility_and_status(client):
     assert status_response.json() == []
 
 
-@pytest.mark.xfail(reason="/api/wips/dependency/next is not available in current app")
 def test_wip_dependency_next_claims_lowest_utilization_candidate(client, integration_db):
     integration_db.execute(
         text(
@@ -619,7 +618,7 @@ def test_wip_dependency_next_claims_lowest_utilization_candidate(client, integra
     first_response = client.post(
         "/api/wips/dependency/next",
         headers=ADMIN_HEADERS,
-        json={"sampleId": SAMPLE_A_ID},
+        json={"sampleId": "SMP-2026-0001"},
     )
 
     assert first_response.status_code == 200
@@ -637,17 +636,39 @@ def test_wip_dependency_next_claims_lowest_utilization_candidate(client, integra
     )
     assert claimed_first["dependency_check"] == 1
 
+    # Mark the claimed Lab B / 光學量測 experiment as completed via a finished WIP.
+    # The endpoint advances to the next group's candidate only when the prior
+    # experiment is actually done (is_dependency_item_completed), not merely
+    # dependency_check-claimed — so without this row the lowest-utilization 992
+    # would stay "sticky" and be returned again.
+    integration_db.execute(
+        text(
+            """
+            INSERT INTO wips (
+                id, wip_no, sample_id, order_no, lab_name, experiment_item,
+                status, progress
+            )
+            VALUES (
+                'wip-0000-0000-0000-000000000992', 'WIP-2026-0992',
+                :sample_a_id, 'ORD-2026-0001', 'Lab B', '光學量測',
+                'completed', 100
+            )
+            """
+        ),
+        {"sample_a_id": SAMPLE_A_ID},
+    )
+    integration_db.commit()
+
     second_response = client.post(
         "/api/wips/dependency/next",
         headers=ADMIN_HEADERS,
-        json={"sampleId": SAMPLE_A_ID},
+        json={"sampleId": "SMP-2026-0001"},
     )
 
     assert second_response.status_code == 200
     assert second_response.json()["data"]["orderItemId"] == 991
 
 
-@pytest.mark.xfail(reason="/api/wips/dependency/next is not available in current app")
 def test_wip_dependency_next_returns_null_when_done(client, integration_db):
     integration_db.execute(
         text(
@@ -678,12 +699,32 @@ def test_wip_dependency_next_returns_null_when_done(client, integration_db):
             """
         )
     )
+    # The single Lab A / SEM 觀察 experiment is fully done: a completed WIP marks
+    # it via is_dependency_item_completed, so there is no pending dependency item
+    # left and the endpoint returns null. (dependency_check=1 alone is not enough
+    # — the endpoint would otherwise re-return the already-claimed item.)
+    integration_db.execute(
+        text(
+            """
+            INSERT INTO wips (
+                id, wip_no, sample_id, order_no, lab_name, experiment_item,
+                status, progress
+            )
+            VALUES (
+                'wip-0000-0000-0000-000000001001', 'WIP-2026-1001',
+                :sample_a_id, 'ORD-2026-0001', 'Lab A', 'SEM 觀察',
+                'completed', 100
+            )
+            """
+        ),
+        {"sample_a_id": SAMPLE_A_ID},
+    )
     integration_db.commit()
 
     response = client.post(
         "/api/wips/dependency/next",
         headers=ADMIN_HEADERS,
-        json={"sampleId": SAMPLE_A_ID},
+        json={"sampleId": "SMP-2026-0001"},
     )
 
     assert response.status_code == 200
