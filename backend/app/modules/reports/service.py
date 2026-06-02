@@ -181,7 +181,12 @@ class ReportService:
                 OrderStatus.WAITING_REPORT_RETURN.value,
             )
         await self._repo.commit()
-        return report_dict(rpt)
+        # Re-fetch via the eager-loading repo path so ``attachments``/``versions`` are
+        # loaded before serialization (the Report model requires repositories to
+        # eager-load; serializing a post-commit instance would lazy-load on the async
+        # session and raise MissingGreenlet when no attachment was appended).
+        created = await self._repo.get_report(rid)
+        return report_dict(created if created is not None else rpt)
 
     async def list_templates(self) -> list[dict]:
         return [template_dict(t) for t in await self._repo.list_templates()]

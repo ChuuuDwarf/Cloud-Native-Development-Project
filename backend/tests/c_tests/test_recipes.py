@@ -55,7 +55,6 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
 from httpx import AsyncClient
 
 # NOTE: no ``pytestmark = pytest.mark.asyncio`` — ``asyncio_mode = "auto"``
@@ -265,27 +264,11 @@ async def test_create_recipe_empty_machines_is_403(
 # UPDATE — PATCH /api/recipes/{recipe_id}
 # Happy path + 404. We create our own row first so we never mutate a shared one.
 # ---------------------------------------------------------------------------
-@pytest.mark.xfail(
-    reason=(
-        "KNOWN BUG: RecipeService.update returns recipe_dict(recipe) right after "
-        "commit(); the serializer reads recipe.updated_at, which TimestampMixin "
-        "mutates with a SERVER-SIDE onupdate=func.now(). After commit the new "
-        "server-generated value is unloaded on the instance (even with "
-        "expire_on_commit=False, a server-side onupdate column is expired), so the "
-        "lazy refresh fires await IO on the async session -> MissingGreenlet -> 500 "
-        "DATABASE_ERROR. The recipe IS persisted; only the update RESPONSE "
-        "serialization 500s. (create_recipe is NOT affected: on INSERT updated_at "
-        "comes from server_default and is populated without a post-commit refresh.) "
-        "INTENDED behaviour: update returns 200 with the changed fields. This strict "
-        "xfail XPASSes the moment update awaits repo.refresh(recipe) / eager-loads "
-        "updated_at (or the serializer stops touching the expired column). Mirrors "
-        "D's create_report lazy-load-after-commit bug."
-    ),
-    strict=True,
-)
 async def test_update_recipe_success(supervisor_a_client: AsyncClient) -> None:
-    """Regression anchor for the update-response post-commit lazy-load bug. We
-    assert the INTENDED 200; today it returns 500, so this xfails (strict)."""
+    """Updating a recipe returns 200 with the changed fields. ``RecipeService.update``
+    awaits ``repo.refresh(recipe)`` after commit so the server-side ``updated_at``
+    (onupdate=func.now()) is reloaded before serialization, avoiding a post-commit
+    lazy load on the async session (MissingGreenlet)."""
     recipe_id = _uid("RCP-UPDATE")
     await supervisor_a_client.post("/api/recipes", json=_recipe_payload(recipe_id))
 

@@ -92,7 +92,6 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -483,21 +482,14 @@ async def test_plant_user_cannot_approve_is_403(
     assert res.json()["error"]["code"] == "FORBIDDEN", res.text
 
 
-@pytest.mark.xfail(
-    reason=(
-        "KNOWN BUG: order items persist lab_id as the submitted CODE ('LAB-A') but "
-        "the approval lab-gate compares against the supervisor's lab UUID, so a "
-        "LAB-A supervisor cannot approve a LAB-A order. This xfail documents the "
-        "INTENDED behaviour (a same-lab supervisor SHOULD be able to approve); it "
-        "will XPASS and flag the moment the lab-id mismatch is fixed."
-    ),
-    strict=True,
-)
 async def test_lab_supervisor_can_approve_own_lab_order(
     plant_user_client: AsyncClient,
     supervisor_a_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
+    """A LAB-A supervisor can approve a LAB-A order: order items persist ``lab_id``
+    as the canonical ``Lab.id`` UUID (normalized at creation), so the approval
+    lab-gate — which compares against the supervisor's lab UUID — matches."""
     order_id = await _create_order(plant_user_client, db_session, _uid("SUP-APPROVE"))
     await plant_user_client.post(f"/api/orders/{order_id}/actions", json={"action": "submit"})
 
@@ -582,37 +574,41 @@ async def test_create_order_unauthenticated_is_401(client: AsyncClient) -> None:
     assert res.json()["error"]["code"] == "UNAUTHORIZED", res.text
 
 
-async def test_get_one_order_is_not_auth_gated(
+async def test_get_one_order_requires_auth(
     plant_user_client: AsyncClient,
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """KNOWN BUG, locked in: ``GET /api/orders/{order_id}`` has NO
-    ``Depends(get_current_user)`` (only ``get_order_history`` and this route omit
-    it; every OTHER orders route is auth-gated). So an UNAUTHENTICATED client can
-    read any order by integer id — it returns 200, not 401. We assert the actual
-    behaviour so a future addition of the auth dependency flips this test and is
-    reviewed deliberately. Contrast ``test_list_orders_unauthenticated_is_401``,
-    which IS gated."""
+    """``GET /api/orders/{order_id}`` is auth-gated like every other orders route:
+    an UNAUTHENTICATED client gets 401 / UNAUTHORIZED. The authenticated happy path
+    is covered below. Contrast ``test_list_orders_unauthenticated_is_401``."""
     order_id = await _create_order(plant_user_client, db_session, _uid("NOAUTH-GET"))
 
     res = await client.get(f"/api/orders/{order_id}")
-    assert res.status_code == 200, res.text
-    assert res.json()["data"]["id"] == order_id
+    assert res.status_code == 401, res.text
+    assert res.json()["error"]["code"] == "UNAUTHORIZED", res.text
+
+    auth_res = await plant_user_client.get(f"/api/orders/{order_id}")
+    assert auth_res.status_code == 200, auth_res.text
+    assert auth_res.json()["data"]["id"] == order_id
 
 
-async def test_get_order_history_is_not_auth_gated(
+async def test_get_order_history_requires_auth(
     plant_user_client: AsyncClient,
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """Same missing-auth gap as the get-one route: ``GET /api/orders/{id}/history``
-    omits ``Depends(get_current_user)``, so an unauthenticated client reads it."""
+    """``GET /api/orders/{id}/history`` is auth-gated: an unauthenticated client
+    gets 401 / UNAUTHORIZED, while an authenticated caller reads the history."""
     order_id = await _create_order(plant_user_client, db_session, _uid("NOAUTH-HIST"))
 
     res = await client.get(f"/api/orders/{order_id}/history")
-    assert res.status_code == 200, res.text
-    assert res.json()["data"][0]["action"] == "create"
+    assert res.status_code == 401, res.text
+    assert res.json()["error"]["code"] == "UNAUTHORIZED", res.text
+
+    auth_res = await plant_user_client.get(f"/api/orders/{order_id}/history")
+    assert auth_res.status_code == 200, auth_res.text
+    assert auth_res.json()["data"][0]["action"] == "create"
 
 
 async def test_engineer_cannot_create_order_is_403(

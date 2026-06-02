@@ -42,3 +42,6 @@ class RecipeRepository:
 
     async def commit(self) -> None:
         await self._session.commit()
+
+    async def refresh(self, recipe: Recipe) -> None:
+        await self._session.refresh(recipe)

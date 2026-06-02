@@ -90,4 +90,8 @@ class RecipeService:
         recipe.parameters = dict(payload.parameters)
         recipe.updated_by = payload.updated_by
         await self._repo.commit()
+        # ``updated_at`` is a server-side onupdate column the DB regenerated on this
+        # UPDATE, so it is expired post-commit; refresh before serializing to avoid a
+        # lazy load on the async session (MissingGreenlet).
+        await self._repo.refresh(recipe)
         return recipe_dict(recipe)

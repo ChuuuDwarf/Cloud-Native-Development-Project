@@ -53,7 +53,6 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,18 +79,11 @@ async def _make_source_wip(
     """Arrange a WIP + WipExecution in a report-eligible state (waiting_confirm or
     completed), so ``create_report`` clears its source-state gate. Returns wip_no.
 
-    NOTE on ``raw_data_url``: we set it by DEFAULT so the created Report gets a
-    ``ReportAttachment`` appended in ``create_report``. That is a WORKAROUND for a
-    real bug (pinned separately in ``test_create_report_no_attachment_is_500``):
-    ``create_report`` returns ``report_dict(rpt)`` right after ``commit()``, and
-    the serializer lazy-accesses ``rpt.attachments`` / ``rpt.versions``. When NO
-    attachment was appended (i.e. the source exec row had no ``raw_data_url``),
-    the empty ``attachments`` collection is unloaded post-commit and the lazy
-    load raises ``MissingGreenlet`` on the async session -> 500. Giving the source
-    WIP a ``raw_data_url`` forces an attachment to be appended (so that collection
-    is in-memory/loaded), letting the create response serialize. This lets the
-    downstream machine tests (which need a real created report) run against the
-    other routes, which all eager-load via ``repo.get_report`` and are unaffected.
+    ``raw_data_url`` defaults to a value so the created Report gets a
+    ``ReportAttachment`` appended; pass ``raw_data_url=None`` to exercise the
+    no-attachment path (see ``test_create_report_no_attachment_succeeds``).
+    ``create_report`` re-fetches via the eager-loading repo path before serializing,
+    so both paths serialize without a post-commit lazy load on the async session.
     """
     wip_no = _uid("WIP")
     order_no = _uid("ORD")
@@ -241,29 +233,20 @@ async def test_create_report_with_submit_goes_pending_review(
     assert res.json()["data"]["status"] == "待審核"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "KNOWN BUG: ReportService.create_report returns report_dict(rpt) right after "
-        "commit(); the serializer lazy-accesses rpt.attachments. When the source WIP's "
-        "exec row has NO raw_data_url, no ReportAttachment is appended, so the empty "
-        "attachments collection is unloaded after commit and the lazy load raises "
-        "MissingGreenlet on the async session -> 500 DATABASE_ERROR. The report IS "
-        "persisted (a follow-up GET succeeds via the eager-loaded repo path); only the "
-        "create RESPONSE serialization 500s. INTENDED behaviour: create returns 200. "
-        "This strict xfail XPASSes the moment create_report eager-loads/refreshes the "
-        "relationships (or the serializer stops touching unloaded collections)."
-    ),
-    strict=True,
-)
-async def test_create_report_no_attachment_is_500(
+async def test_create_report_no_attachment_succeeds(
     engineer_a_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """Regression anchor for the create-response lazy-load bug. We assert the
-    INTENDED 200; today it returns 500, so this xfails (strict)."""
+    """Creating a report from a WIP with NO ``raw_data_url`` (so no ReportAttachment
+    is appended) returns 200. ``create_report`` re-fetches via the eager-loading repo
+    path before serializing, so the empty ``attachments`` collection is loaded and no
+    post-commit lazy load fires on the async session."""
     wip_no = await _make_source_wip(db_session, raw_data_url=None)
     res = await engineer_a_client.post("/api/reports", json={"wipId": wip_no})
     assert res.status_code == 200, res.text
+    body = res.json()["data"]
+    assert body["wipId"] == wip_no
+    assert body["attachments"] == []
 
 
 async def test_create_report_wip_not_ready_is_409(
