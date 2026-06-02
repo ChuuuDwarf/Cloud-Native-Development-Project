@@ -16,22 +16,22 @@ configMapGenerator:
   behavior: merge
   literals:
   - CORS_ORIGINS=https://staging.34.80.119.4.nip.io
-  # Enable the TAS MQTT listener in staging. TAS_SN_KEY must also be set
-  # here (customer key for `phone-conn/calloutResult/<key>`) — left blank
-  # for now; populate before the listener can subscribe.
-  # TODO(devops): set TAS_SN_KEY=<customer-key> once issued.
+  # Enable the TAS MQTT listener in staging. The actual TAS_SN_KEY
+  # (customer key for `phone-conn/calloutResult/<key>`) is treated as a
+  # secret and lives in `lims-secrets` — set it via the lims-set-secrets
+  # interactive script. envFrom precedence: secret beats this configmap,
+  # so we don't need a placeholder here.
   - TAS_ENABLED=true
-  - TAS_SN_KEY=
 
 # Staging deploys on the same VM/IP as prod, distinguished by the nip.io
 # subdomain `staging.<IP>.nip.io`. CD points these at the -rc image tags.
 images:
 - name: lims-backend
   newName: asia-east1-docker.pkg.dev/lims-497613/lims/backend
-  newTag: v0.2.2-rc1
+  newTag: v0.3.1-rc1
 - name: lims-frontend
   newName: asia-east1-docker.pkg.dev/lims-497613/lims/frontend
-  newTag: v0.2.2-rc1
+  newTag: v0.3.1-rc1
 
 # Fewer replicas in staging to leave room on the single VM.
   # Host-based TLS for staging. REPLACE_IP filled with the VM static IP in

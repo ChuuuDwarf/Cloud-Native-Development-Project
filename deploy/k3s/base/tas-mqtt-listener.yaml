@@ -59,6 +59,14 @@ spec:
                 secretKeyRef:
                   name: lims-secrets
                   key: CHT_SERVICE_NUMBER
+            # SN key for MQTT topic phone-conn/calloutResult/<key>. Stored in
+            # `lims-secrets` (treated as confidential customer key), set via
+            # the lims-set-secrets interactive script.
+            - name: TAS_SN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lims-secrets
+                  key: TAS_SN_KEY
           # No probes: listener has no HTTP surface, and when TAS_ENABLED=false
           # it exits 0 immediately (a `pgrep python` probe would flap). The
           # Deployment's `restartPolicy: Always` is the only liveness we want —
