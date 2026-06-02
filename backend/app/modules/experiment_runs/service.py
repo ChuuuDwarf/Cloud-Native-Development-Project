@@ -43,6 +43,7 @@ def _log_safe(value: object) -> str:
     """
     return str(value).replace("\r", "\\r").replace("\n", "\\n")
 
+
 # WIP 已結束（fine-grained exec_status，英文）
 ENDED_EXEC = {WipStatus.COMPLETED.value, WipStatus.TERMINATED.value}
 # 進入「待結果確認」的判定集合
