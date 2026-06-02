@@ -109,7 +109,7 @@ function buildRows(
   return merged.slice(0, MAX_ROWS);
 }
 
-function SeverityBadge({ severity }: { severity: string }) {
+function SeverityBadge({ severity }: Readonly<{ severity: string }>) {
   const color = SEVERITY_COLOR[severity] ?? "var(--text3)";
   return (
     <span
@@ -140,7 +140,7 @@ export interface AlertsPanelProps {
 export default function AlertsPanel({
   unackHighCriticalIssues,
   recentEscalations,
-}: AlertsPanelProps) {
+}: Readonly<AlertsPanelProps>) {
   const rows = buildRows(unackHighCriticalIssues, recentEscalations);
 
   return (

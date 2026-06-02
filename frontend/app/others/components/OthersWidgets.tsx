@@ -12,11 +12,11 @@ export function SimpleTable({
   title,
   headers,
   rows,
-}: {
+}: Readonly<{
   title?: string;
   headers: string[];
   rows: Array<Array<string | number | null | undefined>>;
-}) {
+}>) {
   return (
     <div style={{ marginTop: 14 }}>
       {title && <div style={tableTitleStyle}>{title}</div>}

@@ -16,12 +16,12 @@ function ClosureAction({
   canOperate,
   offline,
   run,
-}: {
+}: Readonly<{
   c: ClosureCheck;
   canOperate: boolean;
   offline: boolean;
   run: RunFn;
-}) {
+}>) {
   if (c.status === "已結案") {
     return <span style={{ fontSize: 10, color: "var(--text3)" }}>已結案</span>;
   }
@@ -70,13 +70,13 @@ export default function ClosureTable({
   offline,
   onDetail,
   run,
-}: {
+}: Readonly<{
   rows: ClosureCheck[];
   canOperate: boolean;
   offline: boolean;
   onDetail: (c: ClosureCheck) => void;
   run: RunFn;
-}) {
+}>) {
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>

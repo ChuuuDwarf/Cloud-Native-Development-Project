@@ -46,7 +46,7 @@ export default function EditUserModal({
   departments,
   onClose,
   onSaved,
-}: EditUserModalProps) {
+}: Readonly<EditUserModalProps>) {
   const initial = buildInitialState(user);
   const [form, setForm] = useState<EditFormState>(initial);
   const [error, setError] = useState<string | null>(null);
@@ -304,7 +304,7 @@ export default function EditUserModal({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span style={{ fontSize: 11, color: "var(--text2)" }}>{label}</span>

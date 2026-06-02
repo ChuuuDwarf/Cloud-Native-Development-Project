@@ -9,11 +9,11 @@ export function HistoryTimeline({
   history,
   usersById,
   currentUser,
-}: {
+}: Readonly<{
   history: OrderHistory[];
   usersById: UserNameLookup;
   currentUser: { id: string; name: string };
-}) {
+}>) {
   if (history.length === 0) return <div style={emptyStyle}>目前沒有流程歷程資料</div>;
 
   return (

@@ -2,11 +2,11 @@ import type { OrderStatus, PriorityLevel } from "../types";
 import { statusLabel } from "../lib/labels";
 import { priorityBadgeStyle, statusBadgeStyle } from "../styles";
 
-export function StatusBadge({ status }: { status: OrderStatus }) {
+export function StatusBadge({ status }: Readonly<{ status: OrderStatus }>) {
   return <span style={statusBadgeStyle}>{statusLabel[status] || status}</span>;
 }
 
-export function PriorityBadge({ priority }: { priority: PriorityLevel }) {
+export function PriorityBadge({ priority }: Readonly<{ priority: PriorityLevel }>) {
   if (priority === "normal") return null;
 
   return (

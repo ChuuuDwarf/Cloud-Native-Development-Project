@@ -1,4 +1,4 @@
-export function InfoGrid({ rows }: { rows: [string, string][] }) {
+export function InfoGrid({ rows }: Readonly<{ rows: [string, string][] }>) {
   return (
     <div
       style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "8px 12px", fontSize: 13 }}

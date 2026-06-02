@@ -45,6 +45,12 @@ export function displayExperimentName(
   );
 }
 
+export function displayScopeTypeLabel(scopeType: string): string {
+  if (scopeType === "user") return "個人";
+  if (scopeType === "department") return "部門";
+  return scopeType;
+}
+
 export function displayScopeName(
   masterData: LookupMasterData,
   usersById: UserNameLookup,

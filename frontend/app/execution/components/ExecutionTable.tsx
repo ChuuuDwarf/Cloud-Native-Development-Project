@@ -19,7 +19,7 @@ type ActionProps = {
   flashError: (text: string) => void;
 };
 
-function RowActions({ w, canOperate, isChief, offline, open, run, flashError }: ActionProps) {
+function RowActions({ w, canOperate, isChief, offline, open, run, flashError }: Readonly<ActionProps>) {
   const disabled = offline;
 
   function promptProgress(wip: Wip) {
@@ -120,7 +120,7 @@ export default function ExecutionTable({
   open,
   run,
   flashError,
-}: {
+}: Readonly<{
   wips: Wip[];
   canOperate: boolean;
   isChief: boolean;
@@ -128,7 +128,7 @@ export default function ExecutionTable({
   open: OpenFn;
   run: RunFn;
   flashError: (text: string) => void;
-}) {
+}>) {
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>

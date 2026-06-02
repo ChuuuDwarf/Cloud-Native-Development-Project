@@ -7,7 +7,7 @@ import type { Report } from "../types";
 import { downloadReport } from "../lib/download";
 import { blockStyle, blockLabelStyle } from "../styles";
 
-function Block({ label, v }: { label: string; v: string }) {
+function Block({ label, v }: Readonly<{ label: string; v: string }>) {
   return (
     <div style={blockStyle}>
       <div style={blockLabelStyle}>{label}</div>
@@ -20,11 +20,11 @@ export default function ReportDetailModal({
   r,
   onClose,
   onSaveTemplate,
-}: {
+}: Readonly<{
   r: Report;
   onClose: () => void;
   onSaveTemplate: (r: Report) => void;
-}) {
+}>) {
   const experimentData = r.experimentData ?? {};
   return (
     <Modal

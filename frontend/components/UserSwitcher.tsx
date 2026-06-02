@@ -29,7 +29,7 @@ function userScopeLabel(user?: AppUser) {
   return user.role === "實驗室大主管" || user.role === "系統管理者" ? "全 LAB" : user.department;
 }
 
-export default function UserSwitcher({ onChange }: { onChange?: (user: AppUser) => void }) {
+export default function UserSwitcher({ onChange }: Readonly<{ onChange?: (user: AppUser) => void }>) {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [currentUserId, setCurrentUserId] = useState(getCurrentUserId);
 

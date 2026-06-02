@@ -31,13 +31,13 @@ const TILE_LABELS: Record<keyof KpiBarData, { label: string; drillTo: string }> 
   open_critical_high_issues: { label: "告警", drillTo: "/issues" },
 };
 
-function Arrow({ delta }: { delta: number }) {
+function Arrow({ delta }: Readonly<{ delta: number }>) {
   if (delta > 0) return <span style={{ color: "#3fb950" }}>↑{delta}</span>;
   if (delta < 0) return <span style={{ color: "var(--red)" }}>↓{Math.abs(delta)}</span>;
   return <span style={{ color: "var(--text3)" }}>→</span>;
 }
 
-function TileSparkline({ series, color }: { series: number[] | null; color: string }) {
+function TileSparkline({ series, color }: Readonly<{ series: number[] | null; color: string }>) {
   // Skip render when no history is available or every bucket is zero.
   if (series == null || series.every((v) => v === 0)) return null;
   const data = series.map((v) => ({ v }));
@@ -72,7 +72,7 @@ function TileSparkline({ series, color }: { series: number[] | null; color: stri
   );
 }
 
-function Tile({ card, label, onClick }: { card: KpiCardData; label: string; onClick: () => void }) {
+function Tile({ card, label, onClick }: Readonly<{ card: KpiCardData; label: string; onClick: () => void }>) {
   const color = COLOR_BY_THRESHOLD[card.threshold_color] || "var(--text1)";
   const sparklineColor = SPARKLINE_COLOR_BY_THRESHOLD[card.threshold_color] || color;
   return (
@@ -115,7 +115,7 @@ function Tile({ card, label, onClick }: { card: KpiCardData; label: string; onCl
   );
 }
 
-export default function KpiBar({ data }: { data: KpiBarData }) {
+export default function KpiBar({ data }: Readonly<{ data: KpiBarData }>) {
   const handle = (path: string) => () => {
     window.location.href = path;
   };

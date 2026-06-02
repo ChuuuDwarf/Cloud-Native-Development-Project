@@ -1068,13 +1068,14 @@ export default function SampleTransferPage() {
             <span style={countBadgeStyle}>{sameLabNextCandidates.length} 筆</span>
           </div>
 
-          {loading ? (
-            <div style={emptyStyle}>載入中...</div>
-          ) : isResolvingTransferNextDestination ? (
+          {loading && <div style={emptyStyle}>載入中...</div>}
+          {!loading && isResolvingTransferNextDestination && (
             <div style={emptyStyle}>更新作業狀態中...</div>
-          ) : sameLabNextCandidates.length === 0 ? (
+          )}
+          {!loading && !isResolvingTransferNextDestination && sameLabNextCandidates.length === 0 && (
             <div style={emptyStyle}>目前沒有待續行實驗的樣品。</div>
-          ) : (
+          )}
+          {!loading && !isResolvingTransferNextDestination && sameLabNextCandidates.length > 0 && (
             <div style={candidateListStyle}>
               {sameLabNextCandidates.map((candidate) => {
                 const key = `same-lab-${candidate.sample.id}-${candidate.nextWip?.id ?? candidate.nextExperiment.experiment_item}`;
@@ -1119,17 +1120,18 @@ export default function SampleTransferPage() {
             <span style={countBadgeStyle}>{transferCandidates.length} 筆</span>
           </div>
 
-          {loading ? (
-            <div style={emptyStyle}>載入中...</div>
-          ) : isResolvingTransferNextDestination ? (
+          {loading && <div style={emptyStyle}>載入中...</div>}
+          {!loading && isResolvingTransferNextDestination && (
             <div style={emptyStyle}>取得下一個交付地點中...</div>
-          ) : transferCandidates.length === 0 ? (
+          )}
+          {!loading && !isResolvingTransferNextDestination && transferCandidates.length === 0 && (
             <div style={emptyStyle}>
               {transferNextDestinationErrors.length > 0
                 ? transferNextDestinationErrors[0]
                 : "目前沒有可交接的樣品。"}
             </div>
-          ) : (
+          )}
+          {!loading && !isResolvingTransferNextDestination && transferCandidates.length > 0 && (
             <div style={candidateListStyle}>
               {transferCandidates.map((candidate) => {
                 const candidateKey = getCandidateKey(candidate);
@@ -1195,11 +1197,11 @@ export default function SampleTransferPage() {
             <span style={countBadgeStyle}>{returnCandidates.length} 筆</span>
           </div>
 
-          {loading ? (
-            <div style={emptyStyle}>載入中...</div>
-          ) : returnCandidates.length === 0 ? (
+          {loading && <div style={emptyStyle}>載入中...</div>}
+          {!loading && returnCandidates.length === 0 && (
             <div style={emptyStyle}>目前沒有待通知取件的樣品。</div>
-          ) : (
+          )}
+          {!loading && returnCandidates.length > 0 && (
             <div style={candidateListStyle}>
               {returnCandidates.map((candidate) => {
                 const candidateKey = getCandidateKey(candidate);
@@ -1253,11 +1255,11 @@ export default function SampleTransferPage() {
             <span style={countBadgeStyle}>{pickupCandidates.length} 筆</span>
           </div>
 
-          {loading ? (
-            <div style={emptyStyle}>載入中...</div>
-          ) : pickupCandidates.length === 0 ? (
+          {loading && <div style={emptyStyle}>載入中...</div>}
+          {!loading && pickupCandidates.length === 0 && (
             <div style={emptyStyle}>目前沒有待取件的樣品。</div>
-          ) : (
+          )}
+          {!loading && pickupCandidates.length > 0 && (
             <div style={candidateListStyle}>
               {pickupCandidates.map((candidate) => {
                 const candidateKey = getCandidateKey(candidate);
@@ -1312,24 +1314,30 @@ export default function SampleTransferPage() {
           </div>
         </div>
 
-        {!selectedCandidate ? (
-          <div style={emptyStyle}>請先選擇上方任一樣品。</div>
-        ) : selectedCandidate.kind === "transfer" ? (
-          <TransferDetail
-            candidate={selectedCandidate}
-            currentLab={currentLab}
-            submitting={submitting}
-            onCreateTransfer={createTransfer}
-            onSendTransfer={sendTransfer}
-            onCancelTransfer={cancelTransfer}
-          />
-        ) : (
-          <ReturnDetail
-            candidate={selectedCandidate}
-            submitting={submitting}
-            onNotifyPickup={notifyPickup}
-          />
-        )}
+        {(() => {
+          if (!selectedCandidate) {
+            return <div style={emptyStyle}>請先選擇上方任一樣品。</div>;
+          }
+          if (selectedCandidate.kind === "transfer") {
+            return (
+              <TransferDetail
+                candidate={selectedCandidate}
+                currentLab={currentLab}
+                submitting={submitting}
+                onCreateTransfer={createTransfer}
+                onSendTransfer={sendTransfer}
+                onCancelTransfer={cancelTransfer}
+              />
+            );
+          }
+          return (
+            <ReturnDetail
+              candidate={selectedCandidate}
+              submitting={submitting}
+              onNotifyPickup={notifyPickup}
+            />
+          );
+        })()}
       </section>
 
       <section style={panelStyle}>

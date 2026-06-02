@@ -43,7 +43,7 @@ import {
   modalNoticeStyle,
 } from "../styles";
 
-function ExperimentRequirementLines({ value }: { value: string | null | undefined }) {
+function ExperimentRequirementLines({ value }: Readonly<{ value: string | null | undefined }>) {
   const displayText = formatExperimentSummary(value);
 
   if (displayText === "-") return "-";
@@ -71,14 +71,14 @@ export function TransferModal({
   onClose,
   onSendTransfer,
   onCancelTransfer,
-}: {
+}: Readonly<{
   transfer: Transfer;
   currentLab: string;
   submitting: boolean;
   onClose: () => void;
   onSendTransfer: (transfer: Transfer) => void;
   onCancelTransfer: (transfer: Transfer) => void;
-}) {
+}>) {
   return (
     <div style={modalBackdropStyle}>
       <div style={modalCardStyle}>
@@ -168,14 +168,14 @@ export function TransferDetail({
   onCreateTransfer,
   onSendTransfer,
   onCancelTransfer,
-}: {
+}: Readonly<{
   candidate: TransferCandidate;
   currentLab: string;
   submitting: boolean;
   onCreateTransfer: (candidate: TransferCandidate) => void;
   onSendTransfer: (transfer: Transfer) => void;
   onCancelTransfer: (transfer: Transfer) => void;
-}) {
+}>) {
   return (
     <div style={detailBoxStyle}>
       <div style={sectionTitleStyle}>樣品資訊</div>
@@ -307,11 +307,11 @@ export function ReturnDetail({
   candidate,
   submitting,
   onNotifyPickup,
-}: {
+}: Readonly<{
   candidate: ReturnCandidate;
   submitting: boolean;
   onNotifyPickup: (candidate: ReturnCandidate) => void;
-}) {
+}>) {
   const isOutbound = candidate.sample.status === "outbound";
 
   return (
@@ -391,7 +391,7 @@ export function ReturnDetail({
   );
 }
 
-export function SummaryCard({ label, value }: { label: string; value: number }) {
+export function SummaryCard({ label, value }: Readonly<{ label: string; value: number }>) {
   return (
     <div style={summaryCardStyle}>
       <div style={summaryValueStyle}>{value}</div>
@@ -400,7 +400,7 @@ export function SummaryCard({ label, value }: { label: string; value: number }) 
   );
 }
 
-export function InfoLine({ label, value }: { label: string; value: string }) {
+export function InfoLine({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div>
       <div style={infoLineLabelStyle}>{label}</div>
@@ -413,11 +413,11 @@ export function InfoBlock({
   label,
   value,
   style,
-}: {
+}: Readonly<{
   label: string;
   value: ReactNode | null | undefined;
   style?: CSSProperties;
-}) {
+}>) {
   return (
     <div style={{ ...infoBlockStyle, ...style }}>
       <div style={infoBlockLabelStyle}>{label}</div>
@@ -426,7 +426,7 @@ export function InfoBlock({
   );
 }
 
-export function WipCard({ wip }: { wip: Wip }) {
+export function WipCard({ wip }: Readonly<{ wip: Wip }>) {
   return (
     <div style={wipCardStyle}>
       <div>
@@ -448,10 +448,10 @@ export function WipCard({ wip }: { wip: Wip }) {
 export function StatusBadge({
   status,
   type = "transfer",
-}: {
+}: Readonly<{
   status: string;
   type?: "transfer" | "wip" | "sample";
-}) {
+}>) {
   let text = status;
 
   if (type === "wip") {

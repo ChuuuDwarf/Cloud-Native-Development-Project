@@ -27,11 +27,11 @@ export default function DispatchTable({
   dispatches,
   activeDispatchId,
   onSelect,
-}: {
+}: Readonly<{
   dispatches: Dispatch[];
   activeDispatchId: string;
   onSelect: (dispatchId: string) => void;
-}) {
+}>) {
   return (
     <Panel title="待排程 / 待排程清單" tag={`${dispatches.length} 筆`}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>

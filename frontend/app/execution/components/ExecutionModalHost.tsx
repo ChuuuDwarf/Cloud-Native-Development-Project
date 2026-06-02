@@ -12,14 +12,14 @@ export default function ExecutionModalHost({
   recipes,
   run,
   onClose,
-}: {
+}: Readonly<{
   modal: ModalKind;
   target: Wip | null;
   machines: Machine[];
   recipes: Recipe[];
   run: RunFn;
   onClose: () => void;
-}) {
+}>) {
   if (!target) return null;
   if (modal === "checkin")
     return (

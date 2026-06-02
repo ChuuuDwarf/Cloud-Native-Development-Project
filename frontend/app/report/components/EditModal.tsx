@@ -9,11 +9,11 @@ export default function EditModal({
   r,
   run,
   onClose,
-}: {
+}: Readonly<{
   r: Report;
   run: RunFn;
   onClose: () => void;
-}) {
+}>) {
   const [summary, setSummary] = useState(r.summary);
   const [conclusion, setConclusion] = useState(r.conclusion);
   const [attachmentName, setAttachmentName] = useState("");

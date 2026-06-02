@@ -1,7 +1,10 @@
 """Tests for /api/issues CRUD + lab scope."""
 
+from uuid import UUID
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # ---------------------------------------------------------------------------
 # Auth gating — these must pass before any happy-path test makes sense.
@@ -334,3 +337,121 @@ async def test_engineer_b_cannot_patch_lab_a_issue(
         json={"title": "hacked"},
     )
     assert response.status_code == 404  # 不是 403，避免存在性洩漏
+
+
+# ---------------------------------------------------------------------------
+# Acknowledgements — who has read a notification about this issue.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_acknowledgements_lists_users_who_read_issue_notification(
+    engineer_a_client: AsyncClient,
+    admin_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """After a recipient marks an issue notification read, the issue's
+    acknowledgements endpoint reports them (user + channel + read_at)."""
+    from app.common.enums import NotificationChannel
+    from app.services.notifications import NotificationService
+
+    md = (await admin_client.get("/api/master-data")).json()["data"]
+    lab_a_id = next(lab["id"] for lab in md["labs"] if lab["code"] == "LAB-A")
+    eng_a_id = UUID((await engineer_a_client.get("/api/me")).json()["data"]["id"])
+
+    created = (
+        await engineer_a_client.post(
+            "/api/issues",
+            json={
+                "type": "warning",
+                "targetType": "machine",
+                "targetId": "M-ACK",
+                "labId": lab_a_id,
+                "title": "ack-list issue",
+            },
+        )
+    ).json()["data"]
+    issue_id = created["id"]
+
+    # Seed a notification for engineer A pointing at the issue, then mark read.
+    service = NotificationService(db_session)
+    rows = await service.notify(
+        recipient_ids=[eng_a_id],
+        lab_id=UUID(lab_a_id),
+        source_type="issue",
+        source_id=str(issue_id),
+        title="alert",
+        channels=[NotificationChannel.IN_APP],
+    )
+    await service.mark_read([rows[0].id], _FakeUser(eng_a_id))
+
+    resp = await engineer_a_client.get(f"/api/issues/{issue_id}/acknowledgements")
+    assert resp.status_code == 200, resp.text
+    acks = resp.json()["data"]
+    assert any(a["userId"] == str(eng_a_id) for a in acks)
+    mine = next(a for a in acks if a["userId"] == str(eng_a_id))
+    assert mine["channel"] == NotificationChannel.IN_APP.value
+    assert mine["readAt"] is not None
+
+
+@pytest.mark.asyncio
+async def test_acknowledgements_empty_when_no_reads(
+    engineer_a_client: AsyncClient,
+    admin_client: AsyncClient,
+) -> None:
+    """A fresh issue nobody has acknowledged yet returns an empty list."""
+    md = (await admin_client.get("/api/master-data")).json()["data"]
+    lab_a_id = next(lab["id"] for lab in md["labs"] if lab["code"] == "LAB-A")
+
+    created = (
+        await engineer_a_client.post(
+            "/api/issues",
+            json={
+                "type": "warning",
+                "targetType": "machine",
+                "targetId": "M-NOACK",
+                "labId": lab_a_id,
+                "title": "no-ack issue",
+            },
+        )
+    ).json()["data"]
+
+    resp = await engineer_a_client.get(f"/api/issues/{created['id']}/acknowledgements")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == []
+
+
+@pytest.mark.asyncio
+async def test_acknowledgements_out_of_scope_is_404(
+    engineer_a_client: AsyncClient,
+    engineer_b_client: AsyncClient,
+    admin_client: AsyncClient,
+) -> None:
+    """A LAB-B engineer asking for a LAB-A issue's acknowledgements gets 404
+    (the get_issue scope filter applies first)."""
+    md = (await admin_client.get("/api/master-data")).json()["data"]
+    lab_a_id = next(lab["id"] for lab in md["labs"] if lab["code"] == "LAB-A")
+
+    created = (
+        await engineer_a_client.post(
+            "/api/issues",
+            json={
+                "type": "warning",
+                "targetType": "machine",
+                "targetId": "M-SCOPE-ACK",
+                "labId": lab_a_id,
+                "title": "scope-ack issue",
+            },
+        )
+    ).json()["data"]
+
+    resp = await engineer_b_client.get(f"/api/issues/{created['id']}/acknowledgements")
+    assert resp.status_code == 404
+
+
+class _FakeUser:
+    """Minimal CurrentUser stand-in for NotificationService.mark_read — it only
+    reads ``.id`` (to scope the UPDATE to this recipient's rows)."""
+
+    def __init__(self, user_id: UUID) -> None:
+        self.id = user_id

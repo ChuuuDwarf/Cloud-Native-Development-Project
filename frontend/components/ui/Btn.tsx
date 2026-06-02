@@ -35,14 +35,14 @@ export default function Btn({
   small,
   disabled,
   title,
-}: {
+}: Readonly<{
   children: ReactNode;
   onClick?: () => void;
   variant?: Variant;
   small?: boolean;
   disabled?: boolean;
   title?: string;
-}) {
+}>) {
   return (
     <button
       onClick={onClick}

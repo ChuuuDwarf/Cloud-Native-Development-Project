@@ -6,7 +6,7 @@ import type { Recipe } from "@/types/recipes";
 
 const HEADERS = ["Recipe", "實驗項目", "適用機台", "方法", "參數", "更新"];
 
-export default function RecipeTable({ recipes }: { recipes: Recipe[] }) {
+export default function RecipeTable({ recipes }: Readonly<{ recipes: Recipe[] }>) {
   return (
     <Panel title="Recipe 版本清單" tag={`${recipes.length} 筆`}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>

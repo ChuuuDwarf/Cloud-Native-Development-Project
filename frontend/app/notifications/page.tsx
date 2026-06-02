@@ -119,11 +119,11 @@ function NotificationRow({
   notification: n,
   onMarkRead,
   disabled,
-}: {
+}: Readonly<{
   notification: NotificationResponse;
   onMarkRead: () => void;
   disabled: boolean;
-}) {
+}>) {
   const isUnread = n.status === NotificationStatus.Unread;
   return (
     <tr
@@ -153,7 +153,7 @@ function NotificationRow({
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
+function Th({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <th
       style={{
@@ -169,11 +169,11 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Td({ children }: { children: React.ReactNode }) {
+function Td({ children }: Readonly<{ children: React.ReactNode }>) {
   return <td style={{ padding: "12px", fontSize: 13, color: "var(--text)" }}>{children}</td>;
 }
 
-function SeverityChip({ severity }: { severity: Severity }) {
+function SeverityChip({ severity }: Readonly<{ severity: Severity }>) {
   const colors = {
     low: "var(--text3)",
     medium: "var(--blue)",

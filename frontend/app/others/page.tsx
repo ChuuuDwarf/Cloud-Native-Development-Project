@@ -281,26 +281,32 @@ export default function OthersPage() {
                               </span>
                             </td>
                             <td style={tdStyle}>
-                              {order.status === "approved" && !relatedSample ? (
-                                <button
-                                  type="button"
-                                  disabled={saving}
-                                  onClick={() => confirmDelivery(order.id)}
-                                  style={{
-                                    ...primaryButtonStyle,
-                                    opacity: saving ? 0.55 : 1,
-                                    cursor: saving ? "not-allowed" : "pointer",
-                                  }}
-                                >
-                                  確認送樣
-                                </button>
-                              ) : relatedSample ? (
-                                <span style={successMiniTextStyle}>
-                                  已建立樣品 {relatedSample.sample_no}
-                                </span>
-                              ) : (
-                                <span style={mutedStyle}>無可執行動作</span>
-                              )}
+                              {(() => {
+                                if (order.status === "approved" && !relatedSample) {
+                                  return (
+                                    <button
+                                      type="button"
+                                      disabled={saving}
+                                      onClick={() => confirmDelivery(order.id)}
+                                      style={{
+                                        ...primaryButtonStyle,
+                                        opacity: saving ? 0.55 : 1,
+                                        cursor: saving ? "not-allowed" : "pointer",
+                                      }}
+                                    >
+                                      確認送樣
+                                    </button>
+                                  );
+                                }
+                                if (relatedSample) {
+                                  return (
+                                    <span style={successMiniTextStyle}>
+                                      已建立樣品 {relatedSample.sample_no}
+                                    </span>
+                                  );
+                                }
+                                return <span style={mutedStyle}>無可執行動作</span>;
+                              })()}
                             </td>
                           </tr>
                         );

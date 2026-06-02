@@ -11,12 +11,12 @@ export default function CreateModal({
   templates,
   run,
   onClose,
-}: {
+}: Readonly<{
   wips: Wip[];
   templates: ReportTemplate[];
   run: RunFn;
   onClose: () => void;
-}) {
+}>) {
   const [wipId, setWipId] = useState(wips[0]?.wipId ?? "");
   const selectedWip = wips.find((w) => w.wipId === wipId);
   const [templateId, setTemplateId] = useState<number | "">("");

@@ -54,7 +54,7 @@ export function OrderList({
   onEdit,
   onAction,
   onDelete,
-}: {
+}: Readonly<{
   orders: Order[];
   filteredOrders: Order[];
   masterData: MasterData;
@@ -74,7 +74,7 @@ export function OrderList({
   onEdit: (order: Order) => void;
   onAction: (order: Order, action: OrderAction) => void;
   onDelete: (order: Order) => void;
-}) {
+}>) {
   return (
     <Panel title={`委託單列表（${filteredOrders.length} / ${orders.length} 筆）`}>
       <div
@@ -111,11 +111,11 @@ export function OrderList({
         ))}
       </div>
 
-      {loading ? (
-        <div style={emptyStyle}>載入中...</div>
-      ) : filteredOrders.length === 0 ? (
+      {loading && <div style={emptyStyle}>載入中...</div>}
+      {!loading && filteredOrders.length === 0 && (
         <div style={emptyStyle}>目前沒有符合此分類的委託單</div>
-      ) : (
+      )}
+      {!loading && filteredOrders.length > 0 && (
         <div style={{ display: "grid", gap: 12 }}>
           {filteredOrders.map((order) => (
             <div key={order.id} style={orderCardStyle}>
@@ -237,12 +237,12 @@ function DeliveryDestinationPanel({
   loading,
   error,
   onConfirm,
-}: {
+}: Readonly<{
   destinations: DeliveryDestination[];
   loading: boolean;
   error?: string;
   onConfirm: () => void;
-}) {
+}>) {
   return (
     <div
       style={{

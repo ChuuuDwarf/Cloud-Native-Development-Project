@@ -21,7 +21,7 @@ export default function CreateUserModal({
   departments,
   onClose,
   onCreated,
-}: CreateUserModalProps) {
+}: Readonly<CreateUserModalProps>) {
   const [form, setForm] = useState<CreateUserPayload>({
     email: "",
     name: "",
@@ -240,7 +240,7 @@ export default function CreateUserModal({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span style={{ fontSize: 11, color: "var(--text2)" }}>{label}</span>

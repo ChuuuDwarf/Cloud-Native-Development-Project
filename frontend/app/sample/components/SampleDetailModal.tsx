@@ -78,10 +78,10 @@ function formatExecutionAction(action: string) {
 function WipExecutionSummary({
   detail,
   loading,
-}: {
+}: Readonly<{
   detail?: WipExecutionDetail;
   loading: boolean;
-}) {
+}>) {
   if (loading && !detail) {
     return <span style={{ color: "var(--text3)" }}>機台履歷載入中...</span>;
   }
@@ -108,12 +108,12 @@ function WipExecutionHistoryModal({
   detail,
   loading,
   onClose,
-}: {
+}: Readonly<{
   wipNo: string;
   detail?: WipExecutionDetail;
   loading: boolean;
   onClose: () => void;
-}) {
+}>) {
   return (
     <Modal onClose={onClose}>
       <div style={modalHeaderStyle}>
@@ -128,11 +128,11 @@ function WipExecutionHistoryModal({
       </div>
 
       <div style={modalBodyStyle}>
-        {loading && !detail ? (
-          <div style={miniEmptyStyle}>機台履歷載入中...</div>
-        ) : !detail ? (
+        {loading && !detail && <div style={miniEmptyStyle}>機台履歷載入中...</div>}
+        {!(loading && !detail) && !detail && (
           <div style={miniEmptyStyle}>尚無上機 / 下機履歷。</div>
-        ) : (
+        )}
+        {!(loading && !detail) && detail && (
           <>
             <div style={sectionTitleStyle}>執行資訊</div>
 
@@ -255,7 +255,7 @@ export function SampleDetailModal({
   onRunSampleAction,
   onGoToWipPage,
   onGoToTransferPage,
-}: SampleDetailModalProps) {
+}: Readonly<SampleDetailModalProps>) {
   const [historyTargetWipNo, setHistoryTargetWipNo] = useState<string | null>(null);
 
   const currentLab = getUserLab(currentUser);
@@ -518,11 +518,11 @@ export function SampleDetailModal({
 
           <div style={sectionTitleStyle}>樣品歷程紀錄</div>
 
-          {historyLoading ? (
-            <div style={miniEmptyStyle}>歷程載入中...</div>
-          ) : sampleHistories.length === 0 ? (
+          {historyLoading && <div style={miniEmptyStyle}>歷程載入中...</div>}
+          {!historyLoading && sampleHistories.length === 0 && (
             <div style={miniEmptyStyle}>目前尚無可查看的歷程紀錄。</div>
-          ) : (
+          )}
+          {!historyLoading && sampleHistories.length > 0 && (
             <>
               <div style={timelineStyle}>
                 {visibleHistories.map((history) => (

@@ -23,6 +23,22 @@ const emptyMasterData: Pick<MasterData, "departments" | "labs" | "experiments"> 
   experiments: [],
 };
 
+function reasonModalTitle(action: OrderAction): string {
+  if (action === "return") return "填寫退回補件原因";
+  if (action === "reject") return "填寫拒絕原因";
+  return "填寫特批原因";
+}
+
+function reasonModalHint(action: OrderAction, orderNo: string): string {
+  if (action === "return") {
+    return `你正在退回委託單 ${orderNo}，請填寫需要補件或修改的原因。`;
+  }
+  if (action === "reject") {
+    return `你正在拒絕委託單 ${orderNo}，請填寫拒絕原因。`;
+  }
+  return `你正在以特批方式核准委託單 ${orderNo}，請填寫主管特批原因。`;
+}
+
 export function useApprovePage() {
   const { user, hasPermission } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -252,19 +268,8 @@ export function useApprovePage() {
         return;
       }
 
-      const title =
-        action === "return"
-          ? "填寫退回補件原因"
-          : action === "reject"
-            ? "填寫拒絕原因"
-            : "填寫特批原因";
-
-      const hint =
-        action === "return"
-          ? `你正在退回委託單 ${order.orderNo}，請填寫需要補件或修改的原因。`
-          : action === "reject"
-            ? `你正在拒絕委託單 ${order.orderNo}，請填寫拒絕原因。`
-            : `你正在以特批方式核准委託單 ${order.orderNo}，請填寫主管特批原因。`;
+      const title = reasonModalTitle(action);
+      const hint = reasonModalHint(action, order.orderNo);
 
       setReasonModal({
         open: true,

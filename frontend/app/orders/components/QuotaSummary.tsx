@@ -7,7 +7,7 @@ import {
   summaryTitleStyle,
 } from "../styles";
 import type { MasterData, QuotaSetting, UserNameLookup } from "../types";
-import { displayScopeName } from "@/lib/displayNames";
+import { displayScopeName, displayScopeTypeLabel } from "@/lib/displayNames";
 
 export function QuotaSummary({
   quotaSettings,
@@ -15,7 +15,7 @@ export function QuotaSummary({
   usersById,
   currentUser,
   onRefresh,
-}: {
+}: Readonly<{
   quotaSettings: QuotaSetting[];
   masterData: MasterData;
   usersById: UserNameLookup;
@@ -26,7 +26,7 @@ export function QuotaSummary({
     departmentId?: string | null;
   };
   onRefresh: () => void;
-}) {
+}>) {
   const filteredQuotaSettings =
     currentUser.role === "plant_user"
       ? quotaSettings.filter((quota) => {
@@ -82,11 +82,7 @@ export function QuotaSummary({
           {sortedQuotaSettings.map((quota) => (
             <div key={quota.id} style={quotaSummaryItemStyle}>
               <div style={{ fontWeight: 800 }}>
-                {quota.scopeType === "user"
-                  ? "個人"
-                  : quota.scopeType === "department"
-                    ? "部門"
-                    : quota.scopeType}
+                {displayScopeTypeLabel(quota.scopeType)}
                 ：
                 {displayScopeName(
                   masterData,

@@ -7,13 +7,13 @@ export default function Modal({
   onClose,
   children,
   footer,
-}: {
+}: Readonly<{
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
-}) {
+}>) {
   if (!open) return null;
   return (
     <div
@@ -94,7 +94,7 @@ export default function Modal({
 }
 
 // 表單欄位
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
   return (
     <div
       style={{

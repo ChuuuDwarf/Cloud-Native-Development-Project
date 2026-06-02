@@ -54,10 +54,10 @@ export const REPLAN_POLICIES: {
 export default function StrategyBar({
   strategy,
   onReplan,
-}: {
+}: Readonly<{
   strategy: Strategy;
   onReplan: (reason: string, strategy: Strategy) => void;
-}) {
+}>) {
   return (
     <div
       style={{

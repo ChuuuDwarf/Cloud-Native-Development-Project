@@ -15,12 +15,12 @@ export function OrderDetail({
   masterData,
   currentUser,
   usersById,
-}: {
+}: Readonly<{
   order: Order;
   masterData: MasterData;
   currentUser: { id: string; name: string };
   usersById: UserNameLookup;
-}) {
+}>) {
   return (
     <div>
       <div style={infoCardStyle}>

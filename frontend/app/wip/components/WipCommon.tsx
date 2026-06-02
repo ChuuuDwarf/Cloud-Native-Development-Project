@@ -21,14 +21,14 @@ export function CollapsibleSection({
   open,
   onToggle,
   children,
-}: {
+}: Readonly<{
   title: string;
   hint?: string;
   right?: ReactNode;
   open: boolean;
   onToggle: () => void;
   children: ReactNode;
-}) {
+}>) {
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -61,7 +61,7 @@ export function CollapsibleSection({
   );
 }
 
-export function InfoItem({ label, value }: { label: string; value: ReactNode }) {
+export function InfoItem({ label, value }: Readonly<{ label: string; value: ReactNode }>) {
   return (
     <div style={infoItemStyle}>
       <div style={infoLabelStyle}>{label}</div>
@@ -70,7 +70,7 @@ export function InfoItem({ label, value }: { label: string; value: ReactNode }) 
   );
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
   return (
     <label style={fieldStyle}>
       <span style={fieldLabelStyle}>{label}</span>
@@ -79,7 +79,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: Readonly<{ status: string }>) {
   const text = sampleStatusText[status] ?? wipStatusText[status] ?? status;
 
   return <span style={statusBadgeStyle}>{text}</span>;

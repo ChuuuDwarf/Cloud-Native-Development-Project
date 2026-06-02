@@ -45,13 +45,13 @@ export function CheckinModal({
   recipes,
   run,
   onClose,
-}: {
+}: Readonly<{
   w: Wip;
   machines: MachineLite[];
   recipes: RecipeLite[];
   run: RunFn;
   onClose: () => void;
-}) {
+}>) {
   const [operator, setOperator] = useState("");
 
   // 此 WIP 所屬實驗室的人員/主管（操作人下拉）。
@@ -193,7 +193,7 @@ export function CheckinModal({
   );
 }
 
-export function AbortModal({ w, run, onClose }: { w: Wip; run: RunFn; onClose: () => void }) {
+export function AbortModal({ w, run, onClose }: Readonly<{ w: Wip; run: RunFn; onClose: () => void }>) {
   const [reason, setReason] = useState("");
   return (
     <Modal
@@ -230,7 +230,7 @@ export function AbortModal({ w, run, onClose }: { w: Wip; run: RunFn; onClose: (
   );
 }
 
-export function ReviewModal({ w, run, onClose }: { w: Wip; run: RunFn; onClose: () => void }) {
+export function ReviewModal({ w, run, onClose }: Readonly<{ w: Wip; run: RunFn; onClose: () => void }>) {
   const [note, setNote] = useState("");
   return (
     <Modal
@@ -294,7 +294,7 @@ export function ReviewModal({ w, run, onClose }: { w: Wip; run: RunFn; onClose: 
 }
 
 // 量測數據顯示（{實驗項目: {欄位: 值}}）—— 驗證 modal 與機台履歷共用。
-function ExperimentDataBlock({ data }: { data?: Record<string, Record<string, string>> }) {
+function ExperimentDataBlock({ data }: Readonly<{ data?: Record<string, Record<string, string>> }>) {
   const entries = Object.entries(data ?? {});
   if (entries.length === 0) {
     return <div style={{ fontSize: 12, color: "var(--text3)" }}>（此實驗無保存的量測數據）</div>;
@@ -334,7 +334,7 @@ function ExperimentDataBlock({ data }: { data?: Record<string, Record<string, st
   );
 }
 
-export function VerifyModal({ w, run, onClose }: { w: Wip; run: RunFn; onClose: () => void }) {
+export function VerifyModal({ w, run, onClose }: Readonly<{ w: Wip; run: RunFn; onClose: () => void }>) {
   return (
     <Modal
       open
@@ -372,7 +372,7 @@ export function VerifyModal({ w, run, onClose }: { w: Wip; run: RunFn; onClose: 
   );
 }
 
-export function DetailModal({ w, onClose }: { w: Wip; onClose: () => void }) {
+export function DetailModal({ w, onClose }: Readonly<{ w: Wip; onClose: () => void }>) {
   return (
     <Modal open title={`機台履歷 · ${w.wipId}`} onClose={onClose}>
       <div
@@ -489,7 +489,7 @@ export function DetailModal({ w, onClose }: { w: Wip; onClose: () => void }) {
   );
 }
 
-function Info({ label, v }: { label: string; v: string }) {
+function Info({ label, v }: Readonly<{ label: string; v: string }>) {
   return (
     <div>
       <div style={{ fontSize: 10, color: "var(--text3)", fontFamily: "monospace" }}>{label}</div>

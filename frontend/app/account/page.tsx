@@ -175,7 +175,7 @@ function AccountPageContent() {
   );
 }
 
-function Th({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Th({ children, style }: Readonly<{ children: React.ReactNode; style?: React.CSSProperties }>) {
   return (
     <th
       style={{
@@ -198,11 +198,11 @@ function Td({
   children,
   colSpan,
   style,
-}: {
+}: Readonly<{
   children: React.ReactNode;
   colSpan?: number;
   style?: React.CSSProperties;
-}) {
+}>) {
   return (
     <td colSpan={colSpan} style={{ padding: "10px 12px", verticalAlign: "middle", ...style }}>
       {children}

@@ -61,3 +61,8 @@ cookie.txt
 TODO.md
 
 backend/celerybeat-schedule*
+
+# SonarQube scan artifacts (generated, not source)
+scan_results
+backend/pytest-junit.xml
+backend/coverage.xml

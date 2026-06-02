@@ -44,14 +44,14 @@ export default function DispatchForm({
   onSubmit,
   prefill,
   prefillNonce,
-}: {
+}: Readonly<{
   experimentItems: string[];
   submitting: boolean;
   onSubmit: (payload: CreateDispatchPayload) => void;
   // 由「待排程 WIP」挑單帶入；手打仍可直接編輯這些欄位。
   prefill?: Partial<FormState> | null;
   prefillNonce?: number;
-}) {
+}>) {
   const [form, setForm] = useState<FormState>(EMPTY);
 
   // 每次挑單（prefillNonce 變動）就把 WIP 資料填入表單；之後仍可手動編輯。

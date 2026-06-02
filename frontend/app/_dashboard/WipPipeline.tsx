@@ -58,7 +58,7 @@ const STAGES: StageDef[] = [
   },
 ];
 
-function Arrow({ delta }: { delta: number }) {
+function Arrow({ delta }: Readonly<{ delta: number }>) {
   if (delta > 0) return <span style={{ color: "#3fb950" }}>↑{delta}</span>;
   if (delta < 0) return <span style={{ color: "var(--red)" }}>↓{Math.abs(delta)}</span>;
   return <span style={{ color: "var(--text3)" }}>→</span>;
@@ -82,11 +82,11 @@ function PieTooltip({
   active,
   payload,
   total,
-}: {
+}: Readonly<{
   active?: boolean;
   payload?: TooltipPayloadEntry[];
   total: number;
-}) {
+}>) {
   if (!active || !payload || payload.length === 0 || total === 0) return null;
   const datum = payload[0].payload;
   const pct = Math.round((datum.value / total) * 100);
@@ -108,7 +108,7 @@ function PieTooltip({
   );
 }
 
-export default function WipPipeline({ data }: { data: WipPipelineData }) {
+export default function WipPipeline({ data }: Readonly<{ data: WipPipelineData }>) {
   const total = data.total;
 
   // Build pie data: keep every stage so the legend lists 6 rows, but the pie

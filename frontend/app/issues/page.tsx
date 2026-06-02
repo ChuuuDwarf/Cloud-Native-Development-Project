@@ -99,7 +99,7 @@ function IssuePageContent() {
   );
 }
 
-function IssueDetailModal({ issue, onClose }: { issue: IssueResponse; onClose: () => void }) {
+function IssueDetailModal({ issue, onClose }: Readonly<{ issue: IssueResponse; onClose: () => void }>) {
   const {
     data: acks,
     isLoading: acksLoading,
@@ -204,23 +204,28 @@ function IssueDetailModal({ issue, onClose }: { issue: IssueResponse; onClose: (
         <h3 style={{ color: "var(--text)", marginTop: 24, marginBottom: 8, fontSize: 14 }}>
           已確認 ({acks?.length ?? 0})
         </h3>
-        {acksLoading ? (
-          <div style={{ color: "var(--text2)", fontSize: 12 }}>載入中...</div>
-        ) : acksIsError ? (
-          <div style={{ color: "var(--red)", fontSize: 12 }}>
-            載入確認紀錄失敗：{(acksError as Error)?.message ?? "未知錯誤"}
-          </div>
-        ) : acks && acks.length > 0 ? (
-          <AcknowledgementList items={acks} />
-        ) : (
-          <div style={{ color: "var(--text2)", fontSize: 12 }}>尚無人確認此通知。</div>
-        )}
+        {(() => {
+          if (acksLoading) {
+            return <div style={{ color: "var(--text2)", fontSize: 12 }}>載入中...</div>;
+          }
+          if (acksIsError) {
+            return (
+              <div style={{ color: "var(--red)", fontSize: 12 }}>
+                載入確認紀錄失敗：{(acksError as Error)?.message ?? "未知錯誤"}
+              </div>
+            );
+          }
+          if (acks && acks.length > 0) {
+            return <AcknowledgementList items={acks} />;
+          }
+          return <div style={{ color: "var(--text2)", fontSize: 12 }}>尚無人確認此通知。</div>;
+        })()}
       </div>
     </div>
   );
 }
 
-function AcknowledgementList({ items }: { items: IssueAcknowledgement[] }) {
+function AcknowledgementList({ items }: Readonly<{ items: IssueAcknowledgement[] }>) {
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
       <thead>
@@ -253,7 +258,7 @@ function AcknowledgementList({ items }: { items: IssueAcknowledgement[] }) {
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
+function Th({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <th
       style={{
@@ -269,19 +274,19 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Td({ children }: { children: React.ReactNode }) {
+function Td({ children }: Readonly<{ children: React.ReactNode }>) {
   return <td style={{ padding: "12px", fontSize: 13, color: "var(--text)" }}>{children}</td>;
 }
 
-function Label({ children }: { children: React.ReactNode }) {
+function Label({ children }: Readonly<{ children: React.ReactNode }>) {
   return <div style={{ color: "var(--text3)", padding: "4px 0" }}>{children}</div>;
 }
 
-function Value({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Value({ children, style }: Readonly<{ children: React.ReactNode; style?: React.CSSProperties }>) {
   return <div style={{ color: "var(--text)", padding: "4px 0", ...style }}>{children}</div>;
 }
 
-function SeverityChip({ severity }: { severity: Severity }) {
+function SeverityChip({ severity }: Readonly<{ severity: Severity }>) {
   const colors = {
     low: "var(--text3)",
     medium: "var(--blue)",

@@ -27,7 +27,7 @@ type Props = {
   onClose: () => void;
 };
 
-export default function SimulateIssueModal({ machines, onClose }: Props) {
+export default function SimulateIssueModal({ machines, onClose }: Readonly<Props>) {
   const queryClient = useQueryClient();
   const [machineId, setMachineId] = useState<string>(machines[0]?.machineId ?? "");
   const [severity, setSeverity] = useState<Severity>("high");
@@ -182,7 +182,7 @@ export default function SimulateIssueModal({ machines, onClose }: Props) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
     <div style={{ marginBottom: 10 }}>
       <div

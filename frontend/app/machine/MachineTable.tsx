@@ -24,14 +24,14 @@ export default function MachineTable({
   applying,
   onEdit,
   onApplyStatus,
-}: {
+}: Readonly<{
   machines: Machine[];
   /** Label of the status that the "套用狀態" button will apply. */
   applyLabel: string;
   applying: boolean;
   onEdit: (machine: Machine) => void;
   onApplyStatus: (machineId: string) => void;
-}) {
+}>) {
   return (
     <Panel title="機台清單" tag={`${machines.length} 筆`}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>

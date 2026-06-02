@@ -9,11 +9,11 @@ export function ReasonModal({
   state,
   setState,
   onSubmit,
-}: {
+}: Readonly<{
   state: Extract<ReasonModalState, { open: true }>;
   setState: Dispatch<SetStateAction<ReasonModalState>>;
   onSubmit: () => void;
-}) {
+}>) {
   return (
     <Modal title={state.title} onClose={() => setState({ open: false })} narrow>
       <p style={{ color: "var(--text2)", fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>

@@ -4,7 +4,7 @@ type PlaceholderPageProps = {
   apiPath?: string;
 };
 
-export default function PlaceholderPage({ title, subtitle, apiPath }: PlaceholderPageProps) {
+export default function PlaceholderPage({ title, subtitle, apiPath }: Readonly<PlaceholderPageProps>) {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>

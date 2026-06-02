@@ -24,7 +24,7 @@ export function ApprovalSettingsPanel({
   quotaOverride,
   onQuotaOverrideChange,
   onReload,
-}: ApprovalSettingsPanelProps) {
+}: Readonly<ApprovalSettingsPanelProps>) {
   return (
     <Panel title="簽核操作設定">
       <Field label="目前簽核人員">

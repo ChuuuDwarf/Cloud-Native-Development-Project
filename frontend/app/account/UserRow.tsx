@@ -10,7 +10,7 @@ interface UserRowProps {
   onEdit: () => void;
 }
 
-export default function UserRow({ user, canUpdate, onToggle, onEdit }: UserRowProps) {
+export default function UserRow({ user, canUpdate, onToggle, onEdit }: Readonly<UserRowProps>) {
   return (
     <tr style={{ borderTop: "1px solid var(--border2)" }}>
       <td style={cellStyle}>{user.name}</td>
@@ -71,7 +71,7 @@ export default function UserRow({ user, canUpdate, onToggle, onEdit }: UserRowPr
   );
 }
 
-function StatusPill({ status }: { status: UserStatus }) {
+function StatusPill({ status }: Readonly<{ status: UserStatus }>) {
   const isActive = status === "active";
   return (
     <span

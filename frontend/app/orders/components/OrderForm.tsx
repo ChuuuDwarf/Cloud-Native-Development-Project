@@ -16,7 +16,7 @@ import type {
   SampleFormGroup,
   UserNameLookup,
 } from "../types";
-import { displayScopeName } from "@/lib/displayNames";
+import { displayScopeName, displayScopeTypeLabel } from "@/lib/displayNames";
 import { Field, Input } from "./common";
 import { SampleExperimentEditor } from "./SampleExperimentEditor";
 
@@ -49,7 +49,7 @@ export function OrderForm({
   onClose,
   onCreate,
   onUpdate,
-}: {
+}: Readonly<{
   currentUserName: string;
   currentUser: { id: string; name: string };
   usersById: UserNameLookup;
@@ -78,7 +78,7 @@ export function OrderForm({
   onClose: () => void;
   onCreate: (submitAfterCreate: boolean) => void;
   onUpdate: () => void;
-}) {
+}>) {
   return (
     <>
       {editingOrderId && (
@@ -133,11 +133,7 @@ export function OrderForm({
               key={`${check.scopeType}-${check.scopeId}`}
               style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}
             >
-              {check.scopeType === "user"
-                ? "個人"
-                : check.scopeType === "department"
-                  ? "部門"
-                  : check.scopeType}{" "}
+              {displayScopeTypeLabel(check.scopeType)}{" "}
               /{" "}
               {displayScopeName(masterData, usersById, check.scopeType, check.scopeId, currentUser)}
               ：已用 {check.used} / 上限 {check.limit}，本次 {check.requested}

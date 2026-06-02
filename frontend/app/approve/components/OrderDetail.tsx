@@ -17,12 +17,12 @@ export function OrderDetail({
   masterData,
   usersById,
   currentUser,
-}: {
+}: Readonly<{
   order: Order;
   masterData: Pick<MasterData, "departments" | "labs" | "experiments">;
   usersById: Record<string, string | undefined>;
   currentUser: { id: string; name: string } | null;
-}) {
+}>) {
   return (
     <div>
       <div style={infoCardStyle}>

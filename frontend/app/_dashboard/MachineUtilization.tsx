@@ -38,7 +38,7 @@ function machineUtilPct(m: MachineGrid): number {
   return Math.min(100, Math.round(raw));
 }
 
-function MachineRow({ m, showLabPrefix }: { m: MachineGrid; showLabPrefix: boolean }) {
+function MachineRow({ m, showLabPrefix }: Readonly<{ m: MachineGrid; showLabPrefix: boolean }>) {
   const isPattern = PATTERN_STATUSES.has(m.status);
   const pct = isPattern ? null : machineUtilPct(m);
   const pattern = STATUS_PATTERN[m.status];
@@ -150,10 +150,10 @@ function MachineRow({ m, showLabPrefix }: { m: MachineGrid; showLabPrefix: boole
 export default function MachineUtilization({
   data,
   showLabPrefix,
-}: {
+}: Readonly<{
   data: MachineHeatmapData;
   showLabPrefix: boolean;
-}) {
+}>) {
   // Flatten by_lab into one ordered list. Within each lab we keep the
   // backend's order; labs are sorted alphabetically so cross-lab views are
   // stable.

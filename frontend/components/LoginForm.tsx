@@ -13,19 +13,35 @@ interface DemoAccount {
   password: string;
 }
 
-const DEMO_ACCOUNTS: DemoAccount[] = [
-  { label: "系統管理員", email: "admin@example.com", password: "Admin1234" },
-  { label: "大主管", email: "director@example.com", password: "Direc1234" },
-  { label: "LAB-A主管", email: "supervisor@example.com", password: "Super1234" },
-  { label: "LAB-B主管", email: "supervisor2@example.com", password: "Super1234" },
-  { label: "LAB-C主管", email: "supervisor3@example.com", password: "Super1234" },
-  { label: "LAB-A人員", email: "engineer@example.com", password: "Engin1234" },
-  { label: "LAB-B人員", email: "engineer2@example.com", password: "Engin1234" },
-  { label: "LAB-C人員", email: "engineer3@example.com", password: "Engin1234" },
-  { label: "廠區使用者", email: "requester@example.com", password: "Reque1234" },
-];
+/**
+ * Dev-only quick-login helpers, sourced from NEXT_PUBLIC_DEMO_ACCOUNTS (a JSON
+ * array string). No password literals live in source — if the env var is
+ * unset/empty/invalid, the list is empty and the helper UI simply renders
+ * nothing. See frontend/.env.example for the expected format.
+ */
+function parseDemoAccounts(): DemoAccount[] {
+  if (process.env.NODE_ENV === "production") return [];
+  const raw = process.env.NEXT_PUBLIC_DEMO_ACCOUNTS;
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (a): a is DemoAccount =>
+        typeof a === "object" &&
+        a !== null &&
+        typeof (a as DemoAccount).label === "string" &&
+        typeof (a as DemoAccount).email === "string" &&
+        typeof (a as DemoAccount).password === "string",
+    );
+  } catch {
+    return [];
+  }
+}
 
-export function LoginForm({ onSuccess }: Props) {
+const DEMO_ACCOUNTS: DemoAccount[] = parseDemoAccounts();
+
+export function LoginForm({ onSuccess }: Readonly<Props>) {
   const { login, error } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -84,27 +100,29 @@ export function LoginForm({ onSuccess }: Props) {
         </div>
       </div>
 
-      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <span style={{ fontSize: 11, color: "var(--text2)" }}>快速登入 (測試帳號)</span>
-        <select
-          value={email}
-          onChange={(e) => {
-            const account = DEMO_ACCOUNTS.find((a) => a.email === e.target.value);
-            if (account) {
-              setEmail(account.email);
-              setPassword(account.password);
-            }
-          }}
-          style={inputStyle}
-        >
-          <option value="">— 選擇測試帳號 —</option>
-          {DEMO_ACCOUNTS.map((a) => (
-            <option key={a.email} value={a.email}>
-              {a.label} ({a.email})
-            </option>
-          ))}
-        </select>
-      </label>
+      {DEMO_ACCOUNTS.length > 0 && (
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 11, color: "var(--text2)" }}>快速登入 (測試帳號)</span>
+          <select
+            value={email}
+            onChange={(e) => {
+              const account = DEMO_ACCOUNTS.find((a) => a.email === e.target.value);
+              if (account) {
+                setEmail(account.email);
+                setPassword(account.password);
+              }
+            }}
+            style={inputStyle}
+          >
+            <option value="">— 選擇測試帳號 —</option>
+            {DEMO_ACCOUNTS.map((a) => (
+              <option key={a.email} value={a.email}>
+                {a.label} ({a.email})
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <span style={{ fontSize: 11, color: "var(--text2)" }}>Email</span>
@@ -165,7 +183,7 @@ export function LoginForm({ onSuccess }: Props) {
         {submitting ? "登入中..." : "登入"}
       </button>
 
-      {process.env.NODE_ENV !== "production" && (
+      {process.env.NODE_ENV !== "production" && DEMO_ACCOUNTS.length > 0 && (
         <div
           style={{
             fontSize: 10,

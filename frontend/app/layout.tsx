@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: "LIMS 實驗室資訊管理系統",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="zh-TW">
       <body style={{ margin: 0, height: "100vh", overflow: "hidden" }}>

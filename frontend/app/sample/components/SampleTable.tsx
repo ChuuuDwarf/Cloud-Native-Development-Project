@@ -35,7 +35,7 @@ export function SampleTable({
   currentUser,
   outgoingTransfersBySampleId,
   onOpenDetail,
-}: SampleTableProps) {
+}: Readonly<SampleTableProps>) {
   const isFactoryUser = checkIsFactoryUser(currentUser);
 
   if (loading) {

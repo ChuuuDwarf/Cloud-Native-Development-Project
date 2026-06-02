@@ -4,13 +4,13 @@ export default function KpiCard({
   sub,
   color,
   icon,
-}: {
+}: Readonly<{
   label: string;
   value: string | number;
   sub?: string;
   color: string;
   icon?: string;
-}) {
+}>) {
   return (
     <div
       style={{

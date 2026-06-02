@@ -59,13 +59,13 @@ export default function RecipeForm({
   experimentItems,
   submitting,
   onSubmit,
-}: {
+}: Readonly<{
   machines: Machine[];
   /** Distinct experiment items, derived from machine support lists. */
   experimentItems: string[];
   submitting: boolean;
   onSubmit: (payload: RecipePayload) => void;
-}) {
+}>) {
   const [form, setForm] = useState<FormState>(EMPTY);
 
   const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch });

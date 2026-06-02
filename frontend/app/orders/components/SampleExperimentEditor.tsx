@@ -27,14 +27,14 @@ export function SampleExperimentEditor({
   onSampleChange,
   onSampleNameChange,
   onDependencyItemsChange,
-}: {
+}: Readonly<{
   groups: SampleFormGroup[];
   items: FormItem[];
   masterData: Pick<MasterData, "labs" | "experiments">;
   onSampleChange: (group: SampleFormGroup, sampleId: string) => void;
   onSampleNameChange: (group: SampleFormGroup, sampleName: string) => void;
   onDependencyItemsChange: (group: SampleFormGroup, nextItems: FormItem[]) => void;
-}) {
+}>) {
   const [explicitFlowIdsByGroup, setExplicitFlowIdsByGroup] = useState<Record<string, string[]>>(
     {}
   );
@@ -217,7 +217,7 @@ function DependencyFlowEditor({
   onMoveItemToFlow,
   onRemoveItem,
   onDeleteItem,
-}: {
+}: Readonly<{
   state: ReturnType<typeof buildDependencyFlowsFromItems>;
   group: SampleFormGroup;
   masterData: Pick<MasterData, "labs" | "experiments">;
@@ -228,7 +228,7 @@ function DependencyFlowEditor({
   onMoveItemToFlow: (sourceFlowId: string, itemIndex: number, targetFlowId: string) => void;
   onRemoveItem: (flowId: string, itemIndex: number) => void;
   onDeleteItem: (flowId: string, itemIndex: number) => void;
-}) {
+}>) {
   const [selectedMoveByItem, setSelectedMoveByItem] = useState<Record<string, string>>({});
   const [selectedExperimentByFlow, setSelectedExperimentByFlow] = useState<Record<string, string>>(
     {}
@@ -431,12 +431,12 @@ function DependencyItemRow({
   masterData,
   prefix,
   actions,
-}: {
+}: Readonly<{
   item: FormItem;
   masterData: Pick<MasterData, "labs" | "experiments">;
   prefix: string;
   actions: ReactNode;
-}) {
+}>) {
   return (
     <div
       style={{

@@ -5,10 +5,10 @@ import { ROLES, type Role } from "@/types/lab";
 export default function RoleSwitcher({
   role,
   onChange,
-}: {
+}: Readonly<{
   role: Role;
   onChange: (r: Role) => void;
-}) {
+}>) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <span style={{ fontSize: 10, color: "var(--text3)", fontFamily: "monospace" }}>目前角色</span>

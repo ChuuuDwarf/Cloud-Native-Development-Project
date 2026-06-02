@@ -6,12 +6,12 @@ export function Modal({
   children,
   onClose,
   narrow = false,
-}: {
+}: Readonly<{
   title: string;
   children: ReactNode;
   onClose: () => void;
   narrow?: boolean;
-}) {
+}>) {
   return (
     <div style={modalOverlayStyle}>
       <div style={{ ...modalStyle, width: narrow ? "min(520px, 92vw)" : "min(900px, 94vw)" }}>

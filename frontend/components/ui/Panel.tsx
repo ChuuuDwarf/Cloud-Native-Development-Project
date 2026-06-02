@@ -6,13 +6,13 @@ export default function Panel({
   action,
   children,
   noPad,
-}: {
+}: Readonly<{
   title: string;
   tag?: string;
   action?: ReactNode;
   children: ReactNode;
   noPad?: boolean;
-}) {
+}>) {
   return (
     <div
       style={{

@@ -342,19 +342,23 @@ export default function DispatchPage() {
             （從「分貨 / WIP」頁送排程後出現；點選即可快速填入左側表單）
           </span>
         </div>
-        {wipsQuery.isLoading ? (
-          <div style={hintTextStyle}>讀取中…</div>
-        ) : waitingWips.length === 0 ? (
-          <div style={hintTextStyle}>目前沒有待排程的 WIP。請先到「分貨 / WIP」頁建立 WIP</div>
-        ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {waitingWips.map((wip) => (
-              <button key={wip.id} onClick={() => pickWipForDispatch(wip)} style={wipChipStyle}>
-                {wip.wip_no} · {wip.experiment_item ?? "-"} · {wip.lab_name ?? "-"}
-              </button>
-            ))}
-          </div>
-        )}
+        {(() => {
+          if (wipsQuery.isLoading) return <div style={hintTextStyle}>讀取中…</div>;
+          if (waitingWips.length === 0) {
+            return (
+              <div style={hintTextStyle}>目前沒有待排程的 WIP。請先到「分貨 / WIP」頁建立 WIP</div>
+            );
+          }
+          return (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {waitingWips.map((wip) => (
+                <button key={wip.id} onClick={() => pickWipForDispatch(wip)} style={wipChipStyle}>
+                  {wip.wip_no} · {wip.experiment_item ?? "-"} · {wip.lab_name ?? "-"}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       <div

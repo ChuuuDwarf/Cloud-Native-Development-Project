@@ -125,7 +125,7 @@ function getAllowedRolesForPath(pathname: string) {
   return rule?.allowedRoles;
 }
 
-export function AuthGate({ children }: { children: ReactNode }) {
+export function AuthGate({ children }: Readonly<{ children: ReactNode }>) {
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();

@@ -16,7 +16,7 @@ export function PermissionGuard({
   children,
   redirectTo = "/",
   redirectDelayMs = 2000,
-}: PermissionGuardProps) {
+}: Readonly<PermissionGuardProps>) {
   const { hasPermission, isLoading } = useAuth();
   const router = useRouter();
   const allowed = hasPermission(requiredPermission);

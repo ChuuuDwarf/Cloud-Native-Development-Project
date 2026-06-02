@@ -7,10 +7,10 @@ import { conditionRowStyle } from "../styles";
 export default function ClosureConditionsModal({
   detail,
   onClose,
-}: {
+}: Readonly<{
   detail: ClosureCheck;
   onClose: () => void;
-}) {
+}>) {
   return (
     <Modal open title={`結單條件 · ${detail.orderId}`} onClose={onClose}>
       <p style={{ fontSize: 12, color: "var(--text3)", marginBottom: 14 }}>{CONDITIONS_NOTE}</p>

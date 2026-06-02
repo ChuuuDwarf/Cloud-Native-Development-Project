@@ -24,7 +24,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [user, setUser] = useState<MeResponse | null>(null);
   // Start with isLoading=true so the gate shows a spinner until the first
   // /api/me call resolves; otherwise we'd flash the login form for users who

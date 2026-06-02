@@ -10,7 +10,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
  * Keeps RootLayout server-rendered while still providing React Query + Auth
  * context to every child component.
  */
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>{children}</AuthProvider>

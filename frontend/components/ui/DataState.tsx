@@ -7,13 +7,13 @@ export default function DataState({
   empty,
   emptyText = "目前沒有資料",
   children,
-}: {
+}: Readonly<{
   loading: boolean;
   error?: string | null;
   empty?: boolean;
   emptyText?: string;
   children: ReactNode;
-}) {
+}>) {
   if (loading) {
     return (
       <div style={{ textAlign: "center", padding: 48, color: "var(--text3)" }}>

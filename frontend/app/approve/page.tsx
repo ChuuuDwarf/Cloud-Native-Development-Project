@@ -60,29 +60,33 @@ export default function ApprovePage() {
               只有狀態為「待簽核」的委託單會出現在這裡。主管可進行核准、退回補件或拒絕。
             </p>
 
-            {loading ? (
-              <div style={emptyStyle}>載入中...</div>
-            ) : orders.length === 0 ? (
-              <div style={emptyStyle}>
-                目前沒有待簽核委託單。請先到「委託單管理」建立草稿並送出。
-              </div>
-            ) : (
-              <div style={{ display: "grid", gap: 12 }}>
-                {orders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    actorLabIds={actorLabIds}
-                    masterData={masterData}
-                    usersById={usersById}
-                    currentUser={user ? { id: user.id, name: user.name } : null}
-                    onOpenDetail={(orderId) => void getDetail(orderId)}
-                    onOpenHistory={(orderId) => void getHistory(orderId)}
-                    onOpenReasonModal={openReasonModal}
-                  />
-                ))}
-              </div>
-            )}
+            {(() => {
+              if (loading) return <div style={emptyStyle}>載入中...</div>;
+              if (orders.length === 0) {
+                return (
+                  <div style={emptyStyle}>
+                    目前沒有待簽核委託單。請先到「委託單管理」建立草稿並送出。
+                  </div>
+                );
+              }
+              return (
+                <div style={{ display: "grid", gap: 12 }}>
+                  {orders.map((order) => (
+                    <OrderCard
+                      key={order.id}
+                      order={order}
+                      actorLabIds={actorLabIds}
+                      masterData={masterData}
+                      usersById={usersById}
+                      currentUser={user ? { id: user.id, name: user.name } : null}
+                      onOpenDetail={(orderId) => void getDetail(orderId)}
+                      onOpenHistory={(orderId) => void getHistory(orderId)}
+                      onOpenReasonModal={openReasonModal}
+                    />
+                  ))}
+                </div>
+              );
+            })()}
           </Panel>
         </div>
       </div>

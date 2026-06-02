@@ -12,7 +12,7 @@ const STATUS_TONE: Record<string, { background: string; color: string; border: s
   },
 };
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: Readonly<{ status: string }>) {
   const tone = STATUS_TONE[status];
   const style = tone ? { ...statusBadgeStyle, ...tone } : statusBadgeStyle;
   return <span style={style}>{sampleStatusText[status] ?? status}</span>;

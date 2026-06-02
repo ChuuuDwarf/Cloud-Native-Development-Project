@@ -12,7 +12,7 @@ import {
 } from "../styles";
 import type { OrderStatus } from "../types";
 
-export function Panel({ title, children }: { title: string; children: ReactNode }) {
+export function Panel({ title, children }: Readonly<{ title: string; children: ReactNode }>) {
   return (
     <section style={panelStyle}>
       <h2 style={panelTitleStyle}>{title}</h2>
@@ -21,7 +21,7 @@ export function Panel({ title, children }: { title: string; children: ReactNode 
   );
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
   return (
     <label style={{ display: "block", marginTop: 10 }}>
       <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 4 }}>{label}</div>
@@ -34,11 +34,11 @@ export function Input({
   value,
   onChange,
   disabled = false,
-}: {
+}: Readonly<{
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
-}) {
+}>) {
   return (
     <input
       value={value}
@@ -53,7 +53,7 @@ export function Input({
   );
 }
 
-export function StatusBadge({ status }: { status: OrderStatus }) {
+export function StatusBadge({ status }: Readonly<{ status: OrderStatus }>) {
   // Fallback to the raw value so an unmapped (e.g. future cross-module) status
   // never renders as a blank badge.
   return <span style={statusBadgeStyle}>{statusLabel[status] ?? status}</span>;
@@ -63,11 +63,11 @@ export function Modal({
   title,
   children,
   onClose,
-}: {
+}: Readonly<{
   title: string;
   children: ReactNode;
   onClose: () => void;
-}) {
+}>) {
   return (
     <div style={modalOverlayStyle}>
       <div style={modalStyle}>
@@ -83,7 +83,7 @@ export function Modal({
   );
 }
 
-export function InfoGrid({ rows }: { rows: [string, string][] }) {
+export function InfoGrid({ rows }: Readonly<{ rows: [string, string][] }>) {
   return (
     <div
       style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "8px 12px", fontSize: 13 }}

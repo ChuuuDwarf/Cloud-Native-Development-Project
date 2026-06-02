@@ -31,6 +31,12 @@ import {
 } from "../styles";
 import { PriorityBadge, StatusBadge } from "./Badges";
 
+function quotaBadgeStyle(quotaOverride: boolean | undefined, needsQuotaOverride: boolean) {
+  if (quotaOverride) return quotaOverrideOkStyle;
+  if (needsQuotaOverride) return quotaExceededStyle;
+  return quotaNormalStyle;
+}
+
 type OrderCardProps = {
   order: Order;
   actorLabIds: string[];
@@ -56,7 +62,7 @@ export function OrderCard({
   onOpenDetail,
   onOpenHistory,
   onOpenReasonModal,
-}: OrderCardProps) {
+}: Readonly<OrderCardProps>) {
   const approvableItems = approvableItemsForActor(actorLabIds, order);
 
   return (
@@ -176,7 +182,7 @@ function OrderItemApprovalCard({
   usersById,
   currentUser,
   onOpenReasonModal,
-}: {
+}: Readonly<{
   order: Order;
   item: OrderItem;
   index: number;
@@ -185,7 +191,7 @@ function OrderItemApprovalCard({
   usersById: Record<string, string | undefined>;
   currentUser: { id: string; name: string } | null;
   onOpenReasonModal: OrderCardProps["onOpenReasonModal"];
-}) {
+}>) {
   const canApproveItem = canActorApproveItem(actorLabIds, order, item);
   const needsQuotaOverride = itemNeedsQuotaOverride(order, item);
   const effectiveStatus = getEffectiveItemStatus(order, item);
@@ -206,15 +212,7 @@ function OrderItemApprovalCard({
         {item.rejectReason && `｜拒絕：${item.rejectReason}`}
       </div>
 
-      <div
-        style={
-          item.quotaOverride
-            ? quotaOverrideOkStyle
-            : needsQuotaOverride
-              ? quotaExceededStyle
-              : quotaNormalStyle
-        }
-      >
+      <div style={quotaBadgeStyle(item.quotaOverride, needsQuotaOverride)}>
         {quotaStatusText(order, item)}
       </div>
 

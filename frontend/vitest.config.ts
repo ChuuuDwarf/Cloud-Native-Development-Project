@@ -36,9 +36,14 @@ export default defineConfig({
     exclude: ["node_modules", ".next", "dist"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "html", "json-summary"],
+      reporter: ["text", "html", "json-summary", "lcov"],
       reportsDirectory: "./coverage",
-      include: ["components/**/*.{ts,tsx}", "src/**/*.{ts,tsx}"],
+      include: [
+        "components/**/*.{ts,tsx}",
+        "src/**/*.{ts,tsx}",
+        "app/**/*.{ts,tsx}",
+        "lib/**/*.{ts,tsx}",
+      ],
       exclude: [
         "**/__tests__/**",
         "**/*.test.{ts,tsx}",
@@ -47,6 +52,14 @@ export default defineConfig({
         ".next/**",
         "dist/**",
         "src/constants/enums.ts",
+        // Framework/structural files with no meaningful logic to unit-test.
+        "app/**/layout.tsx",
+        "app/**/loading.tsx",
+        "app/**/not-found.tsx",
+        "app/**/error.tsx",
+        "**/*.config.*",
+        // Pure type declaration modules (no runtime logic).
+        "src/types/**",
       ],
     },
   },

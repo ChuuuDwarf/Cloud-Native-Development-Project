@@ -8,6 +8,11 @@ import type { Machine, MachinePayload, MachineStatus } from "@/types/machines";
 
 const LABS = ["LAB-A", "LAB-B", "LAB-C"];
 
+function submitLabel(submitting: boolean, isEdit: boolean): string {
+  if (submitting) return "儲存中…";
+  return isEdit ? "儲存編輯" : "新增機台";
+}
+
 function demoTemplate(lab: string): FormState {
   return {
     machineId: "AFM-004",
@@ -62,18 +67,20 @@ export default function MachineForm({
   submitting,
   onSubmit,
   userLabCode,
-}: {
+}: Readonly<{
   /** Machine being edited, or null for a fresh create form. */
   initial: Machine | null;
   submitting: boolean;
   onSubmit: (payload: MachinePayload) => void;
   /** When set, the lab field is locked to this value (lab_supervisor scope). */
   userLabCode?: string | null;
-}) {
+}>) {
   const lockedLab = !initial && userLabCode ? userLabCode : null;
-  const [form, setForm] = useState<FormState>(
-    initial ? toFormState(initial) : lockedLab ? { ...EMPTY, lab: lockedLab } : EMPTY
-  );
+  const [form, setForm] = useState<FormState>(() => {
+    if (initial) return toFormState(initial);
+    if (lockedLab) return { ...EMPTY, lab: lockedLab };
+    return EMPTY;
+  });
 
   const isEdit = initial !== null;
   const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
@@ -175,7 +182,7 @@ export default function MachineForm({
           style={inputStyle}
         />
         <Btn variant="primary" disabled={submitting} onClick={submit}>
-          {submitting ? "儲存中…" : isEdit ? "儲存編輯" : "新增機台"}
+          {submitLabel(submitting, isEdit)}
         </Btn>
       </div>
     </Panel>

@@ -26,7 +26,7 @@ export function formatHourLabel(offset: unknown): string {
   return `${String(actualHour).padStart(2, "0")}:00`;
 }
 
-export default function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
+export default function ThroughputChart({ data }: Readonly<{ data: ThroughputPoint[] }>) {
   const empty = data.length === 0 || data.every((p) => p.completed === 0 && p.returned === 0);
 
   const sumCompleted = data.reduce((acc, p) => acc + p.completed, 0);

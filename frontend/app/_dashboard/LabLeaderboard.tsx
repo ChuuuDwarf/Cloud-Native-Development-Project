@@ -69,7 +69,7 @@ const SUB_CHARTS: SubChartSpec[] = [
   },
 ];
 
-function SubChart({ rows, spec }: { rows: LabRow[]; spec: SubChartSpec }) {
+function SubChart({ rows, spec }: Readonly<{ rows: LabRow[]; spec: SubChartSpec }>) {
   const sorted = [...rows].sort((a, b) => {
     const av = a[spec.metric];
     const bv = b[spec.metric];
@@ -155,7 +155,7 @@ function SubChart({ rows, spec }: { rows: LabRow[]; spec: SubChartSpec }) {
   );
 }
 
-export default function LabLeaderboard({ rows }: { rows: LabRow[] }) {
+export default function LabLeaderboard({ rows }: Readonly<{ rows: LabRow[] }>) {
   return (
     <div
       data-testid="lab-leaderboard"

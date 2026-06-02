@@ -19,7 +19,7 @@ export default function DispatchAssignPanel({
   onScheduleChange,
   onApplySuggested,
   onAssign,
-}: {
+}: Readonly<{
   activeDispatch?: Dispatch;
   assignableMachines: Machine[];
   assignableRecipes: Recipe[];
@@ -32,7 +32,7 @@ export default function DispatchAssignPanel({
   onScheduleChange: (field: "scheduledStart" | "scheduledEnd", value: string) => void;
   onApplySuggested: () => void;
   onAssign: () => void;
-}) {
+}>) {
   return (
     <Panel title="手動確認派工" tag={activeDispatch?.wipId ?? "N/A"}>
       <div
@@ -71,28 +71,39 @@ export default function DispatchAssignPanel({
             style={inputStyle}
           />
         </div>
-        {activeDispatch?.status === "待派工" ? (
-          <>
-            <Btn small disabled={!canApplySuggested} onClick={onApplySuggested}>
-              套用系統預估時間
-            </Btn>
-            <Btn variant="primary" disabled={!canAssign || assigning} onClick={onAssign}>
-              {assigning ? "派工中…" : "確認派工"}
-            </Btn>
-          </>
-        ) : activeDispatch?.status === "待上機" ? (
-          <div style={{ fontSize: 12, color: "var(--green)" }}>
-            ✅ 已完成派工，請至「實驗執行」頁對該 WIP 上機。
-          </div>
-        ) : activeDispatch?.status === "待排程" ? (
-          <div style={{ fontSize: 12, color: "var(--text3)" }}>
-            尚未排程。請先按右上「產生建議」，進入「待派工」後才能確認派工。
-          </div>
-        ) : (
-          <div style={{ fontSize: 12, color: "var(--text3)" }}>
-            請從中間清單選一筆「待派工」的派工單。
-          </div>
-        )}
+        {(() => {
+          if (activeDispatch?.status === "待派工") {
+            return (
+              <>
+                <Btn small disabled={!canApplySuggested} onClick={onApplySuggested}>
+                  套用系統預估時間
+                </Btn>
+                <Btn variant="primary" disabled={!canAssign || assigning} onClick={onAssign}>
+                  {assigning ? "派工中…" : "確認派工"}
+                </Btn>
+              </>
+            );
+          }
+          if (activeDispatch?.status === "待上機") {
+            return (
+              <div style={{ fontSize: 12, color: "var(--green)" }}>
+                ✅ 已完成派工，請至「實驗執行」頁對該 WIP 上機。
+              </div>
+            );
+          }
+          if (activeDispatch?.status === "待排程") {
+            return (
+              <div style={{ fontSize: 12, color: "var(--text3)" }}>
+                尚未排程。請先按右上「產生建議」，進入「待派工」後才能確認派工。
+              </div>
+            );
+          }
+          return (
+            <div style={{ fontSize: 12, color: "var(--text3)" }}>
+              請從中間清單選一筆「待派工」的派工單。
+            </div>
+          );
+        })()}
       </div>
     </Panel>
   );

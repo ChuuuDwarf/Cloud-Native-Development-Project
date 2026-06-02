@@ -16,7 +16,7 @@ function RowActions({
   onEdit,
   onDetail,
   run,
-}: {
+}: Readonly<{
   r: Report;
   canStaff: boolean;
   isChief: boolean;
@@ -24,7 +24,7 @@ function RowActions({
   onEdit: (r: Report) => void;
   onDetail: (r: Report) => void;
   run: RunFn;
-}) {
+}>) {
   const d = offline;
   if (DRAFT_STATUSES.includes(r.status) && canStaff) {
     return (
@@ -96,7 +96,7 @@ export default function ReportTable({
   onEdit,
   onDetail,
   run,
-}: {
+}: Readonly<{
   rows: Report[];
   loading: boolean;
   emptyText: string;
@@ -106,7 +106,7 @@ export default function ReportTable({
   onEdit: (r: Report) => void;
   onDetail: (r: Report) => void;
   run: RunFn;
-}) {
+}>) {
   return (
     <DataState loading={loading} empty={rows.length === 0} emptyText={emptyText}>
       <div style={{ overflowX: "auto" }}>
