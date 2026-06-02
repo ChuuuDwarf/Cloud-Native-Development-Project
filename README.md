@@ -35,24 +35,24 @@ Backend API: FastAPI + JWT cookie auth + OpenAPI
 
 部署與開發支援三種情境：
 
-| 情境 | 用途 | 入口 |
-|---|---|---|
-| Docker Compose | 快速跑完整 stack | [docker-compose.yml](docker-compose.yml) |
-| 本地開發 | 分別啟動前後端，方便 debug | [Makefile](Makefile) |
-| K3s / Argo CD | 雲原生部署與環境推進 | [deploy/k3s](deploy/k3s), [deploy/argocd](deploy/argocd) |
+| 情境           | 用途                       | 入口                                                     |
+| -------------- | -------------------------- | -------------------------------------------------------- |
+| Docker Compose | 快速跑完整 stack           | [docker-compose.yml](docker-compose.yml)                 |
+| 本地開發       | 分別啟動前後端，方便 debug | [Makefile](Makefile)                                     |
+| K3s / Argo CD  | 雲原生部署與環境推進       | [deploy/k3s](deploy/k3s), [deploy/argocd](deploy/argocd) |
 
 ## Tech Stack
 
-| 層 | 技術 |
-|---|---|
-| Frontend | TypeScript, React 19, Next.js 16 App Router, TanStack Query, axios, Recharts |
-| Backend | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 async, Alembic |
-| Database | PostgreSQL 16 |
-| Background jobs | Celery 5, Redis 7, Celery Beat |
-| Auth | JWT access/refresh token, httpOnly cookie, bcrypt |
-| Realtime / notification | SSE, Redis pub/sub, in-app notifications, optional email/TAS phone callout |
-| Tests | pytest, httpx, pytest-asyncio, Vitest, Testing Library, Playwright |
-| CI / Deploy | GitHub Actions, Docker Compose, K3s manifests, Argo CD applications |
+| 層                      | 技術                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| Frontend                | TypeScript, React 19, Next.js 16 App Router, TanStack Query, axios, Recharts |
+| Backend                 | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 async, Alembic               |
+| Database                | PostgreSQL 16                                                                |
+| Background jobs         | Celery 5, Redis 7, Celery Beat                                               |
+| Auth                    | JWT access/refresh token, httpOnly cookie, bcrypt                            |
+| Realtime / notification | SSE, Redis pub/sub, in-app notifications, optional email/TAS phone callout   |
+| Tests                   | pytest, httpx, pytest-asyncio, Vitest, Testing Library, Playwright           |
+| CI / Deploy             | GitHub Actions, Docker Compose, K3s manifests, Argo CD applications          |
 
 ## 專案結構
 
@@ -97,14 +97,14 @@ make up
 
 啟動後：
 
-| Service | URL / Port | 說明 |
-|---|---:|---|
-| Frontend | <http://localhost:3000> | Next.js 操作介面 |
-| Backend | <http://localhost:8000> | FastAPI API |
-| API docs | <http://localhost:8000/api-docs> | Swagger UI |
-| Health | <http://localhost:8000/health> | 後端健康檢查 |
-| PostgreSQL | `localhost:5432` | 預設 `lims/lims` |
-| Redis | `localhost:6379` | Celery broker + pub/sub |
+| Service    |                       URL / Port | 說明                    |
+| ---------- | -------------------------------: | ----------------------- |
+| Frontend   |          <http://localhost:3000> | Next.js 操作介面        |
+| Backend    |          <http://localhost:8000> | FastAPI API             |
+| API docs   | <http://localhost:8000/api-docs> | Swagger UI              |
+| Health     |   <http://localhost:8000/health> | 後端健康檢查            |
+| PostgreSQL |                 `localhost:5432` | 預設 `lims/lims`        |
+| Redis      |                 `localhost:6379` | Celery broker + pub/sub |
 
 需要 pgAdmin 時：
 
@@ -161,12 +161,12 @@ K3s 與 Argo CD 文件入口：
 
 `backend/scripts/seed_dev.py` 會建立 demo 使用者，方便直接登入前端測試角色權限。
 
-| Email | 密碼 | 角色 |
-|---|---|---|
-| `admin@example.com` | `Admin1234` | 系統管理者 |
+| Email                    | 密碼        | 角色       |
+| ------------------------ | ----------- | ---------- |
+| `admin@example.com`      | `Admin1234` | 系統管理者 |
 | `supervisor@example.com` | `Super1234` | 實驗室主管 |
-| `engineer@example.com` | `Engin1234` | 實驗室人員 |
-| `requester@example.com` | `Reque1234` | 廠區使用者 |
+| `engineer@example.com`   | `Engin1234` | 實驗室人員 |
+| `requester@example.com`  | `Reque1234` | 廠區使用者 |
 
 ## 環境變數與安全
 
@@ -178,29 +178,29 @@ cp backend/.env.example backend/.env
 
 重要設定：
 
-| 變數 | 用途 |
-|---|---|
-| `DATABASE_URL` | PostgreSQL async SQLAlchemy 連線 |
-| `REDIS_URL` | Celery broker、cache、SSE pub/sub |
-| `JWT_SECRET` | JWT 簽章金鑰，正式環境必須更換 |
-| `CORS_ORIGINS` | 允許的前端來源 |
-| `EMAIL_BACKEND` | `file` 或 `smtp` |
-| `UPLOADS_DIR` | 檔案與 email outbox 儲存位置 |
-| `CHT_API_KEY`, `CHT_SERVICE_NUMBER` | 中華電信 TAS phone callout，可留空 |
-| `TAS_ENABLED`, `TAS_SN_KEY` | TAS MQTT listener，可留空或設 false |
+| 變數                                | 用途                                |
+| ----------------------------------- | ----------------------------------- |
+| `DATABASE_URL`                      | PostgreSQL async SQLAlchemy 連線    |
+| `REDIS_URL`                         | Celery broker、cache、SSE pub/sub   |
+| `JWT_SECRET`                        | JWT 簽章金鑰，正式環境必須更換      |
+| `CORS_ORIGINS`                      | 允許的前端來源                      |
+| `EMAIL_BACKEND`                     | `file` 或 `smtp`                    |
+| `UPLOADS_DIR`                       | 檔案與 email outbox 儲存位置        |
+| `CHT_API_KEY`, `CHT_SERVICE_NUMBER` | 中華電信 TAS phone callout，可留空  |
+| `TAS_ENABLED`, `TAS_SN_KEY`         | TAS MQTT listener，可留空或設 false |
 
 請勿提交 `.env`、真實密碼、API key 或個人電話。開發環境未設定 TAS/CHT credential 時，電話通知流程會 no-op，不影響一般功能。
 
 ## 核心功能
 
-| 模組 | 功能 |
-|---|---|
-| 帳號 / 角色 | 登入登出、目前使用者、帳號管理、角色權限、實驗室與 master data |
-| 委託單 / 簽核 | 建立送測需求、草稿、送出、主管核准/退回/拒絕、配額檢核 |
-| 收樣 / WIP / 轉送 | 樣品收樣、分貨、WIP 狀態、交接與流轉 |
-| 機台 / Recipe / 派工 | 機台狀態、Recipe 管理、派工指派、排程策略 |
-| 實驗執行 / 報告 / 結案 | 上下機、進度紀錄、結果上傳、報告管理、取件結案 |
-| 異常 / 通知 / 儀表板 | Issue 管理、通知中心、告警升級、主管 dashboard、SSE 即時更新 |
+| 模組                   | 功能                                                           |
+| ---------------------- | -------------------------------------------------------------- |
+| 帳號 / 角色            | 登入登出、目前使用者、帳號管理、角色權限、實驗室與 master data |
+| 委託單 / 簽核          | 建立送測需求、草稿、送出、主管核准/退回/拒絕、配額檢核         |
+| 收樣 / WIP / 轉送      | 樣品收樣、分貨、WIP 狀態、交接與流轉                           |
+| 機台 / Recipe / 派工   | 機台狀態、Recipe 管理、派工指派、排程策略                      |
+| 實驗執行 / 報告 / 結案 | 上下機、進度紀錄、結果上傳、報告管理、取件結案                 |
+| 異常 / 通知 / 儀表板   | Issue 管理、通知中心、告警升級、主管 dashboard、SSE 即時更新   |
 
 主要需求與流程文件：
 

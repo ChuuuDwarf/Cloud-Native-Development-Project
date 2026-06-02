@@ -14,17 +14,17 @@ LIMS 後端是以 FastAPI 建立的 API 服務，負責驗證授權、委託單�
 
 ## Tech Stack
 
-| 類別 | 技術 |
-|---|---|
-| Runtime | Python 3.12 |
-| API | FastAPI, Uvicorn, Pydantic v2 |
-| DB | PostgreSQL 16, SQLAlchemy 2 async, asyncpg, Alembic |
-| Auth | JWT access/refresh token, bcrypt, httpOnly cookie |
-| Background jobs | Celery 5, Redis 7, Celery Beat |
-| Realtime | SSE, Redis pub/sub |
-| Notification | in-app notifications, file/SMTP email, optional TAS phone callout |
-| Tests | pytest, pytest-asyncio, httpx |
-| Quality | ruff, mypy |
+| 類別            | 技術                                                              |
+| --------------- | ----------------------------------------------------------------- |
+| Runtime         | Python 3.12                                                       |
+| API             | FastAPI, Uvicorn, Pydantic v2                                     |
+| DB              | PostgreSQL 16, SQLAlchemy 2 async, asyncpg, Alembic               |
+| Auth            | JWT access/refresh token, bcrypt, httpOnly cookie                 |
+| Background jobs | Celery 5, Redis 7, Celery Beat                                    |
+| Realtime        | SSE, Redis pub/sub                                                |
+| Notification    | in-app notifications, file/SMTP email, optional TAS phone callout |
+| Tests           | pytest, pytest-asyncio, httpx                                     |
+| Quality         | ruff, mypy                                                        |
 
 ## 快速啟動
 
@@ -70,40 +70,40 @@ make seed
 
 啟動 `uvicorn app.main:app --reload --port 8000` 後：
 
-| Endpoint | 用途 |
-|---|---|
-| <http://localhost:8000/api-docs> | Swagger UI |
-| <http://localhost:8000/api-redoc> | ReDoc |
-| <http://localhost:8000/openapi.json> | OpenAPI JSON |
-| <http://localhost:8000/health> | Health check |
-| <http://localhost:8000/> | API root summary |
+| Endpoint                             | 用途             |
+| ------------------------------------ | ---------------- |
+| <http://localhost:8000/api-docs>     | Swagger UI       |
+| <http://localhost:8000/api-redoc>    | ReDoc            |
+| <http://localhost:8000/openapi.json> | OpenAPI JSON     |
+| <http://localhost:8000/health>       | Health check     |
+| <http://localhost:8000/>             | API root summary |
 
 FastAPI app version 為 `0.1.0`。
 
 ## API 路由總覽
 
-| Prefix | 模組 |
-|---|---|
-| `/api/auth/login`, `/api/auth/logout`, `/api/auth/refresh`, `/api/me` | Auth |
-| `/api/users` | 使用者管理 |
-| `/api/roles` | 角色與權限 |
-| `/api/master-data` | 前端下拉與共用主資料 |
-| `/api/labs` | 實驗室 |
-| `/api/orders` | 委託單與簽核流程 |
-| `/api/quotas` | 配額 |
-| `/api/samples` | 樣品 |
-| `/api/wips` | WIP |
-| `/api/transfers` | 樣品轉送 |
-| `/api/machines` | 機台 |
-| `/api/recipes` | Recipe |
-| `/api/dispatches` | 派工 |
-| `/api/experiment-runs` | 實驗執行 |
-| `/api/reports` | 報告 |
-| `/api/closures` | 取件與結案 |
-| `/api/issues` | 異常與告警 |
-| `/api/notifications` | 通知中心 |
-| `/api/dashboard` | 主管儀表板與即時資料 |
-| `/api/workflow-*` | 跨模組流程視圖 |
+| Prefix                                                                | 模組                 |
+| --------------------------------------------------------------------- | -------------------- |
+| `/api/auth/login`, `/api/auth/logout`, `/api/auth/refresh`, `/api/me` | Auth                 |
+| `/api/users`                                                          | 使用者管理           |
+| `/api/roles`                                                          | 角色與權限           |
+| `/api/master-data`                                                    | 前端下拉與共用主資料 |
+| `/api/labs`                                                           | 實驗室               |
+| `/api/orders`                                                         | 委託單與簽核流程     |
+| `/api/quotas`                                                         | 配額                 |
+| `/api/samples`                                                        | 樣品                 |
+| `/api/wips`                                                           | WIP                  |
+| `/api/transfers`                                                      | 樣品轉送             |
+| `/api/machines`                                                       | 機台                 |
+| `/api/recipes`                                                        | Recipe               |
+| `/api/dispatches`                                                     | 派工                 |
+| `/api/experiment-runs`                                                | 實驗執行             |
+| `/api/reports`                                                        | 報告                 |
+| `/api/closures`                                                       | 取件與結案           |
+| `/api/issues`                                                         | 異常與告警           |
+| `/api/notifications`                                                  | 通知中心             |
+| `/api/dashboard`                                                      | 主管儀表板與即時資料 |
+| `/api/workflow-*`                                                     | 跨模組流程視圖       |
 
 實際 route registry 位於 `backend/app/routes/registry.py`。
 
@@ -158,26 +158,26 @@ cp .env.example .env
 
 主要設定：
 
-| 變數 | 預設 / 範例 | 說明 |
-|---|---|---|
-| `ENV` | `development` | 執行環境 |
-| `DATABASE_URL` | `postgresql+asyncpg://lims:lims@localhost:5432/lims` | async SQLAlchemy DB URL |
-| `REDIS_URL` | `redis://localhost:6379/0` | Celery broker、cache、SSE pub/sub |
-| `JWT_SECRET` | `change-me-in-prod-please` | JWT 簽章金鑰，正式環境必須更換 |
-| `JWT_ALGORITHM` | `HS256` | JWT 演算法 |
-| `JWT_ACCESS_EXPIRES_MINUTES` | `60` | access token 有效時間 |
-| `JWT_REFRESH_EXPIRES_DAYS` | `7` | refresh token 有效天數 |
-| `CORS_ORIGINS` | `http://localhost:3000` | 允許前端來源，逗號分隔 |
-| `EMAIL_BACKEND` | `file` | `file` 或 `smtp` |
-| `EMAIL_FROM` | `noreply@lims.local` | email 寄件人 |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | 空 / `587` | SMTP 設定 |
-| `UPLOADS_DIR` | `./uploads` | 上傳檔案與 file email backend 位置 |
-| `CHT_API_KEY`, `CHT_SERVICE_NUMBER` | 空 | TAS phone callout credential，可留空 |
-| `CHT_BASE_URL` | `https://tasapi.cht.com.tw/apis/CHTIoT` | TAS REST API base URL |
-| `TAS_ENABLED` | `false` | 是否啟用 TAS phone/MQTT pipeline |
-| `TAS_SN_KEY` | 空 | MQTT topic key |
-| `TAS_MQTT_BROKER_URL` | `tls://tasapi.cht.com.tw:2883` | TAS MQTT broker |
-| `DEMO_PHONE` | 空 | seed users 共用 demo phone |
+| 變數                                                   | 預設 / 範例                                          | 說明                                 |
+| ------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------ |
+| `ENV`                                                  | `development`                                        | 執行環境                             |
+| `DATABASE_URL`                                         | `postgresql+asyncpg://lims:lims@localhost:5432/lims` | async SQLAlchemy DB URL              |
+| `REDIS_URL`                                            | `redis://localhost:6379/0`                           | Celery broker、cache、SSE pub/sub    |
+| `JWT_SECRET`                                           | `change-me-in-prod-please`                           | JWT 簽章金鑰，正式環境必須更換       |
+| `JWT_ALGORITHM`                                        | `HS256`                                              | JWT 演算法                           |
+| `JWT_ACCESS_EXPIRES_MINUTES`                           | `60`                                                 | access token 有效時間                |
+| `JWT_REFRESH_EXPIRES_DAYS`                             | `7`                                                  | refresh token 有效天數               |
+| `CORS_ORIGINS`                                         | `http://localhost:3000`                              | 允許前端來源，逗號分隔               |
+| `EMAIL_BACKEND`                                        | `file`                                               | `file` 或 `smtp`                     |
+| `EMAIL_FROM`                                           | `noreply@lims.local`                                 | email 寄件人                         |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | 空 / `587`                                           | SMTP 設定                            |
+| `UPLOADS_DIR`                                          | `./uploads`                                          | 上傳檔案與 file email backend 位置   |
+| `CHT_API_KEY`, `CHT_SERVICE_NUMBER`                    | 空                                                   | TAS phone callout credential，可留空 |
+| `CHT_BASE_URL`                                         | `https://tasapi.cht.com.tw/apis/CHTIoT`              | TAS REST API base URL                |
+| `TAS_ENABLED`                                          | `false`                                              | 是否啟用 TAS phone/MQTT pipeline     |
+| `TAS_SN_KEY`                                           | 空                                                   | MQTT topic key                       |
+| `TAS_MQTT_BROKER_URL`                                  | `tls://tasapi.cht.com.tw:2883`                       | TAS MQTT broker                      |
+| `DEMO_PHONE`                                           | 空                                                   | seed users 共用 demo phone           |
 
 未設定 TAS/CHT 時，電話通知任務會記錄並跳過，不影響 API、通知中心或 email demo。
 
@@ -233,18 +233,18 @@ tests/
 
 根目錄 [../docker-compose.yml](../docker-compose.yml) 會啟動：
 
-| Service | 用途 |
-|---|---|
-| `postgres` | PostgreSQL |
-| `redis` | Redis |
-| `migrate` | 一次性 Alembic migration |
-| `seed` | 一次性 demo seed |
-| `backend` | FastAPI API |
-| `celery-worker` | 背景任務 |
-| `celery-beat` | 排程任務 |
-| `tas-mqtt-listener` | TAS MQTT listener，可選 |
-| `frontend` | Next.js 前端 |
-| `pgadmin` | DB 管理工具，需 `--profile tools` |
+| Service             | 用途                              |
+| ------------------- | --------------------------------- |
+| `postgres`          | PostgreSQL                        |
+| `redis`             | Redis                             |
+| `migrate`           | 一次性 Alembic migration          |
+| `seed`              | 一次性 demo seed                  |
+| `backend`           | FastAPI API                       |
+| `celery-worker`     | 背景任務                          |
+| `celery-beat`       | 排程任務                          |
+| `tas-mqtt-listener` | TAS MQTT listener，可選           |
+| `frontend`          | Next.js 前端                      |
+| `pgadmin`           | DB 管理工具，需 `--profile tools` |
 
 常用指令：
 

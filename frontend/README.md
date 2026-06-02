@@ -13,15 +13,15 @@ LIMS 前端是以 Next.js App Router 建立的角色導向操作介面，負責�
 
 ## Tech Stack
 
-| 類別 | 技術 |
-|---|---|
-| Framework | Next.js 16 App Router |
-| UI runtime | React 19 |
-| Language | TypeScript |
-| Data fetching | TanStack Query, axios |
-| Charts | Recharts |
-| Tests | Vitest, Testing Library, jsdom |
-| Quality | ESLint, TypeScript typecheck, Prettier |
+| 類別          | 技術                                   |
+| ------------- | -------------------------------------- |
+| Framework     | Next.js 16 App Router                  |
+| UI runtime    | React 19                               |
+| Language      | TypeScript                             |
+| Data fetching | TanStack Query, axios                  |
+| Charts        | Recharts                               |
+| Tests         | Vitest, Testing Library, jsdom         |
+| Quality       | ESLint, TypeScript typecheck, Prettier |
 
 ## 快速啟動
 
@@ -48,17 +48,17 @@ make up
 
 ## Scripts
 
-| 指令 | 用途 |
-|---|---|
-| `npm run dev` | 啟動 Next.js dev server |
-| `npm run build` | 建置 production bundle |
-| `npm run start` | 啟動 production server |
-| `npm run lint` | ESLint 檢查 |
-| `npm run typecheck` | TypeScript 型別檢查 |
-| `npm run test` | 執行 Vitest |
-| `npm run test:coverage` | 執行 Vitest coverage |
-| `npm run format` | Prettier 格式化 |
-| `npm run format:check` | Prettier 檢查 |
+| 指令                    | 用途                    |
+| ----------------------- | ----------------------- |
+| `npm run dev`           | 啟動 Next.js dev server |
+| `npm run build`         | 建置 production bundle  |
+| `npm run start`         | 啟動 production server  |
+| `npm run lint`          | ESLint 檢查             |
+| `npm run typecheck`     | TypeScript 型別檢查     |
+| `npm run test`          | 執行 Vitest             |
+| `npm run test:coverage` | 執行 Vitest coverage    |
+| `npm run format`        | Prettier 格式化         |
+| `npm run format:check`  | Prettier 檢查           |
 
 根目錄 Makefile 也提供：
 
@@ -70,26 +70,26 @@ make test-frontend
 
 ## 路由與功能
 
-| Route | 功能 |
-|---|---|
-| `/` | 主管儀表板、KPI、WIP pipeline、告警與即時資料 |
-| `/login` | 登入頁 |
-| `/account` | 使用者與帳號管理 |
-| `/orders` | 委託單建立、列表、明細與送出 |
-| `/orders/templates` | 委託單範本 |
-| `/approve` | 主管簽核、退回、拒絕與特批 |
-| `/sample` | 收樣與樣品資訊 |
-| `/wip` | WIP 建立、狀態與管理 |
-| `/transfer` | 樣品轉送與交接 |
-| `/dispatch` | 派工、機台/Recipe 指派 |
-| `/machine` | 機台管理與狀態模擬 |
-| `/recipe` | Recipe 管理 |
-| `/execution` | 實驗執行與進度紀錄 |
-| `/report` | 報告建立、編輯、下載與狀態 |
-| `/closure` | 取件結案與結案條件檢查 |
-| `/issues` | 異常事件 |
-| `/notifications` | 通知中心 |
-| `/others` | 暫存、入庫或其他流程輔助頁 |
+| Route               | 功能                                          |
+| ------------------- | --------------------------------------------- |
+| `/`                 | 主管儀表板、KPI、WIP pipeline、告警與即時資料 |
+| `/login`            | 登入頁                                        |
+| `/account`          | 使用者與帳號管理                              |
+| `/orders`           | 委託單建立、列表、明細與送出                  |
+| `/orders/templates` | 委託單範本                                    |
+| `/approve`          | 主管簽核、退回、拒絕與特批                    |
+| `/sample`           | 收樣與樣品資訊                                |
+| `/wip`              | WIP 建立、狀態與管理                          |
+| `/transfer`         | 樣品轉送與交接                                |
+| `/dispatch`         | 派工、機台/Recipe 指派                        |
+| `/machine`          | 機台管理與狀態模擬                            |
+| `/recipe`           | Recipe 管理                                   |
+| `/execution`        | 實驗執行與進度紀錄                            |
+| `/report`           | 報告建立、編輯、下載與狀態                    |
+| `/closure`          | 取件結案與結案條件檢查                        |
+| `/issues`           | 異常事件                                      |
+| `/notifications`    | 通知中心                                      |
+| `/others`           | 暫存、入庫或其他流程輔助頁                    |
 
 ## 專案結構
 
