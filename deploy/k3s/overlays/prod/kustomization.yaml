@@ -11,11 +11,11 @@ resources:
 # Override CORS_ORIGINS for the prod hostname. Same-origin browser requests
 # (/api + / share the host) don't trip CORS; this is for non-browser API
 # clients calling the prod URL directly.
+  
 configMapGenerator:
 - behavior: merge
   literals:
   - CORS_ORIGINS=https://34.80.119.4.nip.io
-  
   - TAS_ENABLED=true
   name: lims-config
 
@@ -27,10 +27,10 @@ configMapGenerator:
 images:
 - name: lims-backend
   newName: asia-east1-docker.pkg.dev/lims-497613/lims/backend
-  newTag: v0.3.1
+  newTag: v0.4.0
 - name: lims-frontend
   newName: asia-east1-docker.pkg.dev/lims-497613/lims/frontend
-  newTag: v0.3.1
+  newTag: v0.4.0
 
 # Host-based TLS for prod. REPLACE_IP is filled with the VM's reserved static
 # IP in Phase 3 (e.g. 34.80.1.2 -> host 34.80.1.2.nip.io). cert-manager issues
