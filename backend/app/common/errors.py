@@ -20,7 +20,7 @@ class AppError(HTTPException):
 
 class ValidationError(AppError):
     code = "VALIDATION_ERROR"
-    default_status = status.HTTP_422_UNPROCESSABLE_ENTITY
+    default_status = status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 class NotFoundError(AppError):

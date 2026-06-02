@@ -108,7 +108,7 @@ describe("Sidebar", () => {
     expect(screen.getByText("系統")).toBeInTheDocument();
 
     expect(screen.getByText("帳號管理")).toBeInTheDocument();
-    expect(screen.getByText("系統設定")).toBeInTheDocument();
+    expect(screen.getByText("系統工具")).toBeInTheDocument();
     expect(screen.getByText("簽核管理")).toBeInTheDocument();
   });
 

@@ -57,7 +57,7 @@ class OrderRepository:
 
     async def create_order(self, payload: OrderCreate, current_user: CurrentUser) -> Order:
         require_role(current_user, {"plant_user"})
-        await self._validate_order_master_data(payload.department_id, payload.items)
+        labs_by_key = await self._validate_order_master_data(payload.department_id, payload.items)
 
         applicant_id = user_id(current_user)
         now = utc_now()
@@ -72,7 +72,7 @@ class OrderRepository:
             created_at=now,
             updated_at=now,
         )
-        order.items = [self._make_item(item, now) for item in payload.items]
+        order.items = [self._make_item(item, now, labs_by_key) for item in payload.items]
         self.db.add(order)
         await self.db.flush()
 
@@ -183,7 +183,7 @@ class OrderRepository:
                 for item in order.items
             ]
 
-        await self._validate_order_master_data(next_department_id, next_items)
+        labs_by_key = await self._validate_order_master_data(next_department_id, next_items)
 
         if payload.department_id is not None:
             order.department_id = payload.department_id
@@ -211,7 +211,7 @@ class OrderRepository:
                         raise bad_request("Only returned order items can be edited individually")
 
                     # validate mapping for new lab/experiment
-                    await self._validate_order_master_data(
+                    patch_labs_by_key = await self._validate_order_master_data(
                         order.department_id,
                         [
                             OrderItemCreate(
@@ -228,7 +228,7 @@ class OrderRepository:
 
                     target.sample_id = item_patch.sample_id
                     target.sample_name = item_patch.sample_name
-                    target.lab_id = item_patch.lab_id
+                    target.lab_id = self._resolve_lab_id(item_patch.lab_id, patch_labs_by_key)
                     target.experiment_id = item_patch.experiment_id
                     target.target_group = item_patch.target_group
                     target.target = item_patch.target
@@ -247,7 +247,7 @@ class OrderRepository:
             else:
                 order.items.clear()
                 await self.db.flush()
-                order.items = [self._make_item(item, now) for item in payload.items]
+                order.items = [self._make_item(item, now, labs_by_key) for item in payload.items]
                 order.total_items = len(order.items)
 
         order.updated_at = now
@@ -989,11 +989,24 @@ class OrderRepository:
             raise not_found("Order not found")
         return order
 
-    def _make_item(self, payload: OrderItemCreate, now: datetime) -> OrderItemModel:
+    @staticmethod
+    def _resolve_lab_id(lab_key: str, labs_by_key: dict[str, Lab]) -> str:
+        """Normalize a submitted lab key (Lab.code or UUID string) to the canonical
+        ``Lab.id`` UUID string that every order-item reader expects (approve gate,
+        dashboard scoping, lab-name lookups all compare against ``Lab.id``)."""
+        lab = labs_by_key.get(lab_key)
+        return str(lab.id) if lab is not None else lab_key
+
+    def _make_item(
+        self,
+        payload: OrderItemCreate,
+        now: datetime,
+        labs_by_key: dict[str, Lab],
+    ) -> OrderItemModel:
         return OrderItemModel(
             sample_id=payload.sample_id,
             sample_name=payload.sample_name,
-            lab_id=payload.lab_id,
+            lab_id=self._resolve_lab_id(payload.lab_id, labs_by_key),
             experiment_id=payload.experiment_id,
             target_group=payload.target_group,
             target=payload.target,
@@ -1007,7 +1020,7 @@ class OrderRepository:
         self,
         department_id: str,
         items: Sequence[OrderItemMasterData],
-    ) -> None:
+    ) -> dict[str, Lab]:
         department_exists = (
             await self.db.execute(
                 select(Department.id).where(
@@ -1062,6 +1075,8 @@ class OrderRepository:
                 raise bad_request(
                     f"Experiment {item.experiment_id} does not belong to lab {item.lab_id}"
                 )
+
+        return labs_by_key
 
     @staticmethod
     def _truncate_text(value: str | None, max_length: int) -> str | None:

@@ -82,6 +82,7 @@ async def list_orders_by_applicant(
 @router.get("/{order_id}")
 async def get_order(
     order_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
     order = await service.get_order(order_id)
@@ -132,6 +133,7 @@ async def handle_order_action(
 @router.get("/{order_id}/history")
 async def get_order_history(
     order_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
     service: OrderService = Depends(get_order_service),
 ) -> ApiResponse:
     return ApiResponse(
