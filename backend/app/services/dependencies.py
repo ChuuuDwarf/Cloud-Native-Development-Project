@@ -8,7 +8,7 @@ from app.repos.order_repo import OrderRepository
 from app.services.order_service import OrderService
 
 
-async def get_order_repo(db: AsyncSession = Depends(get_db)) -> OrderRepository:
+def get_order_repo(db: AsyncSession = Depends(get_db)) -> OrderRepository:
     return OrderRepository(db)
 
 

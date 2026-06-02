@@ -121,5 +121,5 @@ class IssueService:
         return await self._repo.list_acknowledgements(issue_id)
 
 
-async def get_issue_service(session: Annotated[AsyncSession, Depends(get_db)]) -> IssueService:
+def get_issue_service(session: Annotated[AsyncSession, Depends(get_db)]) -> IssueService:
     return IssueService(session)

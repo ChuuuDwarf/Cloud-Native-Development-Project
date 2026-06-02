@@ -128,7 +128,7 @@ export default function EditUserModal({
 
   return (
     <div
-      role="dialog"
+      role="presentation"
       onClick={onClose}
       onKeyDown={(e) => {
         if (e.key === "Escape") onClose();
@@ -144,17 +144,31 @@ export default function EditUserModal({
         zIndex: 100,
       }}
     >
+      <dialog
+        open
+        aria-modal="true"
+        aria-label="編輯使用者"
+        style={{
+          // Reset native <dialog> user-agent defaults so the backdrop's
+          // flex centering controls layout (UA sets position/inset/margin/etc).
+          position: "static",
+          inset: "auto",
+          margin: 0,
+          padding: 0,
+          color: "inherit",
+          background: "var(--s1)",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+          width: "100%",
+          maxWidth: 460,
+        }}
+      >
       <form
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
         style={{
-          background: "var(--s1)",
-          border: "1px solid var(--border)",
-          borderRadius: 12,
           padding: 24,
-          width: "100%",
-          maxWidth: 460,
           display: "flex",
           flexDirection: "column",
           gap: 12,
@@ -190,7 +204,7 @@ export default function EditUserModal({
             style={inputStyle}
             value={form.phoneNumber}
             onChange={(e) => {
-              const cleaned = e.target.value.replace(/\D/g, "").slice(0, 10);
+              const cleaned = e.target.value.replaceAll(/\D/g, "").slice(0, 10);
               setForm({ ...form, phoneNumber: cleaned });
               if (phoneError) setPhoneError(null);
             }}
@@ -300,6 +314,7 @@ export default function EditUserModal({
           </button>
         </div>
       </form>
+      </dialog>
     </div>
   );
 }

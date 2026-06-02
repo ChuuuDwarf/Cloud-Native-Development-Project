@@ -170,74 +170,75 @@ export default function AlertsPanel({
           }}
         >
           {rows.map((r) => (
-            <li
-              key={r.issue_id}
-              data-testid="alerts-panel-row"
-              data-issue-id={r.issue_id}
-              data-acknowledged={r.acknowledged ? "true" : "false"}
-              data-group={r.group}
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                globalThis.location.href = `/issues/${r.issue_id}`;
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
+            <li key={r.issue_id} style={{ display: "flex" }}>
+              <button
+                type="button"
+                data-testid="alerts-panel-row"
+                data-issue-id={r.issue_id}
+                data-acknowledged={r.acknowledged ? "true" : "false"}
+                data-group={r.group}
+                onClick={() => {
                   globalThis.location.href = `/issues/${r.issue_id}`;
-                }
-              }}
-              style={{
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 12,
-                color: "var(--text2)",
-                opacity: r.acknowledged ? 0.55 : 1,
-              }}
-            >
-              <SeverityBadge severity={r.severity} />
-              {r.lab_name && (
-                <span
-                  style={{
-                    fontFamily: "monospace",
-                    color: "var(--text3)",
-                    width: 56,
-                    flexShrink: 0,
-                  }}
-                >
-                  {r.lab_name}
-                </span>
-              )}
-              <span
+                }}
                 style={{
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 12,
+                  color: "var(--text2)",
+                  opacity: r.acknowledged ? 0.55 : 1,
                   flex: 1,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+                  width: "100%",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  font: "inherit",
+                  textAlign: "left",
                 }}
               >
-                {r.title}
-                {r.acknowledged && (
-                  <span style={{ color: "var(--text3)", marginLeft: 6 }}>(ack)</span>
+                <SeverityBadge severity={r.severity} />
+                {r.lab_name && (
+                  <span
+                    style={{
+                      fontFamily: "monospace",
+                      color: "var(--text3)",
+                      width: 56,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {r.lab_name}
+                  </span>
                 )}
-              </span>
-              {r.escalation_level > 0 && (
                 <span
                   style={{
-                    fontSize: 10,
-                    color: "var(--text3)",
-                    fontFamily: "monospace",
-                    flexShrink: 0,
+                    flex: 1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  L{r.escalation_level}
+                  {r.title}
+                  {r.acknowledged && (
+                    <span style={{ color: "var(--text3)", marginLeft: 6 }}>(ack)</span>
+                  )}
                 </span>
-              )}
-              <span style={{ fontSize: 10, color: "var(--text3)", flexShrink: 0 }}>
-                {ago(r.timestamp)}
-              </span>
+                {r.escalation_level > 0 && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: "var(--text3)",
+                      fontFamily: "monospace",
+                      flexShrink: 0,
+                    }}
+                  >
+                    L{r.escalation_level}
+                  </span>
+                )}
+                <span style={{ fontSize: 10, color: "var(--text3)", flexShrink: 0 }}>
+                  {ago(r.timestamp)}
+                </span>
+              </button>
             </li>
           ))}
         </ul>

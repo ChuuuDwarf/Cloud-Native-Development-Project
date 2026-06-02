@@ -16,7 +16,7 @@ from app.core.database import get_db
 from app.modules.dashboard.service import DashboardService
 
 
-async def get_dashboard_service(
+def get_dashboard_service(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> DashboardService:
     return DashboardService(session)

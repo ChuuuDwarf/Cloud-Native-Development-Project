@@ -111,18 +111,16 @@ async def test_pickup_confirmed_action_is_locked_to_original_requester():
 
     # Lab supervisor: previously allowed via can_operate path → now 403.
     with pytest.raises(HTTPException) as exc:
-        await _validate_sample_action_permission(
-            lab_a_supervisor, sample_in_lab_a, "pickup_confirmed"
-        )
+        _validate_sample_action_permission(lab_a_supervisor, sample_in_lab_a, "pickup_confirmed")
     assert exc.value.status_code == 403
     assert "原委託使用者" in exc.value.detail
 
     # Original requester: should still pass.
-    await _validate_sample_action_permission(owner, sample_in_lab_a, "pickup_confirmed")
+    _validate_sample_action_permission(owner, sample_in_lab_a, "pickup_confirmed")
 
     # Different plant_user (not the applicant) → 403.
     with pytest.raises(HTTPException) as exc:
-        await _validate_sample_action_permission(other_factory, sample_in_lab_a, "pickup_confirmed")
+        _validate_sample_action_permission(other_factory, sample_in_lab_a, "pickup_confirmed")
     assert exc.value.status_code == 403
 
     # Lab supervisor doing other actions (e.g., inbound) still passes — only
@@ -132,7 +130,7 @@ async def test_pickup_confirmed_action_is_locked_to_original_requester():
         "status": "transferring",
         "current_location": "Lab A 收樣區",
     }
-    await _validate_sample_action_permission(lab_a_supervisor, sample_for_inbound, "inbound")
+    _validate_sample_action_permission(lab_a_supervisor, sample_for_inbound, "inbound")
 
 
 def test_validate_uuid_rejects_invalid_values():

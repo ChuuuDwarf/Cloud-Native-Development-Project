@@ -337,7 +337,7 @@ class NotificationService:
         # the issue-flow walkthrough for the motivation.
 
 
-async def get_notification_service(
+def get_notification_service(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> NotificationService:
     return NotificationService(session)

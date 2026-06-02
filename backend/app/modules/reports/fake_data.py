@@ -13,9 +13,14 @@ from __future__ import annotations
 
 import random
 
+# Cryptographically-secure RNG (backed by os.urandom). Exposes the same
+# uniform/randint/choice API as the random module, so it is a drop-in for
+# the demo-data generators below while satisfying SonarQube rule S2245.
+_rng = random.SystemRandom()
+
 
 def _r(low: float, high: float, digits: int = 2) -> float:
-    return round(random.uniform(low, high), digits)
+    return round(_rng.uniform(low, high), digits)
 
 
 def _edx() -> dict[str, str]:
@@ -35,17 +40,17 @@ def _edx() -> dict[str, str]:
 def _fib() -> dict[str, str]:
     return {
         "切割深度": f"{_r(1.0, 8.0, 2)} μm",
-        "研磨時間": f"{random.randint(5, 40)} min",
+        "研磨時間": f"{_rng.randint(5, 40)} min",
         "離子束電流": f"{_r(0.1, 9.3, 2)} nA",
     }
 
 
 def _sem() -> dict[str, str]:
     return {
-        "放大倍率": f"{random.choice([5000, 10000, 20000, 50000])} x",
+        "放大倍率": f"{_rng.choice([5000, 10000, 20000, 50000])} x",
         "解析度": f"{_r(1.0, 5.0, 1)} nm",
-        "加速電壓": f"{random.choice([5, 10, 15, 20])} kV",
-        "影像張數": str(random.randint(3, 12)),
+        "加速電壓": f"{_rng.choice([5, 10, 15, 20])} kV",
+        "影像張數": str(_rng.randint(3, 12)),
     }
 
 
@@ -71,24 +76,24 @@ def _probe() -> dict[str, str]:
     return {
         "接觸電阻": f"{_r(0.5, 50.0, 2)} Ω",
         "片電阻": f"{_r(10, 200, 1)} Ω/sq",
-        "量測點數": str(random.randint(9, 49)),
+        "量測點數": str(_rng.randint(9, 49)),
     }
 
 
 def _esd() -> dict[str, str]:
     return {
-        "HBM 通過電壓": f"{random.choice([2000, 4000, 6000, 8000])} V",
-        "MM 通過電壓": f"{random.choice([200, 400, 600])} V",
-        "CDM 通過電壓": f"{random.choice([500, 750, 1000])} V",
-        "判定": random.choice(["Pass", "Pass", "Fail"]),
+        "HBM 通過電壓": f"{_rng.choice([2000, 4000, 6000, 8000])} V",
+        "MM 通過電壓": f"{_rng.choice([200, 400, 600])} V",
+        "CDM 通過電壓": f"{_rng.choice([500, 750, 1000])} V",
+        "判定": _rng.choice(["Pass", "Pass", "Fail"]),
     }
 
 
 def _htol() -> dict[str, str]:
-    fails = random.randint(0, 2)
+    fails = _rng.randint(0, 2)
     return {
-        "測試時數": f"{random.choice([168, 500, 1000])} hr",
-        "樣品數": str(random.randint(45, 77)),
+        "測試時數": f"{_rng.choice([168, 500, 1000])} hr",
+        "樣品數": str(_rng.randint(45, 77)),
         "失效數": str(fails),
         "FIT": f"{_r(1.0, 50.0, 1)}",
     }
@@ -97,8 +102,8 @@ def _htol() -> dict[str, str]:
 def _tc() -> dict[str, str]:
     return {
         "溫度範圍": "-40 ~ 125 ℃",
-        "循環數": f"{random.choice([200, 500, 1000])}",
-        "失效數": str(random.randint(0, 3)),
+        "循環數": f"{_rng.choice([200, 500, 1000])}",
+        "失效數": str(_rng.randint(0, 3)),
         "分層比例": f"{_r(0.0, 5.0, 2)} %",
     }
 
@@ -124,7 +129,7 @@ def generate_experiment_data(item: str) -> dict[str, str]:
     return {
         "量測值": f"{_r(0, 100, 2)}",
         "標準差": f"{_r(0, 5, 3)}",
-        "樣本數": str(random.randint(3, 30)),
+        "樣本數": str(_rng.randint(3, 30)),
     }
 
 

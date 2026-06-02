@@ -261,6 +261,12 @@ services:
             dockerfile: Dockerfile
             args:
                 NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+                # Dev-only quick-login accounts (JSON array). Set in your gitignored
+                # root .env to populate the login dropdown. NOTE: this image is a
+                # production build, and the dropdown is gated on NODE_ENV !==
+                # "production", so it stays hidden here regardless — for `npm run dev`
+                # use frontend/.env.local instead. Wired for completeness/consistency.
+                NEXT_PUBLIC_DEMO_ACCOUNTS: ${NEXT_PUBLIC_DEMO_ACCOUNTS:-}
         ports:
             # The standalone runner image listens on 3030 (see frontend/Dockerfile:
             # ENV PORT=3030 / EXPOSE 3030), so publish host 3000 -> container 3030.
@@ -272,6 +278,7 @@ services:
                 condition: service_healthy
         environment:
             NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+            NEXT_PUBLIC_DEMO_ACCOUNTS: ${NEXT_PUBLIC_DEMO_ACCOUNTS:-}
             # NOTE: do NOT set PORT here — the Dockerfile sets PORT=3030 and the port
             # mapping above publishes host 3000 -> container 3030. Overriding PORT to
             # 3000 made Next listen on 3000 while the mapping still targeted 3030, so

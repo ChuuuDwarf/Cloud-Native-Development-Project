@@ -43,6 +43,12 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
+    # Starlette runs middleware in reverse registration order: the LAST
+    # ``add_middleware`` call becomes the OUTERMOST layer. CORSMiddleware must
+    # be outermost so CORS headers are attached even when an inner middleware
+    # short-circuits or errors — hence it is added last (SonarQube S8414).
+    app.add_middleware(RequestLoggerMiddleware)
+    app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -51,8 +57,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["X-Request-ID"],
     )
-    app.add_middleware(RequestLoggerMiddleware)
-    app.add_middleware(RequestIdMiddleware)
 
     @app.exception_handler(AppError)
     async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:

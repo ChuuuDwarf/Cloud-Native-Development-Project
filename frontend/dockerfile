@@ -25,9 +25,21 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3030
 ENV HOSTNAME=0.0.0.0
+# Copy build output WITHOUT --chown: files stay owned by root and are only
+# world-readable (COPY default mode includes o+r / o+x). The `node` runtime
+# user can read+serve them but cannot modify them. This deliberately avoids
+# chowning to the runtime user, which would make the copied resources writable
+# by `node` and trip docker:S6504 ("write permissions assigned to the copied
+# resource"). The Next.js standalone server only reads its own files at runtime.
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+
+# Run the standalone server as the built-in non-root `node` user (uid 1000)
+# shipped by node:20-alpine, satisfying docker:S6471 (no root at runtime).
+# Combined with the root-owned, world-readable files above, this gives a
+# read-only serve: non-root runtime + non-writable app dir.
+USER node
 
 EXPOSE 3030
 CMD ["node", "server.js"]

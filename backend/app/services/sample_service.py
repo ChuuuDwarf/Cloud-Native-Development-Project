@@ -528,7 +528,7 @@ async def update_sample(
     return updated_sample
 
 
-async def _validate_sample_action_permission(
+def _validate_sample_action_permission(
     current_user: dict,
     sample: dict,
     action: str,
@@ -1029,7 +1029,7 @@ async def handle_sample_action(
             detail="action must be one of: receive, inbound, outbound, pickup_confirmed, split",
         )
 
-    await _validate_sample_action_permission(current_user, sample, action)
+    _validate_sample_action_permission(current_user, sample, action)
     operator_name = _get_operator_name(payload, current_user)
 
     if action == "receive":

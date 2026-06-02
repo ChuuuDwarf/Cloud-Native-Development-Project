@@ -7,13 +7,18 @@
 
 import math
 
+import pytest
+
 from app.db.models import Wip, WipExecution
 from app.modules.experiment_runs.service import (
     PROGRESS_STEP_PERCENT,
     PROGRESS_TICK_SECONDS,
     _ensure_experiment_data,
 )
-from app.modules.reports.fake_data import generate_for_items
+from app.modules.reports.fake_data import (
+    generate_experiment_data,
+    generate_for_items,
+)
 
 
 def test_ensure_experiment_data_generates_for_wip_item() -> None:
@@ -58,3 +63,43 @@ def test_generate_for_items_shape() -> None:
 
     assert generate_for_items([]) == {}
     assert generate_for_items([""]) == {}  # falsy items are skipped
+
+
+# Expected measurement-field keys per experiment item. Exercising every entry
+# drives the corresponding ``_rng.*`` generator line so demo-data stays covered.
+EXPERIMENT_FIELD_KEYS = {
+    "EDX": {"Si 含量", "O 含量", "Al 含量", "其他元素", "加速電壓"},
+    "FIB": {"切割深度", "研磨時間", "離子束電流"},
+    "SEM": {"放大倍率", "解析度", "加速電壓", "影像張數"},
+    "CV": {"平帶電壓 Vfb", "最大電容 Cmax", "最小電容 Cmin", "界面態密度 Dit"},
+    "IV": {"閾值電壓 Vth", "導通電流 Ion", "關斷電流 Ioff", "漏電流"},
+    "Probe": {"接觸電阻", "片電阻", "量測點數"},
+    "ESD": {"HBM 通過電壓", "MM 通過電壓", "CDM 通過電壓", "判定"},
+    "HTOL": {"測試時數", "樣品數", "失效數", "FIT"},
+    "TC": {"溫度範圍", "循環數", "失效數", "分層比例"},
+}
+
+
+@pytest.mark.parametrize("item", sorted(EXPERIMENT_FIELD_KEYS))
+def test_generate_experiment_data_returns_expected_fields(item: str) -> None:
+    data = generate_experiment_data(item)
+
+    assert set(data) == EXPERIMENT_FIELD_KEYS[item]
+    assert all(isinstance(v, str) and v for v in data.values())
+
+
+def test_generate_experiment_data_unknown_item_uses_generic_fallback() -> None:
+    data = generate_experiment_data("not-a-real-item")
+
+    assert set(data) == {"量測值", "標準差", "樣本數"}
+    assert all(isinstance(v, str) and v for v in data.values())
+
+
+def test_generate_for_items_covers_all_known_types_plus_unknown() -> None:
+    items = [*sorted(EXPERIMENT_FIELD_KEYS), "unknown"]
+    data = generate_for_items(items)
+
+    assert set(data) == set(items)
+    for item in EXPERIMENT_FIELD_KEYS:
+        assert set(data[item]) == EXPERIMENT_FIELD_KEYS[item]
+    assert set(data["unknown"]) == {"量測值", "標準差", "樣本數"}
