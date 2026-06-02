@@ -14,6 +14,8 @@
 - Backend README: [backend/README.md](backend/README.md)
 - 團隊分工: [docs/team_work_split.md](docs/team_work_split.md)
 - 整合規範: [docs/integration_contract.md](docs/integration_contract.md)
+<img width="2559" height="1359" alt="image" src="https://github.com/user-attachments/assets/fef87f82-aaba-4b71-9450-61d331b5947b" />
+
 
 ## 系統架構
 
