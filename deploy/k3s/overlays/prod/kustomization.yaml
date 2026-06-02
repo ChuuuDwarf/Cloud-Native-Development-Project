@@ -15,6 +15,8 @@ configMapGenerator:
 - behavior: merge
   literals:
   - CORS_ORIGINS=https://34.80.119.4.nip.io
+  
+  - TAS_ENABLED=true
   name: lims-config
 
 # Real images in GCP Artifact Registry (project lims-497613, repo `lims`,
